@@ -654,7 +654,7 @@ def build_brief(store: Store, contract: dict, unit: dict, state: dict) -> dict:
 
 
 def claim(store: Store, worker: str, unit_id: str = "",
-          isolate: bool = True) -> tuple[dict[str, Any], int]:
+          isolate: bool | None = None) -> tuple[dict[str, Any], int]:
     """Atomically claim the next ready unit and return its brief.
 
     "Nothing ready" and "nothing left to do" are different facts, and a worker
@@ -662,6 +662,16 @@ def claim(store: Store, worker: str, unit_id: str = "",
     to run single-file. EXIT_WAIT means wait; EXIT_DRAINED means stop.
     """
     contract = store.load_contract()
+    if isolate is None:
+        if "isolate" in contract:
+            isolate = bool(contract["isolate"])
+        else:
+            try:
+                from anthill import context as _c
+                isolate = bool((_c.current().config.get("execution") or {})
+                               .get("isolate", False))
+            except Exception:                      # pragma: no cover
+                isolate = False
     reap_stale(store, contract)
     states = store.all_states(contract)
 
@@ -710,6 +720,20 @@ def claim(store: Store, worker: str, unit_id: str = "",
         else:
             state["worktree"] = str(store.repo)
             state["branch"] = contract.get("base_branch", "main")
+            # Working in place means the unit inherits whatever the operator had
+            # already left dirty, and the ownership check would blame it for all
+            # of it -- observed: an agent failed for CLAUDE.md, which install had
+            # written before the unit existed. Baseline it, in the shape `seeded`
+            # uses, so pre-existing content is exempt while any further change to
+            # those files is still a violation.
+            pre = {}
+            for rel in changed_files(store.repo, integration_branch(contract)):
+                q = store.repo / rel
+                if q.is_file() and not q.is_symlink():
+                    pre[rel] = _digest(q)
+            state["seeded"] = pre
+            state["seeded_count"] = len(pre)
+            state["in_place"] = True
         store.write_state(unit["id"], state)
         return build_brief(store, contract, unit, state), 0
 
@@ -785,6 +809,44 @@ def record_gate(store: Store, unit: dict, state: dict, cmd: str,
     store.write_state(unit["id"], state)
 
 
+def reopen(store: Store, unit_id: str, reason: str = "",
+           by: str = "") -> tuple[dict[str, Any], int]:
+    """Return an escalated or blocked unit to the board.
+
+    Written because its absence forced hand-editing of a state file. An
+    escalation is a considered verdict; once a human has looked, there has to be
+    a sanctioned way to say "fixed, try again". Editing JSON is indistinguishable
+    from tampering and leaves no record of who decided what.
+
+    A `done` unit is never reopened: its work is already merged.
+    """
+    contract = store.load_contract()
+    unit = find_unit(contract, unit_id)
+    state = store.read_state(unit["id"])
+    if state["status"] == DONE:
+        return ({"refused": f"{unit_id} is done; its work is already merged. "
+                            "Add a new unit rather than reopening this one."},
+                EXIT_TERMINAL)
+    previous = state["status"]
+    state.setdefault("reopened", []).append(
+        {"at": now(), "from": previous, "by": by or "(unattributed)",
+         "reason": reason, "attempts_cleared": state.get("attempts", 0)})
+    cleared = state.get("attempts", 0)
+    state["status"] = READY
+    state["attempts"] = 0
+    state.pop("owner", None)
+    state.pop("awaiting_audit", None)
+    store.write_state(unit["id"], state)
+    store.release_lock(unit["id"])
+    esc = store.root / "escalations" / f"{safe(unit_id)}.md"
+    if esc.exists():
+        esc.replace(esc.with_suffix(".resolved.md"))
+    return ({"unit": unit_id, "was": previous, "now": READY,
+             "attempts_cleared": cleared, "reason": reason or "(none given)",
+             "note": "the unit is claimable again; its worktree and commits are "
+                     "untouched"}, 0)
+
+
 def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
     """Ownership check, then the unit's own gate. The exit code becomes the only
     fact that matters about this unit."""
@@ -858,7 +920,54 @@ def done(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
     state["done_at"] = now()
     store.write_state(unit["id"], state)
     store.release_lock(unit["id"])
-    return {"unit": unit["id"], "status": DONE}, 0
+
+    out: dict[str, Any] = {"unit": unit["id"], "status": DONE}
+    # A finished sprint whose blueprint still describes the tree from before it
+    # ran is worse than no blueprint: it is confidently out of date.
+    states = store.all_states(contract)
+    if not [u["id"] for u in contract["units"]
+            if states.get(u["id"], {}).get("status") != DONE]:
+        out["sprint_complete"] = True
+        out["blueprint"] = _refresh_blueprint(store)
+    return out, 0
+
+
+def _refresh_blueprint(store: Store) -> dict[str, Any]:
+    """Redraw the map over the integrated tree, and report the intent gap.
+
+    Failure never fails the unit: the work is merged and gated, and a map that
+    could not be rebuilt is a reporting problem.
+    """
+    try:
+        from anthill import integrate as _integrate, context as _ctx
+        from anthill.navigate import build_map, structure
+        ctx = _ctx.current()
+        # In place, the integration worktree exists but holds nothing -- units
+        # merge into the repo itself. Scanning it produced a blueprint of zero
+        # nodes for a sprint that had just landed two files.
+        contract = store.load_contract()
+        in_place = not contract.get("isolate", False)
+        tree = store.repo if in_place else (
+            _integrate.integration_tree(ctx) or store.repo)
+        build_map.REPO_ROOT = tree
+        structure.REPO_ROOT = tree
+        inc, top = _ctx.discover_sources(tree, set(build_map.EXCLUDE_PARTS))
+        cfg = ctx.config.get("source") or {}
+        build_map.INCLUDE_DIRS = cfg.get("include_dirs") or inc
+        build_map.INCLUDE_TOPLEVEL = cfg.get("include_toplevel") or top
+        structure.INCLUDE_DIRS = build_map.INCLUDE_DIRS
+        structure.INCLUDE_TOPLEVEL = build_map.INCLUDE_TOPLEVEL
+        m = build_map.build()
+        build_map.OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        build_map.OUT_PATH.write_text(json.dumps(m, indent=2), encoding="utf-8")
+        gap = _integrate.report_gap(ctx, tree)
+        return {"nodes": len(m["nodes"]),
+                "anchors": sum(len(n["anchors"]) for n in m["nodes"]),
+                "scanned": str(tree),
+                "intent_gap": {k: gap.get(k) for k in
+                               ("share_explained", "files_with_no_page")}}
+    except Exception as exc:                            # pragma: no cover
+        return {"error": f"blueprint not refreshed: {exc}"}
 
 
 def release(store: Store, unit_id: str) -> dict[str, Any]:

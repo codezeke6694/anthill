@@ -678,7 +678,7 @@ def _load_gates(path: str) -> dict[str, str]:
             if not str(k).startswith("_") and str(v).strip()}
 
 
-def cmd_pages(args: argparse.Namespace) -> None:
+def cmd_pages(args: argparse.Namespace) -> int:
     """Validate a page set: required frontmatter, pin grammar, footprint."""
     kd, sr = _knowledge_args(args)
     loaded = pages_mod.load_pages(kd)
@@ -686,16 +686,36 @@ def cmd_pages(args: argparse.Namespace) -> None:
     counts: dict[str, int] = {}
     for f in findings:
         counts[f["severity"]] = counts.get(f["severity"], 0) + 1
-    _print_json({
+    blocked = sorted(pages_mod.blocking(findings))
+    ruleless, uncited = [], []
+    for page in loaded:
+        if not page["rules"]:
+            ruleless.append(page["path"])
+        else:
+            for r in page["rules"]:
+                if not r["cites"]:
+                    uncited.append(f"{page['path']}:{r['rule_id']}")
+    out = {
         "knowledge_dir": str(kd),
         "source_root": str(sr),
         "page_count": len(loaded),
         "not_indexed": pages_mod.skipped_files(kd),
         "by_severity": counts,
-        "blocked_pages": sorted(pages_mod.blocking(findings)),
+        "blocked_pages": blocked,
+        "pages_without_rules": ruleless,
+        "rules_without_a_citation": uncited,
         "findings": findings if args.all else findings[:40],
         "truncated": (not args.all) and len(findings) > 40,
-    })
+    }
+    # It used to report `blocked_pages` and exit 0 regardless, which made every
+    # knowledge gate vacuous -- the check ran, found the fault, and passed.
+    code = 1 if blocked else 0
+    if getattr(args, "require_rules", False) and (ruleless or uncited):
+        out["refused"] = ("a page that states no rule, or a rule that cites no "
+                          "symbol, records nothing that can later be proven wrong")
+        code = 1
+    _print_json(out)
+    return code
 
 
 def cmd_index_pages(args: argparse.Namespace) -> None:
@@ -815,7 +835,8 @@ def cmd_work_next(args: argparse.Namespace) -> int:
     """Claim the next ready unit. The exit code is the worker protocol:
     0 = work claimed, 3 = wait, 4 = nothing left that can ever run."""
     payload, code = work_mod.claim(_store(args), worker=args.worker,
-                                   unit_id=args.unit, isolate=not args.no_isolate)
+                                   unit_id=args.unit,
+                                   isolate=False if args.no_isolate else None)
     _print_json(payload)
     return code
 
@@ -835,6 +856,12 @@ def cmd_work_done(args: argparse.Namespace) -> int:
 def cmd_work_release(args: argparse.Namespace) -> int:
     _print_json(work_mod.release(_store(args), args.unit))
     return 0
+
+
+def cmd_work_reopen(args: argparse.Namespace) -> int:
+    out, code = work_mod.reopen(_store(args), args.unit, args.reason, args.by)
+    _print_json(out)
+    return code
 
 
 def cmd_work_escalate(args: argparse.Namespace) -> int:
@@ -857,7 +884,7 @@ def cmd_work_pool(args: argparse.Namespace) -> int:
     prompt = (Path(args.prompt_file).expanduser().read_text(encoding="utf-8")
               if args.prompt_file else pool_mod.DEFAULT_PROMPT)
     result = pool_mod.run(store, workers=args.workers, agent_cmd=args.agent,
-                          isolate=not args.no_isolate, prompt_template=prompt,
+                          isolate=False if args.no_isolate else None, prompt_template=prompt,
                           timeout=args.timeout, idle_sleep=args.idle_sleep)
     if not args.all:
         result["events"] = result["events"][-40:]
@@ -873,7 +900,9 @@ def cmd_work_heartbeat(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Emergent Agent navigation CLI")
+    parser = argparse.ArgumentParser(
+        prog="anthill",
+        description="Anthill navigation and work CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def _with_map(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -938,6 +967,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pg = _kn(sub.add_parser("pages", help="Validate knowledge pages (frontmatter, pin, footprint)"))
     pg.add_argument("--all", action="store_true", help="Print every finding")
+    pg.add_argument("--require-rules", action="store_true",
+                    help="Also refuse a page with no rules, or a rule with no "
+                         "citation — both validate clean and assert nothing")
     pg.set_defaults(func=cmd_pages)
 
     ip = _kn(sub.add_parser("index-pages", help="Build the page map the router navigates"))
@@ -1044,6 +1076,13 @@ def build_parser() -> argparse.ArgumentParser:
     we.add_argument("--unit", required=True)
     we.add_argument("--reason", default="escalated by hand")
     we.set_defaults(func=cmd_work_escalate)
+
+    wo = _repo(wsub.add_parser(
+        "reopen", help="Return an escalated or blocked unit to the board"))
+    wo.add_argument("--unit", required=True)
+    wo.add_argument("--reason", default="", help="What was resolved")
+    wo.add_argument("--by", default="", help="Who decided it was ready to retry")
+    wo.set_defaults(func=cmd_work_reopen)
 
     _repo(wsub.add_parser("reap", help="Reclaim locks held by dead workers")).set_defaults(func=cmd_work_reap)
 
