@@ -47,9 +47,27 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] in ROUTER_COMMANDS:
         from anthill.navigate import router
         return router.main(argv) or 0
-    if argv and argv[0] == "map" and len(argv) > 1 and argv[1] == "build":
+    if argv and argv[0] == "map":
+        # Dispatch on the verb, not the exact pair: `map --help` used to fall
+        # through to a parser that had never heard of `map`.
         from anthill.navigate import build_map
-        return build_map.main(argv[2:]) or 0
+        rest = argv[1:]
+        if rest and rest[0] == "build":
+            rest = rest[1:]
+        elif rest and rest[0] not in ("-h", "--help", "--stats"):
+            print(f"anthill: unknown map subcommand {rest[0]!r}; "
+                  f"the only one is `map build`", file=sys.stderr)
+            return 2
+        return build_map.main(rest) or 0
+    if argv and argv[0] == "guard":
+        from anthill import guard
+        return guard.main(argv[1:])
+    if argv and argv[0] == "control":
+        from anthill import control
+        return control.main(argv[1:])
+    if argv and argv[0] == "tidy":
+        from anthill import tidy
+        return tidy.main(argv[1:])
     if argv and argv[0] == "skill":
         from anthill import skills
         return skills.main(argv[1:])

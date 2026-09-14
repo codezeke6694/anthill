@@ -196,7 +196,10 @@ def invocation(ctx: _ctx.Context) -> str:
     try:
         rel = tool_root.relative_to(ctx.root.resolve())
     except ValueError:
-        return "anthill"                     # installed outside; assume on PATH
+        # Assuming `anthill` is on PATH is how a generated hook came out as
+        # `exec anthill guard` and died "not found" -- while the commit
+        # succeeded, so the guard looked installed and enforced nothing.
+        return str(tool_root / "bin" / "anthill")
     return f"./{rel.as_posix()}/bin/anthill"
 
 
@@ -221,6 +224,109 @@ def deny_rules(paths: list[str]) -> list[str]:
         out.append(f"Edit({p})")
         out.append(f"Write({p})")
     return out
+
+
+HOOK_MARKER = "anthill-pre-commit-guard"
+
+HOOK = """#!/usr/bin/env bash
+# anthill-pre-commit-guard — installed by `anthill install`. Refuses a commit of
+# product source that no currently claimed unit owns, so the board is the way
+# into the tree rather than one option among two.
+ANTHILL="{cmd}"
+if ! command -v "$ANTHILL" >/dev/null 2>&1 && [ ! -x "$ANTHILL" ]; then
+  # Fail closed. A guard that cannot run must not pass silently -- that is the
+  # state where it looks installed and enforces nothing.
+  echo "anthill: pre-commit guard cannot run: $ANTHILL not found." >&2
+  echo "  Re-run \\`anthill install --force\\` to repair the hook," >&2
+  echo "  or \\`git commit --no-verify\\` to bypass it deliberately." >&2
+  exit 1
+fi
+"$ANTHILL" guard || exit 1
+"""
+
+POST_HOOK_MARKER = "anthill-post-commit-blueprint"
+
+POST_HOOK = """#!/usr/bin/env bash
+# anthill-post-commit-blueprint — installed by `anthill install`.
+# Redraws the blueprint after every commit. Hooked to the commit rather than to
+# `work done` on purpose: that fires a handful of times per sprint and only if
+# the board is used at all, and a blueprint that updates only when someone
+# remembers the orchestrator is a blueprint that is usually wrong. ~0.25s.
+# post-commit cannot abort anything, so failure here never costs a commit.
+ANTHILL="{cmd}"
+if command -v "$ANTHILL" >/dev/null 2>&1 || [ -x "$ANTHILL" ]; then
+  "$ANTHILL" map build >/dev/null 2>&1 || true
+fi
+exit 0
+"""
+
+
+def _write_hook(ctx: _ctx.Context, name: str, body: str, marker: str,
+                advice: str) -> dict[str, Any]:
+    """Write one git hook, never over something that is not ours."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=ctx.root,
+                           capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return {"installed": False, "reason": "git not available"}
+    if r.returncode != 0:
+        return {"installed": False, "reason": "not a git repository"}
+    gitdir = Path(r.stdout.strip())
+    if not gitdir.is_absolute():
+        gitdir = ctx.root / gitdir
+    hook = gitdir / "hooks" / name
+    if hook.exists():
+        existing = hook.read_text(encoding="utf-8", errors="ignore")
+        if marker not in existing:
+            return {"installed": False, "path": str(hook),
+                    "reason": f"a {name} hook already exists and was left alone",
+                    "add_this_line": advice}
+        if existing == body:
+            return {"installed": True, "path": str(hook), "already": True}
+        # Ours, but out of date. An earlier version pointed at a binary that did
+        # not resolve and let every commit through; refusing to repair our own
+        # hook left that in place.
+        hook.write_text(body, encoding="utf-8")
+        hook.chmod(0o755)
+        return {"installed": True, "path": str(hook), "repaired": True}
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(body, encoding="utf-8")
+    hook.chmod(0o755)
+    return {"installed": True, "path": str(hook)}
+
+
+def install_hook(ctx: _ctx.Context) -> dict[str, Any]:
+    cmd = invocation(ctx)
+    return _write_hook(ctx, "pre-commit", HOOK.format(cmd=cmd), HOOK_MARKER,
+                       f"{cmd} guard || exit 1")
+
+
+def install_post_hook(ctx: _ctx.Context) -> dict[str, Any]:
+    cmd = invocation(ctx)
+    return _write_hook(ctx, "post-commit", POST_HOOK.format(cmd=cmd),
+                       POST_HOOK_MARKER,
+                       f"{cmd} map build >/dev/null 2>&1 || true")
+
+
+def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
+    """The exact text install writes. Shared with `control` on purpose.
+
+    These were two copies of the same construction and drifted the moment the
+    vendored-invocation footer was added here and not there -- so `control`
+    reported CLAUDE.md as EDITED on every vendored install, permanently. A check
+    that always fires is a check nobody reads.
+    """
+    cmd = invocation(ctx)
+    text = CLAUDE_MD.format(name=name, protected=protected_block)
+    if cmd != "anthill":
+        text = text.replace("anthill ", f"{cmd} ")
+        rel = cmd.split("/bin/")[0].lstrip("./")
+        text += (f"\n## Running the tool\n\nInvoke it by path from the "
+                 f"repository root:\n\n```bash\n{cmd} status\n```\n\nOr put "
+                 f"it on your PATH once per shell:\n\n```bash\n"
+                 f"export PATH=\"{rel}/bin:$PATH\"\n```\n")
+    return text
 
 
 def plan(ctx: _ctx.Context, project_name: str = "",
@@ -344,16 +450,8 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     (ctx.root / "AGENTS.md").write_text(
         _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values), encoding="utf-8")
     written.append(str(ctx.root / "AGENTS.md"))
-    claude_md = CLAUDE_MD.format(name=name, protected=protected_block)
-    # Every documented command becomes one that runs from the project root.
-    claude_md = claude_md.replace("anthill ", f"{cmd} ") if cmd != "anthill" else claude_md
-    if cmd != "anthill":
-        claude_md += (f"\n## Running the tool\n\nThis project vendors Anthill, so "
-                      f"invoke it by path from the repository root:\n\n"
-                      f"```bash\n{cmd} status\n```\n\nOr put it on your PATH once "
-                      f"per shell:\n\n```bash\nexport PATH=\"$PWD/"
-                      f"{cmd.split('/bin/')[0].lstrip('./')}/bin:$PATH\"\n```\n")
-    (ctx.root / "CLAUDE.md").write_text(claude_md, encoding="utf-8")
+    (ctx.root / "CLAUDE.md").write_text(
+        render_claude_md(ctx, name, protected_block), encoding="utf-8")
     written.append(str(ctx.root / "CLAUDE.md"))
 
     # The deny rules. Merged into an existing settings.json rather than
@@ -403,6 +501,18 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
             result["skills_indexed"] = idx["indexed"]
     except Exception as exc:                          # pragma: no cover
         result["skills_note"] = f"skill index skipped: {exc}"
+
+    result["pre_commit_hook"] = install_hook(ctx)
+    result["post_commit_hook"] = install_post_hook(ctx)
+
+    # Stamped after everything above is on disk, so the fingerprints cover what
+    # is actually there. Without this, `control` compares against whatever was
+    # recorded at some earlier install and calls every re-render pending.
+    try:
+        from anthill import control as control_mod
+        result["control_fingerprints"] = control_mod.record(ctx)["recorded"]
+    except Exception as exc:                          # pragma: no cover
+        result["control_note"] = f"fingerprints not recorded: {exc}"
 
     gitignore = ctx.state / ".gitignore"
     if not gitignore.exists():
