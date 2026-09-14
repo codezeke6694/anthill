@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Entry point. Resolves the installed package regardless of where it is invoked
+# from, so `anthill` works inside any target project.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${HERE}/..:${PYTHONPATH:-}"
+exec python3 -m anthill.cli "$@"

@@ -1,0 +1,97 @@
+# Agents — {{PROJECT_NAME}}
+
+Every agent reads this file first, whatever tool it runs in. Find your role
+below, then read only that role's file. Load nothing else.
+
+This file is the tool-neutral entry point. `CLAUDE.md` is the Claude Code
+equivalent and says the same things; if they ever disagree, `CONSTITUTION.md`
+wins over both.
+
+---
+
+## First, every session: is the charter complete?
+
+```bash
+{{ANTHILL}} onboard --show
+```
+
+If it reports anything as `blank`, **that is your first task, before any code.**
+Ask the owner those questions in conversation — one at a time, in plain
+language — then record what they say:
+
+```bash
+{{ANTHILL}} onboard --stack "..." --building "..." --architecture "..."
+```
+
+Rules for this:
+
+- **Never invent an answer.** A charter you wrote yourself is not a charter; it
+  is you agreeing with yourself, and every unit brief downstream inherits it.
+- **Never edit `CONSTITUTION.md` directly.** It is denied to you. `anthill
+  onboard` is the only sanctioned path, and it fills blanks only — it will not
+  overwrite a decision the owner already recorded.
+- `--stack` is the one that blocks work: it decides district boundaries, the
+  `owns` globs in every unit, and which code can be structurally fingerprinted.
+
+Do not start a sprint against a blank charter.
+
+---
+
+## Authority chain
+
+```
+Owner directive
+  → CONSTITUTION.md
+    → .anthill/roles/<your role>.md
+      → your unit brief
+        → repo code
+```
+
+Never rewrite anything above your own level. If you believe a higher rule is
+wrong, escalate and stop.
+
+---
+
+## Roles
+
+{{ROLE_TABLE}}
+
+---
+
+## Rules every agent follows
+
+- **Load only what your role specifies.** Not the constitution, not other
+  units, not the log archive. Context you did not need is context that made you
+  worse. The same applies to skills: load `bootstrap` ones, load a
+  `phase-scoped` or `conditional` one when its trigger fires, and leave
+  `reference` skills on the shelf until you need them.
+- **You never mark your own work done.** A gate does:
+  `{{ANTHILL}} work gate <unit>` then `{{ANTHILL}} work done <unit>`, and the second is
+  refused unless the first passed.
+- **Your `owns` list is your whole authority.** It is enforced by `git diff`.
+  One file outside it fails the unit and names the file.
+- **Contracts are read-only.** If a contract is wrong, escalate. Never edit one.
+- **Never fill `intent_attested_by`.** That is a human's signature, and no agent
+  may write it under any circumstance.
+- **When blocked: escalate and stop.** Do not guess, do not work around, do not
+  widen your boundary to fix something adjacent.
+
+## Protected paths
+
+Denied to every agent, enforced outside your control:
+
+{{PROTECTED_BLOCK}}
+
+## Where things are
+
+| Path | What |
+|---|---|
+| `CONSTITUTION.md` | project charter — human-owned, outranks everything |
+| `.anthill/roles/` | role definitions |
+| `.anthill/contracts/` | units in flight — read-only |
+| `.anthill/sprints/current.json` | what this sprint contains |
+| `.anthill/audits/` | audit findings, pinned to the commit audited |
+| `.anthill/knowledge/` | recorded intent — pages and rules |
+| `.anthill/build/maps/` | the blueprint (generated) |
+| `.anthill/log/lessons/` | lessons, filed by area so they resurface |
+| `.anthill/skills/INDEX.md` | reusable instruction — read with `{{ANTHILL}} skill get <name>` |

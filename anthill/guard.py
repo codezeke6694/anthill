@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Make the board the only door into the source tree.
+
+Anthill refuses to let a *unit* close without proof. It had no opinion about
+code that was never a unit — and `git commit` always works. So one sprint ran
+through the board and roughly four thousand lines across six districts went
+around it: no owned boundary, no gate, no audit, no page. The instruction to use
+the board was there; nothing required it.
+
+This is the requirement. Staged product source must be owned by a unit that is
+currently claimed. Everything else — documents, state, tests outside a district,
+config — is untouched, because refusing those would just teach people the
+`--no-verify` flag.
+
+Deliberately narrow:
+  * no install, or no contract  -> allow. A repo not using the board is not the
+    board's business.
+  * a merge commit             -> allow. `work done` merges, and blocking that
+    would break the mechanism this exists to protect.
+  * nothing staged in scope    -> allow.
+
+`git commit --no-verify` still bypasses it, and that is fine: this is a door,
+not a lock. The point is that walking around it becomes a visible choice rather
+than the path of least resistance.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from anthill import context as _ctx
+
+ALLOW, REFUSE, ERROR = 0, 1, 2
+
+
+def _git(args: list[str], cwd: Path) -> str:
+    try:
+        r = subprocess.run(["git", *args], cwd=cwd, capture_output=True,
+                           text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return r.stdout if r.returncode == 0 else ""
+
+
+def staged(cwd: Path) -> list[str]:
+    out = _git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
+    return [f for f in out.splitlines() if f.strip()]
+
+
+def is_merging(cwd: Path) -> bool:
+    """A merge in progress. `work done` makes one, so it must not be blocked."""
+    gitdir = (_git(["rev-parse", "--git-dir"], cwd) or ".git").strip()
+    base = (cwd / gitdir) if not Path(gitdir).is_absolute() else Path(gitdir)
+    return (base / "MERGE_HEAD").exists()
+
+
+def in_scope(rel: str, include: list[str], toplevel: list[str],
+             exclude: set[str]) -> bool:
+    """Is this a product source file the board should own?"""
+    parts = Path(rel).parts
+    if not parts or (exclude & set(parts)):
+        return False
+    return parts[0] in set(include) or rel in set(toplevel)
+
+
+def active_units(ctx: _ctx.Context) -> tuple[list[dict], list[str]]:
+    """Units currently claimed, and every unit id the contract declares."""
+    contract_path = ctx.contracts_dir / "contract.json"
+    work_root = ctx.state / "build" / "work"
+    # The orchestrator keeps its own copy of the contract per run directory;
+    # prefer that, since it is the one the board is actually executing.
+    for cand in sorted(work_root.glob("*/contract.json")) + [contract_path]:
+        if cand.exists():
+            contract_path = cand
+            break
+    if not contract_path.exists():
+        return [], []
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], []
+    units = contract.get("units") or []
+    state_dir = contract_path.parent / "state"
+    live = []
+    for u in units:
+        sp = state_dir / f"{str(u.get('id','')).replace('/', '_')}.json"
+        status = ""
+        if sp.exists():
+            try:
+                status = json.loads(sp.read_text(encoding="utf-8")).get("status", "")
+            except (OSError, json.JSONDecodeError):
+                status = ""
+        if status in ("claimed", "gated"):
+            live.append(u)
+    return live, [str(u.get("id")) for u in units]
+
+
+def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
+    from anthill.orchestrate.orchestrator import matches_any
+
+    if not ctx.installed:
+        return {"verdict": "allowed", "why": "anthill is not installed here"}, ALLOW
+    if is_merging(cwd):
+        return {"verdict": "allowed", "why": "merge in progress"}, ALLOW
+
+    include, toplevel, exclude = ctx.source_roots()
+    files = staged(cwd)
+    scoped = [f for f in files if in_scope(f, include, toplevel, exclude)]
+    if not scoped:
+        return {"verdict": "allowed", "staged": len(files),
+                "why": "nothing staged under the product source set"}, ALLOW
+
+    live, all_ids = active_units(ctx)
+    if not all_ids:
+        return {"verdict": "allowed", "why": "no contract on this board"}, ALLOW
+
+    owned: list[str] = []
+    orphan: list[str] = []
+    for f in scoped:
+        holder = next((u["id"] for u in live if matches_any(f, u.get("owns") or [])), "")
+        (owned if holder else orphan).append(f if holder else f)
+
+    if not orphan:
+        return {"verdict": "allowed", "owned_by_a_claimed_unit": len(owned)}, ALLOW
+
+    return {
+        "verdict": "refused",
+        "unowned": orphan,
+        "claimed_units": [{"id": u["id"], "owns": u.get("owns")} for u in live],
+        "why": ("these files are product source that no currently claimed unit "
+                "owns, so nothing will gate, audit or describe them"),
+        "next": ("claim a unit that owns them (`anthill work next`), or add one "
+                 "to the sprint and recompile. To commit anyway: "
+                 "`git commit --no-verify` — a visible choice, not a blocked one"),
+    }, REFUSE
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Refuse a commit of product source that no claimed unit owns.")
+    ap.add_argument("--project", default="")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    cwd = Path.cwd()
+    try:
+        ctx = _ctx.resolve(args.project or None)
+    except SystemExit:
+        return ALLOW                      # never block a commit on our own fault
+
+    report, code = check(ctx, cwd)
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return code
+
+    if code == ALLOW:
+        return ALLOW
+    print("\nanthill: commit refused — the board is the way in.\n", file=sys.stderr)
+    for f in report["unowned"]:
+        print(f"  unowned  {f}", file=sys.stderr)
+    print(f"\n  {report['why']}", file=sys.stderr)
+    if report["claimed_units"]:
+        print("\n  currently claimed:", file=sys.stderr)
+        for u in report["claimed_units"]:
+            print(f"    {u['id']}  owns {u['owns']}", file=sys.stderr)
+    else:
+        print("\n  no unit is claimed at all.", file=sys.stderr)
+    print(f"\n  {report['next']}\n", file=sys.stderr)
+    return REFUSE
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
