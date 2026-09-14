@@ -50,7 +50,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "knowledge": {"dir": "knowledge", "areas": [], "registries": []},
     "execution": {"base_branch": "main", "integration_branch": "",
-                  "seed_paths": [], "seed_working_state": False},
+                  "seed_paths": [], "seed_working_state": False,
+                  # Directories prepended to PATH when a gate or an agent runs.
+                  # Empty means "discover the project's virtualenv".
+                  "env_path": [], "venv": "",
+                  # Isolation buys exactly one thing: several agents at once.
+                  # Ownership is enforced either way. Off by default, because a
+                  # single agent pays the whole cost -- code that never appears
+                  # in the owner's folder -- for a benefit it is not using.
+                  "isolate": False},
     "gates": {},
     # Blueprint conditions compiled into every gate. `require_page` is off by
     # default because a project's first sprints legitimately have no pages yet;
@@ -134,11 +142,70 @@ class Context:
         include, toplevel, _ = self.source_roots()
         return bool(include or toplevel)
 
+    def exec_env(self) -> dict[str, str]:
+        """`os.environ` with the project's tooling reachable.
+
+        Applied to gates and to agent processes alike: an agent that cannot run
+        the gate it is told to satisfy is in exactly the same bind as a gate
+        that cannot run itself.
+        """
+        import os as _os
+        env = dict(_os.environ)
+        ex = self.config.get("execution") or {}
+        extra: list[str] = []
+        venv = find_venv(self.root, str(ex.get("venv") or ""))
+        if venv:
+            for sub in ("bin", "Scripts"):
+                if (venv / sub).exists():
+                    extra.append(str(venv / sub))
+            env["VIRTUAL_ENV"] = str(venv)
+        # The tool's own bin, because compiled gates call `anthill blueprint`
+        # and `anthill audit check`. Without this a gate got past pytest and
+        # then died 127 on its own commands -- a failure that looks identical
+        # to the missing test runner and was mistaken for it.
+        tool_bin = Path(__file__).resolve().parents[1] / "bin"
+        if tool_bin.exists():
+            extra.append(str(tool_bin))
+        for entry in (ex.get("env_path") or []):
+            q = Path(entry)
+            extra.append(str(q if q.is_absolute() else self.root / q))
+        if extra:
+            env["PATH"] = ":".join(extra + [env.get("PATH", "")])
+        # A worktree is not the project root, so anything importing the package
+        # by name needs the root on the path as well.
+        env["PYTHONPATH"] = ":".join(
+            [str(self.root)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+        env["ANTHILL_PROJECT"] = str(self.root)
+        return env
+
     def save_config(self) -> None:
         self.state.mkdir(parents=True, exist_ok=True)
         tmp = self.config_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(self.config, indent=2) + "\n", encoding="utf-8")
         tmp.replace(self.config_path)
+
+
+VENV_NAMES = (".venv", "venv", ".virtualenv", "env")
+
+
+def find_venv(root: Path, configured: str = "") -> Path | None:
+    """The project's virtualenv, if it has one.
+
+    A unit worktree is a fresh checkout of committed content, so it contains no
+    virtualenv -- the venv is gitignored, and rightly so. That is why a gate
+    running bare `pytest` inside a worktree died with exit 127, `command not
+    found`, which would have killed every worker in a pool before any of them
+    did a thing. Copying the environment in is not the answer; referencing it
+    on PATH is.
+    """
+    if configured:
+        p = (root / configured) if not Path(configured).is_absolute() else Path(configured)
+        return p if (p / "bin").exists() or (p / "Scripts").exists() else None
+    for name in VENV_NAMES:
+        cand = root / name
+        if (cand / "bin").exists() or (cand / "Scripts").exists():
+            return cand
+    return None
 
 
 def discover_sources(root: Path, exclude: set[str]) -> tuple[list[str], list[str]]:
