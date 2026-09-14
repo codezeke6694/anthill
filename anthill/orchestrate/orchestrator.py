@@ -51,6 +51,9 @@ EXIT_OWNERSHIP = 64      # wrote outside its owns
 EXIT_NO_GATE = 65        # asked to close without a passing gate
 EXIT_CONFLICT = 66       # gated but will not merge
 EXIT_TERMINAL = 67       # already done or escalated
+# A gate ending 3 means "not reviewed yet", not "wrong". A coordination gap, so
+# it is reported and retried rather than charged to the unit.
+EXIT_NOT_REVIEWED = 3
 
 
 class OrchestratorError(RuntimeError):
@@ -767,7 +770,11 @@ def record_gate(store: Store, unit: dict, state: dict, cmd: str,
                      "output_tail": output}
     if exit_code == 0:
         state["status"] = GATED
+    elif exit_code == EXIT_NOT_REVIEWED:
+        state["status"] = CLAIMED
+        state["awaiting_audit"] = True
     else:
+        state.pop("awaiting_audit", None)
         state["attempts"] = state.get("attempts", 0) + 1
         if state["attempts"] >= unit.get("escalate_after", 2):
             state["status"] = ESCALATED
