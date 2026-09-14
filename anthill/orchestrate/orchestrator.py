@@ -76,10 +76,20 @@ def write_json_atomic(path: Path, data: dict) -> None:
 
 
 def run(cmd: list[str] | str, cwd: Path | None = None,
-        capture: bool = True) -> subprocess.CompletedProcess:
+        capture: bool = True,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=str(cwd) if cwd else None,
                           shell=isinstance(cmd, str),
-                          capture_output=capture, text=True)
+                          capture_output=capture, text=True, env=env)
+
+
+def exec_env() -> dict[str, str]:
+    """The environment a gate runs in. Never the bare worktree's."""
+    from anthill import context as _ctx
+    try:
+        return _ctx.current().exec_env()
+    except Exception:                                  # pragma: no cover
+        return dict(os.environ)
 
 
 # --------------------------------------------------------------------- store
@@ -353,6 +363,13 @@ DEFAULT_ARTEFACT_IGNORE = (
     "**/__pycache__/**", "**/*.pyc", "**/*.pyo",
     "**/node_modules/**", "**/.pytest_cache/**", "**/.ruff_cache/**",
     "**/*.egg-info/**", "**/.DS_Store", "**/.mypy_cache/**",
+    # The orchestrator's own state and the host's settings. In an isolated
+    # worktree these never appear -- a fresh checkout has no state changes -- so
+    # the omission was invisible until a unit ran in place, where every file
+    # `install` had written showed up as an ownership violation and failed an
+    # agent that had touched nothing but its own district.
+    ".anthill/**", "**/.anthill/**", ".claude/**", "**/.claude/**",
+    ".venv/**", "**/.venv/**", "venv/**",
 )
 
 
@@ -788,7 +805,7 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
                 "violations": violations,
                 "ignored_artefacts": ignored}, EXIT_OWNERSHIP
 
-    res = run(unit["gate"], cwd=worktree)
+    res = run(unit["gate"], cwd=worktree, env=exec_env())
     output = (res.stdout or "") + (res.stderr or "")
     record_gate(store, unit, state, cmd=unit["gate"],
                 exit_code=res.returncode, output=output[-4000:])

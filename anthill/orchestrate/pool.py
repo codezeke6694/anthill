@@ -86,6 +86,7 @@ def _run_agent(agent_cmd: str, brief: dict, worktree: Path, log_path: Path,
         try:
             res = subprocess.run(agent_cmd, shell=True, cwd=str(worktree),
                                  input=payload, text=True, timeout=timeout,
+                                 env=work.exec_env(),
                                  stdout=log, stderr=subprocess.STDOUT)
             return res.returncode
         except subprocess.TimeoutExpired:
@@ -155,7 +156,7 @@ def _worker_loop(store: work.Store, name: str, agent_cmd: str, isolate: bool,
 
 
 def run(store: work.Store, workers: int, agent_cmd: str = "",
-        isolate: bool = True, prompt_template: str = DEFAULT_PROMPT,
+        isolate: bool | None = None, prompt_template: str = DEFAULT_PROMPT,
         timeout: int = 3600, idle_sleep: float = IDLE_SLEEP) -> dict[str, Any]:
     """Run the board to completion with `workers` concurrent agents.
 
