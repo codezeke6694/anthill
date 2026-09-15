@@ -59,7 +59,7 @@ code says that -- but what it is trying to achieve._
 _Each rule gets a stable identity that is never renamed or reused, and a
 citation so it can be falsified:_
 
-- **BR-{registry}-example:** Statement of the rule (sg: path/to/file.py::symbol).
+- **BR-{registry}-example:** Statement of the rule (cite: path/to/file.py::symbol).
 
 ## Non-obvious behaviour
 
@@ -87,7 +87,7 @@ _What this makes easy, and what it makes hard._
 
 ## Rules
 
-- **BR-{registry}-example:** Statement of the rule (sg: path/to/file.py::symbol).
+- **BR-{registry}-example:** Statement of the rule (cite: path/to/file.py::symbol).
 
 ## History
 """,
@@ -102,7 +102,7 @@ _What this makes easy, and what it makes hard._
 
 ## Rules
 
-- **BR-{registry}-example:** Statement of the rule (sg: path/to/file.py::symbol).
+- **BR-{registry}-example:** Statement of the rule (cite: path/to/file.py::symbol).
 
 ## History
 """,
@@ -121,7 +121,7 @@ _The mechanism, measured -- not the guess._
 
 ## Rules
 
-- **BR-{registry}-example:** Statement of the rule (sg: path/to/file.py::symbol).
+- **BR-{registry}-example:** Statement of the rule (cite: path/to/file.py::symbol).
 
 ## History
 """,
@@ -142,7 +142,7 @@ authoritative for **behaviour**.
 2. **A rule identity is permanent.** `BR-<REGISTRY>-<slug>` is never renamed or
    reused. A rule that stops applying is retired in History with evidence.
 3. **A citation makes a rule falsifiable.** Write it inline as
-   `(sg: path/to/file.py::symbol)`. A rule with no citation is allowed, and is
+   `(cite: path/to/file.py::symbol)`. A rule with no citation is allowed, and is
    tracked as the honest backlog of statements nothing can check.
 4. **You never fill `intent_attested_by`.** That field is a human's signature on
    intent. An agent may draft, document, and cite; it may not attest.

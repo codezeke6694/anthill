@@ -29,7 +29,11 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any
 
-WORK_DIR = ".sagework"
+# The fallback run directory, and a path the ownership check exempts. Named
+# for this tool rather than the one it was ported from: `.sagework` was a
+# leftover that survived the port because it is a string literal, not an
+# identifier -- the sweep that removed the old package name checked imports.
+WORK_DIR = ".anthill/work"
 CONTRACT_FILE = "contract.json"
 STALE_LOCK_SECONDS = 1800  # 30 min without a heartbeat -> reclaimable
 
@@ -543,7 +547,7 @@ def commit_unit_work(store: Store, unit: dict, state: dict) -> None:
             cwd=wt)
     run(["git", "reset", "-q", "--", WORK_DIR], cwd=wt)
     if run(["git", "diff", "--cached", "--name-only"], cwd=wt).stdout.strip():
-        run(["git", "commit", "-q", "-m", f"sagework: {unit['id']}"], cwd=wt)
+        run(["git", "commit", "-q", "-m", f"anthill: {unit['id']}"], cwd=wt)
 
 
 def integrate(store: Store, contract: dict, unit: dict, state: dict) -> tuple[bool, str]:
@@ -569,7 +573,7 @@ def integrate(store: Store, contract: dict, unit: dict, state: dict) -> tuple[bo
         if wt is None:
             return False, f"could not prepare the integration worktree: {target}"
         res = run(["git", "merge", "--no-ff", "-m",
-                   f"sagework: {unit['id']} (gate passed)", state["branch"]], cwd=wt)
+                   f"anthill: {unit['id']} (gate passed)", state["branch"]], cwd=wt)
         if res.returncode != 0:
             conflicts = run(["git", "diff", "--name-only", "--diff-filter=U"],
                             cwd=wt).stdout.strip()

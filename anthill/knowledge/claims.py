@@ -72,7 +72,14 @@ _PIN_RE = re.compile(r"^verified_against:\s*([A-Za-z0-9_.-]+)@([0-9a-fA-F]{7,40}
 _RULE_START_RE = re.compile(r"^[ \t]*[-*][ \t]*\*\*(BR-[A-Z0-9]+-[a-z0-9-]+):\*\*", re.M)
 _RULE_END_RE = re.compile(r"^#{1,6}[ \t]", re.M)
 # The extension that makes a prose rule falsifiable: an explicit symbol citation.
-_CITE_RE = re.compile(r"\(sg:\s*([^)]+?)\s*\)")
+# `cite:` is canonical. `sg:` is accepted because it is what every page written
+# before this change uses -- it was the district prefix of the project this tool
+# was ported from and meant nothing here, but a grammar change that silently
+# invalidated existing citations would be worse than an odd keyword. `code:`
+# reads naturally and costs nothing to allow.
+_CITE_PREFIXES = ("cite", "sg", "code")
+_CITE_RE = re.compile(r"\((?:" + "|".join(_CITE_PREFIXES) + r"):\s*([^)]+?)\s*\)")
+CANONICAL_CITE = "cite"
 
 
 def _iter_rules(text: str) -> list[tuple[str, str]]:
@@ -171,7 +178,8 @@ def from_knowledge(knowledge_dir: Path) -> list[dict[str, Any]]:
 
     A page pins itself with `verified_against: <prefix>@<sha>` and states rules
     as `- **BR-AREA-slug:** text`. A rule becomes machine-checkable only when it
-    cites the code it is about, written inline as `(sg: path/to/file.py::symbol)`.
+    cites the code it is about, written inline as
+    `(cite: path/to/file.py::symbol)`. `sg:` and `code:` are also accepted.
     Rules with no citation are still returned, marked uncited — they are the
     honest backlog of statements nothing can falsify.
     """
