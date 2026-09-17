@@ -122,28 +122,40 @@ work shares its blind spots exactly, so its approval means little. Tests stay
 the only real proof either way, but a different tool on the auditor seat is the
 one thing that buys genuine independence.
 
-## Branches: main belongs to the owner
+## Two rules about git
 
-You do not commit to `main`, and you do not push to it. Work on a branch; the
-owner merges when they have reviewed it.
+**1. Never push. Ask.**
+
+Pushing is the owner's act, every time, on every branch. An approval given once
+does not carry forward — not to the next push, not across a context compaction,
+not because the last one was fine. If something is ready to go up, say what it
+is and why, and let the owner push it.
+
+Commit locally as much as you like. A local commit stays on this machine and
+can be undone without anyone noticing. A push reaches the remote and everyone
+working from it, and cannot be taken back the same way.
+
+**2. Work on a branch, not on `main`.**
 
 ```bash
 git switch -c work/<what-you-are-doing>
-# commit here as often as you like
-git push -u origin work/<what-you-are-doing>
 ```
 
-**Never use `git commit --no-verify` or `git push --no-verify`.** The hooks that
-refuse a commit on `main`, or source no unit owns, are not obstacles to route
-around — they are the only thing standing between a change and the owner's
-branch. A refusal is information: read what it says and do that instead. If you
-believe a hook is wrong, say so and stop; do not flag past it.
+Not only because `main` is the owner's. Other people work on this codebase from
+the same remote — a colleague already has a branch of their own here. `main` is
+the thing everybody branches from and merges into, so a change sitting directly
+on it is a change nobody agreed to and everybody inherits. Your branch is yours
+to be wrong on.
 
-This is asked of you rather than enforced against you, and you should know why:
-a local hook runs the same git binary for you and for the owner, on the same
-machine, so it cannot tell you apart and cannot stop you. It holds because you
-choose to let it. Bypassing it once teaches the next session that bypassing is
-normal.
+**And never bypass the hooks.** No `--no-verify`, on commit or on push. The
+hooks that refuse these things are not obstacles to route around; a refusal is
+information — read it and do what it says. If you think a hook is wrong, say so
+and stop.
+
+Know why that last one is asked rather than enforced: a local hook runs the same
+git binary for you and for the owner, on the same machine, so it cannot tell you
+apart and cannot stop you. It holds because you choose to let it. Bypassing it
+once teaches the next session that bypassing is normal.
 
 ## Before you touch anything
 

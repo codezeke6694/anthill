@@ -201,32 +201,40 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
 
 
 def check_push(ctx: _ctx.Context, cwd: Path, refs: list[str]) -> tuple[dict, int]:
-    """Refuse a push to a protected branch.
+    """Refuse a push the owner has not asked for.
 
-    A commit is local and recoverable; a push is not. git hands pre-push the
-    refs being updated on stdin, so this reads what is actually being pushed
-    rather than guessing from the current branch -- `git push origin HEAD:main`
-    from a work branch targets main without ever checking it out.
+    Every push, not only one at a protected branch. A local commit stays on the
+    machine and can be undone without anyone noticing; a push reaches the remote
+    and everybody working from it, and cannot be taken back the same way. So
+    pushing is the owner's act and needs their say-so each time -- an approval
+    given once does not carry forward to the next one.
+
+    git hands pre-push the refs being updated on stdin, so this reads what is
+    actually being pushed rather than guessing from the current branch.
     """
-    names = protected(ctx)
-    if not names:
-        return {"verdict": "allowed", "why": "no protected branches configured"}, ALLOW
+    ex = ctx.config.get("execution") or {}
+    if not ex.get("push_requires_owner", True):
+        # Fall back to protecting just the named branches.
+        names = protected(ctx)
+        hit = [r for r in refs if r in names]
+        if not hit or is_owner():
+            return {"verdict": "allowed", "pushing": refs}, ALLOW
+        return ({"verdict": "refused", "pushing_to": hit, "protected": names,
+                 "why": "these branches belong to the owner",
+                 "next": "push a work branch instead"}, REFUSE)
     if is_owner():
-        return {"verdict": "allowed", "why": f"${OWNER_ENV} is set"}, ALLOW
-    hit = [r for r in refs if r in names]
-    if not hit:
-        return {"verdict": "allowed", "pushing": refs}, ALLOW
+        return {"verdict": "allowed", "why": f"${OWNER_ENV} is set",
+                "pushing": refs}, ALLOW
     return ({
         "verdict": "refused",
-        "pushing_to": hit,
-        "protected": names,
-        "why": ("a push to the owner's branch is not recoverable the way a local "
-                "commit is. The owner merges and pushes these."),
-        "next": ("push your work branch instead:\n"
-                 "    git push -u origin $(git branch --show-current)\n"
-                 "  then open it for review.\n"
-                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell, "
-                 "or git push --no-verify"),
+        "pushing": refs or ["(unknown ref)"],
+        "why": ("pushing is the owner's act. A local commit stays here and can "
+                "be undone quietly; a push reaches the remote and everyone "
+                "working from it, and cannot be taken back the same way."),
+        "next": ("ask the owner to push, and say what is ready and why.\n"
+                 "  Commit as much as you like locally -- that costs nobody "
+                 "anything.\n"
+                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell."),
     }, REFUSE)
 
 
@@ -263,8 +271,9 @@ def main(argv: list[str] | None = None) -> int:
             return code
         if code == ALLOW:
             return ALLOW
-        print(f"\nanthill: push refused — {', '.join(report['pushing_to'])} "
-              f"belongs to the owner.\n", file=sys.stderr)
+        target = ", ".join(report.get("pushing_to") or report.get("pushing") or [])
+        print(f"\nanthill: push refused — pushing is the owner's act "
+              f"({target}).\n", file=sys.stderr)
         print(f"  {report['why']}\n", file=sys.stderr)
         print(f"  {report['next']}\n", file=sys.stderr)
         return REFUSE

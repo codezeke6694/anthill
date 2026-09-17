@@ -61,7 +61,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
                   "isolate": False,
                   # Branches an agent may not commit to or push. The owner
                   # merges into these; nothing else does.
-                  "protected_branches": ["main", "master"]},
+                  "protected_branches": ["main", "master"],
+                  # Pushing is the owner's act, not an agent's -- any branch,
+                  # not only a protected one. A push leaves the machine and
+                  # reaches other people; a local commit does not.
+                  "push_requires_owner": True},
     "gates": {},
     # Blueprint conditions compiled into every gate. `require_page` is off by
     # default because a project's first sprints legitimately have no pages yet;

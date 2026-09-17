@@ -69,8 +69,10 @@ being visible instead of silent.
 - An agent never asserts its own completion. Only a passing gate closes a unit.
 - An audit may refuse a unit. An audit may never, by itself, pass one.
 - Protected paths (below) are never edited by any agent, for any reason.
-- No agent commits or pushes to a protected branch. Work happens on a branch
-  and the owner merges it.
+- No agent pushes to any remote unless the owner asks for that push. An
+  approval given once does not carry to the next one.
+- No agent commits to a protected branch. Work happens on a branch, because
+  others branch from and merge into `main` too.
 - No agent bypasses a git hook. `--no-verify` is the owner's, not an agent's.
 
 ## Protected paths
