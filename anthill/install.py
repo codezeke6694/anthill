@@ -157,6 +157,11 @@ git binary for you and for the owner, on the same machine, so it cannot tell you
 apart and cannot stop you. It holds because you choose to let it. Bypassing it
 once teaches the next session that bypassing is normal.
 
+The owner's override is `ANTHILL_OWNER=1`, set per command and never in a shell
+profile — your shell is initialised from the same profile theirs is, so a line
+in `.zshrc` would hand it to you permanently. Do not set it, do not suggest
+setting it, and do not use it if you find it already set.
+
 ## Before you touch anything
 
 You are operating as a **role**, not as a general assistant. Find your role in

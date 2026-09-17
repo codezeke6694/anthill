@@ -57,8 +57,18 @@ def is_owner() -> bool:
 
     A local hook runs the same binary for both, on the same machine, so it
     cannot actually tell. This is a convenience so the owner is not fighting
-    their own tooling when they merge -- an agent launched from a shell that
-    exports it inherits it, and could read the profile that sets it.
+    their own tooling.
+
+    Set it **per command** -- `ANTHILL_OWNER=1 git push` -- and never in a shell
+    profile. An agent's shell is initialised from the same profile the owner's
+    is, so a line in `.zshrc` hands the agent owner status permanently and this
+    check never fires again. Measured: the PATH additions from a user's
+    `.zshrc` were present in an agent's environment.
+
+    A per-command prefix also matches the rule it enforces: pushing is asked for
+    each time, and a persistent variable is standing permission -- which is
+    exactly the failure this exists to catch, an approval from one context read
+    as authorization for the next.
 
     So treat it as a turn signal, not a lock. The only control that genuinely
     distinguishes an owner from an agent lives off this machine: branch
@@ -99,7 +109,8 @@ def check_branch(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
                 f"is merged in once the owner is satisfied with it."),
         "next": (f"git switch -c work/<what-you-are-doing>   # then commit\n"
                  f"  The owner merges it into {branch} once reviewed.\n"
-                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell."),
+                 f"  If you are the owner: {OWNER_ENV}=1 git push   "
+                 f"(or `git opush`)"),
     }, REFUSE)
 
 
@@ -234,7 +245,8 @@ def check_push(ctx: _ctx.Context, cwd: Path, refs: list[str]) -> tuple[dict, int
         "next": ("ask the owner to push, and say what is ready and why.\n"
                  "  Commit as much as you like locally -- that costs nobody "
                  "anything.\n"
-                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell."),
+                 f"  If you are the owner: {OWNER_ENV}=1 git push   "
+                 f"(or `git opush`)"),
     }, REFUSE)
 
 
