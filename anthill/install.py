@@ -244,6 +244,20 @@ fi
 "$ANTHILL" guard || exit 1
 """
 
+PUSH_HOOK_MARKER = "anthill-pre-push-guard"
+
+PUSH_HOOK = """#!/usr/bin/env bash
+# anthill-pre-push-guard — installed by `anthill install`. Refuses a push to a
+# branch the owner keeps. Reads the refs being pushed on stdin, so
+# `git push origin HEAD:main` is caught too.
+ANTHILL="{cmd}"
+if ! command -v "$ANTHILL" >/dev/null 2>&1 && [ ! -x "$ANTHILL" ]; then
+  echo "anthill: pre-push guard cannot run: $ANTHILL not found." >&2
+  exit 1
+fi
+"$ANTHILL" guard --push || exit 1
+"""
+
 POST_HOOK_MARKER = "anthill-post-commit-blueprint"
 
 POST_HOOK = """#!/usr/bin/env bash
@@ -300,6 +314,12 @@ def install_hook(ctx: _ctx.Context) -> dict[str, Any]:
     cmd = invocation(ctx)
     return _write_hook(ctx, "pre-commit", HOOK.format(cmd=cmd), HOOK_MARKER,
                        f"{cmd} guard || exit 1")
+
+
+def install_push_hook(ctx: _ctx.Context) -> dict[str, Any]:
+    cmd = invocation(ctx)
+    return _write_hook(ctx, "pre-push", PUSH_HOOK.format(cmd=cmd),
+                       PUSH_HOOK_MARKER, f"{cmd} guard --push || exit 1")
 
 
 def install_post_hook(ctx: _ctx.Context) -> dict[str, Any]:
@@ -503,6 +523,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         result["skills_note"] = f"skill index skipped: {exc}"
 
     result["pre_commit_hook"] = install_hook(ctx)
+    result["pre_push_hook"] = install_push_hook(ctx)
     result["post_commit_hook"] = install_post_hook(ctx)
 
     # Stamped after everything above is on disk, so the fingerprints cover what

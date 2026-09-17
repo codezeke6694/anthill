@@ -49,6 +49,60 @@ def _git(args: list[str], cwd: Path) -> str:
     return r.stdout if r.returncode == 0 else ""
 
 
+OWNER_ENV = "ANTHILL_OWNER"
+
+
+def is_owner() -> bool:
+    """Is this the owner acting, rather than an agent?
+
+    A local hook runs the same binary for both, on the same machine, so it
+    cannot actually tell. This is a convenience so the owner is not fighting
+    their own tooling when they merge -- an agent launched from a shell that
+    exports it inherits it, and could read the profile that sets it.
+
+    So treat it as a turn signal, not a lock. The only control that genuinely
+    distinguishes an owner from an agent lives off this machine: branch
+    protection on the remote, where merging requires an identity the agent does
+    not hold.
+    """
+    import os as _os
+    return _os.environ.get(OWNER_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
+def current_branch(cwd: Path) -> str:
+    return _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd).strip()
+
+
+def protected(ctx: _ctx.Context) -> list[str]:
+    ex = ctx.config.get("execution") or {}
+    return [str(b) for b in (ex.get("protected_branches") or [])]
+
+
+def check_branch(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
+    """Is this a branch the owner keeps for themselves?
+
+    Checked before ownership, because it is the more basic question: a change
+    committed straight onto `main` has bypassed review entirely, whatever unit
+    owned the files. The owner merges into a protected branch; nothing else does.
+    """
+    branch = current_branch(cwd)
+    names = protected(ctx)
+    if not names or branch not in names:
+        return None
+    if is_owner():
+        return None
+    return ({
+        "verdict": "refused",
+        "branch": branch,
+        "protected": names,
+        "why": (f"{branch!r} is the owner's branch. Work happens on a branch and "
+                f"is merged in once the owner is satisfied with it."),
+        "next": (f"git switch -c work/<what-you-are-doing>   # then commit\n"
+                 f"  The owner merges it into {branch} once reviewed.\n"
+                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell."),
+    }, REFUSE)
+
+
 def staged(cwd: Path) -> list[str]:
     out = _git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
     return [f for f in out.splitlines() if f.strip()]
@@ -110,6 +164,10 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
     if is_merging(cwd):
         return {"verdict": "allowed", "why": "merge in progress"}, ALLOW
 
+    on_protected = check_branch(ctx, cwd)
+    if on_protected is not None:
+        return on_protected
+
     include, toplevel, exclude = ctx.source_roots()
     files = staged(cwd)
     scoped = [f for f in files if in_scope(f, include, toplevel, exclude)]
@@ -142,10 +200,52 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
     }, REFUSE
 
 
+def check_push(ctx: _ctx.Context, cwd: Path, refs: list[str]) -> tuple[dict, int]:
+    """Refuse a push to a protected branch.
+
+    A commit is local and recoverable; a push is not. git hands pre-push the
+    refs being updated on stdin, so this reads what is actually being pushed
+    rather than guessing from the current branch -- `git push origin HEAD:main`
+    from a work branch targets main without ever checking it out.
+    """
+    names = protected(ctx)
+    if not names:
+        return {"verdict": "allowed", "why": "no protected branches configured"}, ALLOW
+    if is_owner():
+        return {"verdict": "allowed", "why": f"${OWNER_ENV} is set"}, ALLOW
+    hit = [r for r in refs if r in names]
+    if not hit:
+        return {"verdict": "allowed", "pushing": refs}, ALLOW
+    return ({
+        "verdict": "refused",
+        "pushing_to": hit,
+        "protected": names,
+        "why": ("a push to the owner's branch is not recoverable the way a local "
+                "commit is. The owner merges and pushes these."),
+        "next": ("push your work branch instead:\n"
+                 "    git push -u origin $(git branch --show-current)\n"
+                 "  then open it for review.\n"
+                 f"  If you are the owner: export {OWNER_ENV}=1 in your shell, "
+                 "or git push --no-verify"),
+    }, REFUSE)
+
+
+def _pushed_refs(stdin_text: str) -> list[str]:
+    """Remote branch names from pre-push stdin: `<local ref> <sha> <remote ref> <sha>`."""
+    out = []
+    for line in stdin_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2].startswith("refs/heads/"):
+            out.append(parts[2][len("refs/heads/"):])
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Refuse a commit of product source that no claimed unit owns.")
     ap.add_argument("--project", default="")
+    ap.add_argument("--push", action="store_true",
+                    help="pre-push mode: read the refs being pushed on stdin")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -155,6 +255,20 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit:
         return ALLOW                      # never block a commit on our own fault
 
+    if args.push:
+        refs = _pushed_refs(sys.stdin.read() if not sys.stdin.isatty() else "")
+        report, code = check_push(ctx, cwd, refs)
+        if args.json:
+            print(json.dumps(report, indent=2))
+            return code
+        if code == ALLOW:
+            return ALLOW
+        print(f"\nanthill: push refused — {', '.join(report['pushing_to'])} "
+              f"belongs to the owner.\n", file=sys.stderr)
+        print(f"  {report['why']}\n", file=sys.stderr)
+        print(f"  {report['next']}\n", file=sys.stderr)
+        return REFUSE
+
     report, code = check(ctx, cwd)
     if args.json:
         print(json.dumps(report, indent=2))
@@ -162,6 +276,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if code == ALLOW:
         return ALLOW
+    if report.get("branch"):
+        print(f"\nanthill: commit refused — {report['branch']} is the owner's "
+              f"branch.\n", file=sys.stderr)
+        print(f"  {report['why']}\n", file=sys.stderr)
+        print(f"  {report['next']}\n", file=sys.stderr)
+        return REFUSE
     print("\nanthill: commit refused — the board is the way in.\n", file=sys.stderr)
     for f in report["unowned"]:
         print(f"  unowned  {f}", file=sys.stderr)

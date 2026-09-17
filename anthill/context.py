@@ -58,7 +58,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
                   # Ownership is enforced either way. Off by default, because a
                   # single agent pays the whole cost -- code that never appears
                   # in the owner's folder -- for a benefit it is not using.
-                  "isolate": False},
+                  "isolate": False,
+                  # Branches an agent may not commit to or push. The owner
+                  # merges into these; nothing else does.
+                  "protected_branches": ["main", "master"]},
     "gates": {},
     # Blueprint conditions compiled into every gate. `require_page` is off by
     # default because a project's first sprints legitimately have no pages yet;
