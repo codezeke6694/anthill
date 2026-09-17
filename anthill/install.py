@@ -122,6 +122,29 @@ work shares its blind spots exactly, so its approval means little. Tests stay
 the only real proof either way, but a different tool on the auditor seat is the
 one thing that buys genuine independence.
 
+## Branches: main belongs to the owner
+
+You do not commit to `main`, and you do not push to it. Work on a branch; the
+owner merges when they have reviewed it.
+
+```bash
+git switch -c work/<what-you-are-doing>
+# commit here as often as you like
+git push -u origin work/<what-you-are-doing>
+```
+
+**Never use `git commit --no-verify` or `git push --no-verify`.** The hooks that
+refuse a commit on `main`, or source no unit owns, are not obstacles to route
+around — they are the only thing standing between a change and the owner's
+branch. A refusal is information: read what it says and do that instead. If you
+believe a hook is wrong, say so and stop; do not flag past it.
+
+This is asked of you rather than enforced against you, and you should know why:
+a local hook runs the same git binary for you and for the owner, on the same
+machine, so it cannot tell you apart and cannot stop you. It holds because you
+choose to let it. Bypassing it once teaches the next session that bypassing is
+normal.
+
 ## Before you touch anything
 
 You are operating as a **role**, not as a general assistant. Find your role in
