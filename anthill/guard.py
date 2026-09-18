@@ -179,6 +179,12 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
     if on_protected is not None:
         return on_protected
 
+    ex = ctx.config.get("execution") or {}
+    if not ex.get("guard_ownership", False):
+        return ({"verdict": "allowed",
+                 "why": "ownership guarding is off (execution.guard_ownership); "
+                        "branch and push protection still apply"}, ALLOW)
+
     include, toplevel, exclude = ctx.source_roots()
     files = staged(cwd)
     scoped = [f for f in files if in_scope(f, include, toplevel, exclude)]

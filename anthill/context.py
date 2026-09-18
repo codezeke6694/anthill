@@ -65,7 +65,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
                   # Pushing is the owner's act, not an agent's -- any branch,
                   # not only a protected one. A push leaves the machine and
                   # reaches other people; a local commit does not.
-                  "push_requires_owner": True},
+                  "push_requires_owner": True,
+                  # Refuse a commit of product source no claimed unit owns.
+                  # Off by default: it only makes sense once a project has
+                  # decided every change goes through the board, and until then
+                  # it refuses ordinary work on a branch -- measured, 21 files
+                  # at once. Branch and push protection are separate and stay on.
+                  "guard_ownership": False},
     "gates": {},
     # Blueprint conditions compiled into every gate. `require_page` is off by
     # default because a project's first sprints legitimately have no pages yet;
