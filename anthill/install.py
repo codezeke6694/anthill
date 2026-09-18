@@ -200,14 +200,62 @@ file outside your unit: context you did not need is context that made you worse.
 
 ## How work closes
 
-You do not decide that work is complete. A gate does:
+You do not decide that work is complete. A gate does. An agent cannot assert
+completion — that is the load-bearing rule of this system, and the sequence that
+implements it is below.
+
+## Doing a piece of work, start to finish
+
+**Every session, before anything else, find out whether a unit is already
+yours.** Context gets compacted and sessions restart; the board does not forget.
 
 ```bash
-anthill work gate <unit>    # ownership check, then tests, blueprint, audit
-anthill work done <unit>    # refused unless the gate passed
+anthill work status --repo .
 ```
 
-An agent cannot assert completion. That is the load-bearing rule of this system.
+- It names a unit as `in_flight` → that is likely yours. Read
+  `.anthill/build/work/*/briefs/<unit>.md` — your own instructions, written to a
+  file for exactly this reason — before touching any code.
+- It says `board_is_behind` → the sprint was changed since the board was seeded.
+  Run `anthill work load --repo .` to pick up the new units. Without this,
+  `work next` reports "drained" while the sprint sits there with work on it.
+- Nothing ready and nothing behind → there is no work for you. Say so rather
+  than inventing some.
+
+Then:
+
+```bash
+anthill work next --repo .  --worker <you>   # claims one, prints the brief
+#   build, inside the unit's `owns` paths and nowhere else
+anthill work gate --repo .  --unit <id>      # ownership, tests, map, audit
+anthill work done --repo .  --unit <id>      # refused unless the gate passed
+```
+
+### Read the gate's exit code; it tells you what to do next
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `0` | passed | `work done` |
+| `1` | a test failed, or an audit refuses the work | fix the work |
+| `3` | nobody has reviewed this state yet | **not your fault, and it costs you no attempt.** An auditor reviews it, then re-gate |
+| `64` | you wrote outside `owns` — the file is named | revert that file; it belongs to another unit |
+| `65` | you called `done` without a passing gate | run the gate |
+| `66` | gated, but will not merge: two units claim one file | a contract bug. Escalate; do not resolve it yourself |
+
+### When you are stuck
+
+```bash
+anthill work escalate --repo . --unit <id> --reason "<what stopped you>"
+```
+
+Then **stop**. Do not guess, do not widen your boundary to fix something
+adjacent, and do not edit anything under `.anthill/build/work/` by hand — state
+edited directly is indistinguishable from tampering and records nobody's
+decision. If a unit was escalated and the cause is since fixed, the sanctioned
+way back is `anthill work reopen --repo . --unit <id> --reason "..." --by "..."`.
+
+If a command seems to be missing or a step does not exist, say so and ask. That
+is a real answer and a useful one; inventing a workaround is neither.
 
 ## Keeping the blueprint current
 
@@ -374,19 +422,27 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
 
     These were two copies of the same construction and drifted the moment the
     vendored-invocation footer was added here and not there -- so `control`
-    reported CLAUDE.md as EDITED on every vendored install, permanently. A check
-    that always fires is a check nobody reads.
+    reported CLAUDE.md as EDITED on every vendored install, permanently.
+
+    The path is stated once, at the top, rather than substituted into every
+    example. Substituting turned every command in the work sequence into a
+    60-character absolute path and made the section unreadable; one export the
+    agent runs first is both shorter and how a person would actually work.
     """
     cmd = invocation(ctx)
     text = CLAUDE_MD.format(name=name, protected=protected_block)
-    if cmd != "anthill":
-        text = text.replace("anthill ", f"{cmd} ")
-        rel = cmd.split("/bin/")[0].lstrip("./")
-        text += (f"\n## Running the tool\n\nInvoke it by path from the "
-                 f"repository root:\n\n```bash\n{cmd} status\n```\n\nOr put "
-                 f"it on your PATH once per shell:\n\n```bash\n"
-                 f"export PATH=\"{rel}/bin:$PATH\"\n```\n")
-    return text
+    if cmd == "anthill":
+        return text
+    bindir = cmd.rsplit("/bin/", 1)[0] + "/bin"
+    header = (f"## Run this first, every session\n\n"
+              f"Anthill lives outside this repository. Put it on your PATH "
+              f"before anything else, or every command below fails with "
+              f"`command not found`:\n\n"
+              f"```bash\nexport PATH=\"{bindir}:$PATH\"\n```\n\n"
+              f"Every `anthill ...` in this file assumes you have done that.\n\n")
+    # after the H1 and its opening lines, before the first section
+    marker = "## First, every session: is the charter complete?"
+    return text.replace(marker, header + marker, 1) if marker in text else header + text
 
 
 def plan(ctx: _ctx.Context, project_name: str = "",
