@@ -128,6 +128,23 @@ class Store:
     def contract_path(self) -> Path:
         return self.root / CONTRACT_FILE
 
+    def canonical_contract(self) -> Path:
+        """Where `sprint compile` writes, if this run has a project context."""
+        try:
+            from anthill import context as _c
+            return _c.current().contracts_dir / "contract.json"
+        except Exception:                                  # pragma: no cover
+            return self.contract_path
+
+    def board_is_behind(self) -> bool:
+        """Has the approved contract moved on since the board was seeded?"""
+        canon = self.canonical_contract()
+        if not canon.exists() or not self.contract_path.exists():
+            return False
+        if canon.resolve() == self.contract_path.resolve():
+            return False
+        return canon.stat().st_mtime > self.contract_path.stat().st_mtime
+
     def load_contract(self) -> dict:
         if not self.contract_path.exists():
             raise OrchestratorError(
@@ -811,6 +828,62 @@ def record_gate(store: Store, unit: dict, state: dict, cmd: str,
         else:
             state["status"] = CLAIMED
     store.write_state(unit["id"], state)
+
+
+def load_board(store: Store, source: Path, write: bool = True) -> dict[str, Any]:
+    """Seed or refresh the board from a compiled contract.
+
+    `sprint compile` writes the contract the owner approved; the orchestrator
+    reads a copy inside the run directory. Nothing joined the two, so extending
+    a sprint from 8 units to 12 left the board on the old 8 and `work next`
+    reported "drained" -- every unit on a board nobody had told about the new
+    work. The gap went unnoticed for two weeks because every test of the
+    orchestrator copied the file by hand first.
+
+    Existing unit state is preserved: a unit that is already `done` stays done.
+    Units the new contract drops are reported rather than deleted, because their
+    state is the only record that the work happened.
+    """
+    source = Path(source)
+    if not source.exists():
+        raise OrchestratorError(f"no contract at {source}; run `sprint compile` first")
+    contract = json.loads(source.read_text(encoding="utf-8"))
+    validate_contract(contract)
+    new_ids = [str(u["id"]) for u in contract["units"]]
+
+    old_ids: list[str] = []
+    if store.contract_path.exists():
+        try:
+            old_ids = [str(u["id"]) for u in
+                       json.loads(store.contract_path.read_text(encoding="utf-8")
+                                  ).get("units") or []]
+        except (OSError, json.JSONDecodeError):
+            old_ids = []
+
+    have_state = sorted(p.stem for p in store.state_dir.glob("*.json")) \
+        if store.state_dir.exists() else []
+    added = [u for u in new_ids if u not in old_ids]
+    dropped = [u for u in old_ids if u not in new_ids]
+    # State for a unit no contract declares. Left alone: it is the only record
+    # that the work happened, and `work status` reads the contract so it never
+    # surfaces there.
+    orphaned = [s for s in have_state if s not in new_ids]
+
+    if write:
+        store.init_dirs()
+        write_json_atomic(store.contract_path, contract)
+
+    return {
+        "board": str(store.contract_path),
+        "from": str(source),
+        "units": len(new_ids),
+        "added": added,
+        "dropped": dropped,
+        "orphaned_state": orphaned,
+        "written": write,
+        "note": ("existing unit state is kept, so anything already done stays "
+                 "done; new units start unclaimed"),
+    }
 
 
 def reopen(store: Store, unit_id: str, reason: str = "",

@@ -822,12 +822,23 @@ def cmd_kb_catalogue(args: argparse.Namespace) -> None:
 
 
 def cmd_work_plan(args: argparse.Namespace) -> int:
-    _print_json(work_mod.plan(_store(args)))
+    st = _store(args)
+    _print_json({**work_mod.plan(st), **_behind_note(st)})
     return 0
 
 
+def _behind_note(store) -> dict:
+    """A board seeded before the contract moved reports confidently wrong."""
+    if not store.board_is_behind():
+        return {}
+    return {"board_is_behind": (
+        "the approved contract is newer than this board. Run `work load` to "
+        "pick up the change; until then this reflects the old plan.")}
+
+
 def cmd_work_status(args: argparse.Namespace) -> int:
-    _print_json(work_mod.status(_store(args)))
+    st = _store(args)
+    _print_json({**work_mod.status(st), **_behind_note(st)})
     return 0
 
 
@@ -855,6 +866,13 @@ def cmd_work_done(args: argparse.Namespace) -> int:
 
 def cmd_work_release(args: argparse.Namespace) -> int:
     _print_json(work_mod.release(_store(args), args.unit))
+    return 0
+
+
+def cmd_work_load(args: argparse.Namespace) -> int:
+    store = _store(args)
+    src = Path(args.contract).expanduser() if args.contract else store.canonical_contract()
+    _print_json(work_mod.load_board(store, src, write=not args.dry_run))
     return 0
 
 
@@ -1076,6 +1094,13 @@ def build_parser() -> argparse.ArgumentParser:
     we.add_argument("--unit", required=True)
     we.add_argument("--reason", default="escalated by hand")
     we.set_defaults(func=cmd_work_escalate)
+
+    wl = _repo(wsub.add_parser(
+        "load", help="Seed or refresh the board from the compiled contract"))
+    wl.add_argument("--contract", default="",
+                    help="Contract to load (default: the one `sprint compile` wrote)")
+    wl.add_argument("--dry-run", action="store_true")
+    wl.set_defaults(func=cmd_work_load)
 
     wo = _repo(wsub.add_parser(
         "reopen", help="Return an escalated or blocked unit to the board"))
