@@ -26,6 +26,32 @@ ROUTER_COMMANDS = {
     "readiness", "board", "harvest", "kb", "work",
 }
 
+# Commands dispatched before argparse ever runs, each to its own module. They
+# are listed here so `--help` can name them.
+#
+# It could not, and that was the bug: `anthill --help` advertised five commands
+# while every command the agent instructions actually require -- `work`,
+# `onboard`, `roles`, `map`, `blueprint` -- appeared in none of them, and an
+# unsupported flag printed a third list again. An agent that has lost its
+# instructions cannot recover them from `--help`; it has to read the Python.
+DELEGATED = [
+    ("work", "Claim, gate, close and escalate units (the execution loop)"),
+    ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
+    ("roles", "Who is planner, builder and auditor"),
+    ("skill", "Reusable instruction, indexed and load-classed"),
+    ("map", "Rebuild the structural blueprint (`map build`)"),
+    ("blueprint", "Check the blueprint still matches the tree"),
+    ("integrate", "Redraw the blueprint after a merge"),
+    ("guard", "Pre-commit and pre-push checks (invoked by the hooks)"),
+    ("control", "Has a control file drifted from what install wrote?"),
+    ("tidy", "Stray artefacts that belong to nobody"),
+]
+
+# The ported navigation and knowledge surface. Grouped rather than listed one by
+# one: eighteen entries in the top-level help would bury the ten above, which
+# are the ones an agent needs every session.
+NAVIGATION = sorted(ROUTER_COMMANDS - {"work"})
+
 
 def _out(data) -> None:
     print(json.dumps(data, indent=2))
@@ -85,9 +111,20 @@ def main(argv: list[str] | None = None) -> int:
         return blueprint.main(argv[1:])
 
     ap = argparse.ArgumentParser(
-        prog="anthill", description="A development agent system: blueprint, intent, foreman.")
+        prog="anthill",
+        description="A development agent system: blueprint, intent, foreman.",
+        epilog="navigation and knowledge (`anthill <cmd> --help`):\n  "
+               + "\n  ".join(", ".join(NAVIGATION[i:i + 6])
+                             for i in range(0, len(NAVIGATION), 6)),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default="", help="Target project root")
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    # Registered so they appear in the command list and in `--help`. Dispatch
+    # happened above, before parsing, so these parsers are never reached -- each
+    # delegated command keeps its own flags and its own help.
+    for name, blurb in DELEGATED:
+        sub.add_parser(name, help=blurb, add_help=False)
 
     # -------------------------------------------------------------- install
     ins = sub.add_parser("install", help="Take control of a repository")

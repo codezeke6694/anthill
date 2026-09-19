@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from anthill import context as _ctx
@@ -61,14 +61,34 @@ def load(ctx: _ctx.Context) -> dict[str, Any]:
 
 
 def new(ctx: _ctx.Context, name: str, goal: str, owner: str = "") -> dict[str, Any]:
-    """Open a sprint. Archives any open one rather than losing it."""
+    """Open a sprint. Archives any open one rather than losing it.
+
+    "Rather than losing it" is a promise, so it has to survive the case where
+    the archive name is already taken. The filename was the slug alone, and a
+    slug is neither unique nor under anyone's control -- on LogiAstro,
+    `archive/sprint-1.json` already existed while the live sprint was also
+    `sprint-1`, so opening a new one would have overwritten the earlier archive
+    with no prompt and no copy. `.anthill/` is gitignored, so there is no second
+    copy anywhere and nothing to recover from.
+    """
     p = current_path(ctx)
     archived = None
+    dropped: list[str] = []
     if p.exists():
         prev = json.loads(p.read_text(encoding="utf-8"))
-        dest = ctx.sprints_dir / "archive" / f"{prev.get('slug', 'sprint')}.json"
+        slug = prev.get("slug", "sprint")
+        dest = ctx.sprints_dir / "archive" / f"{slug}.json"
+        if dest.exists():
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            dest = ctx.sprints_dir / "archive" / f"{slug}.{stamp}.json"
         _write(dest, prev)
         archived = str(dest)
+        # Units of the closed sprint vanish from the board: `work load` will
+        # report them as dropped and `work next` will not serve them again.
+        # Their state files survive, which is right, but the units become
+        # unreachable through the normal flow -- so say which ones, before the
+        # fact rather than after.
+        dropped = [u["id"] for u in prev.get("units", []) if u.get("id")]
     sprint = {
         "name": name,
         "slug": name.lower().replace(" ", "-"),
@@ -81,9 +101,14 @@ def new(ctx: _ctx.Context, name: str, goal: str, owner: str = "") -> dict[str, A
         "next_action": "add units, then `anthill sprint compile`",
     }
     _write(p, sprint)
-    out = {"created": str(p), "sprint": sprint["name"], "goal": goal}
+    out: dict[str, Any] = {"created": str(p), "sprint": sprint["name"], "goal": goal}
     if archived:
         out["archived_previous"] = archived
+    if dropped:
+        out["units_left_behind"] = dropped
+        out["note"] = (f"{len(dropped)} unit(s) of the previous sprint are no "
+                       f"longer on the board; their state files are kept but "
+                       f"`work next` will not serve them")
     return out
 
 
@@ -164,16 +189,135 @@ def spec_gate_for(tests: str) -> str:
     return tests
 
 
+# ------------------------------------------------------- does the gate bite?
+
+# Everything `assemble_gate` appends. Stripped before looking for test paths, so
+# `anthill audit check x` is not mistaken for the unit's own test selection.
+_APPENDED = ("anthill blueprint", "anthill audit check", "anthill map")
+
+
+def _test_command(gate: str) -> str:
+    """The part of a gate that is supposed to run the unit's tests."""
+    kept = [seg.strip() for seg in gate.split("&&")
+            if seg.strip() and not any(seg.strip().startswith(a) for a in _APPENDED)]
+    return " && ".join(kept)
+
+
+def _path_tokens(command: str) -> list[str]:
+    """Arguments that name a file or a glob, as opposed to flags and verbs."""
+    tokens = []
+    for raw in command.replace("&&", " ").split():
+        tok = raw.strip("'\"")
+        if tok.startswith("-") or "=" in tok.split("/")[0]:
+            continue
+        if "/" in tok or tok.endswith((".py", ".ts", ".tsx", ".mjs", ".js")):
+            tokens.append(tok)
+    return tokens
+
+
+def _overlaps(token: str, glob: str) -> bool:
+    """Could `token` and `glob` ever name the same file?
+
+    Compared as directory prefixes, in both directions. A gate is written by a
+    human aiming at a tree (`pytest tests/core`) while `owns` describes the same
+    tree as a pattern (`tests/core/**`), and neither string matches the other
+    under any glob rule -- so a literal comparison refuses exactly the
+    test-first sprints this check exists to protect.
+    """
+    root = glob.split("*")[0].rstrip("/")
+    tok = token.split("*")[0].rstrip("/")
+    if not root:                      # an owns glob of `**` owns everything
+        return True
+    if not tok:
+        return False
+    return tok == root or tok.startswith(root + "/") or root.startswith(tok + "/")
+
+
+def gate_selection(ctx: _ctx.Context, gate: str, owns_union: list[str]) -> tuple[str, list[str]]:
+    """Does this gate command actually select any test file?
+
+    Returns one of:
+      `selects`          -- names at least one path that exists, or that a unit
+                            in this sprint is going to create
+      `selects_nothing`  -- names paths, and not one of them can ever match
+      `unverifiable`     -- names no paths at all (`npm test`, bare `pytest`);
+                            what it runs is decided by a config file this cannot
+                            read
+
+    This exists because of the worst outcome the system can produce. A gate
+    pointed at a glob that matches nothing exits 0, `work done` accepts it, and
+    the unit closes having proved nothing -- the system is not stuck, it is
+    confidently wrong, and green is the one signal everything else trusts. It
+    nearly happened here: two units were given `npm --prefix web test`, while
+    `web/vite.config.ts` pins vitest to `../tests/mapping-web/**`, and the tests
+    in question lived in `tests/design-system/`. They would never have been
+    collected. It was caught by reading the runner config on a hunch.
+
+    A path inside some unit's `owns` counts as resolving even when it does not
+    exist yet: under test-first the `.spec` unit writes those files after the
+    contract is compiled, so requiring them on disk now would refuse every
+    correctly-ordered sprint.
+    """
+    command = _test_command(gate)
+    tokens = _path_tokens(command)
+    if not tokens:
+        return ("unverifiable" if command.strip() else "selects_nothing"), []
+    unresolved = []
+    for tok in tokens:
+        if list(ctx.root.glob(tok)):
+            continue
+        if any(PurePath(tok).full_match(g) for g in owns_union):
+            continue
+        if any(_overlaps(tok, g) for g in owns_union):
+            continue
+        unresolved.append(tok)
+    if unresolved and len(unresolved) == len(tokens):
+        return "selects_nothing", unresolved
+    return "selects", unresolved
+
+
+def mapped_by_blueprint(ctx: _ctx.Context, owns: list[str]) -> bool:
+    """Can the blueprint say anything at all about what this unit owns?
+
+    The map parses Python under the configured source roots, so a unit whose
+    every owned path sits in `exclude_parts` -- the whole frontend tree, the
+    tests tree -- gets a gate step that passes no matter what it did. A step
+    that cannot fail is not a check; it is a line of output that looks like one,
+    and on a red gate it sends the reader looking in the wrong place.
+
+    Deliberately conservative: only an owns glob whose leading directory is
+    *explicitly excluded* counts as unmapped. Anything ambiguous keeps the
+    check, because wrongly dropping it weakens a real gate while wrongly keeping
+    it only costs a no-op.
+    """
+    if not owns:
+        return False
+    _, _, exclude = ctx.source_roots()
+    for glob in owns:
+        head = PurePath(glob).parts[0] if PurePath(glob).parts else ""
+        if head and head not in exclude:
+            return True
+    return False
+
+
 def assemble_gate(ctx: _ctx.Context, unit_id: str, tests: str,
-                  kind: str = "impl") -> str:
+                  kind: str = "impl", owns: list[str] | None = None) -> str:
     """tests -> blueprint freshness -> audit. In that order, and never rebuilt here.
 
     The gate must not run `map build` itself: rebuilding regenerates every
     fingerprint from the live tree, so the freshness check could never fail and
     the ratchet would be decorative. The builder rebuilds; the gate verifies.
+
+    The blueprint step is dropped for a unit the map does not cover -- see
+    `mapped_by_blueprint`. The audit step never is: an audit is about intent,
+    and intent applies to a stylesheet exactly as much as to a parser.
     """
     tests = spec_gate_for(tests) if kind == "spec" else tests.strip()
     parts = [tests] if tests.strip() else []
+    if owns is not None and not mapped_by_blueprint(ctx, owns):
+        if (ctx.config.get("audit") or {}).get("required", True):
+            parts.append(f"anthill audit check {unit_id}")
+        return " && ".join(parts)
     bp = ctx.config.get("blueprint") or {}
     flags = ""
     if bp.get("require_page"):
@@ -211,8 +355,14 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
                 # appended by assemble_gate -- a unit cannot opt out of those.
                 u.get("spec_tests") or u.get("gate", ""),
                 kind="verbatim" if u.get("spec_tests")
-                else ("spec" if u["id"].endswith(".spec") else "impl")),
+                else ("spec" if u["id"].endswith(".spec") else "impl"),
+                owns=u["owns"]),
             "brief": _brief(ctx, u, sprint),
+            # `needs_iface` is what the orchestrator schedules on. `depends_on`
+            # is carried alongside it because the contract is described as the
+            # source of truth for what a unit waits on, and a reader of the
+            # contract alone could not see the dependency graph at all.
+            "depends_on": list(u.get("depends_on") or []),
             "needs_iface": u.get("depends_on") or [],
             "needs_data": [],
             "escalate_after": 2,
@@ -223,6 +373,30 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
                 for u in units for d in u["needs_iface"] if d not in ids]
     for u in units:
         u["needs_iface"] = [d for d in u["needs_iface"] if d in ids]
+
+    # Does each gate actually bite? A gate that selects no tests is the only
+    # failure on this list that lets bad work through rather than blocking good
+    # work, so it is refused here rather than reported.
+    owns_union = [g for u in units for g in u["owns"]]
+    vacuous, unverifiable = [], []
+    for u in units:
+        if not u["gate"].strip():
+            continue
+        verdict, unresolved = gate_selection(ctx, u["gate"], owns_union)
+        if verdict == "selects_nothing":
+            vacuous.append({"unit": u["id"], "gate": u["gate"],
+                            "matches_nothing": unresolved})
+        elif verdict == "unverifiable":
+            unverifiable.append({"unit": u["id"], "gate": u["gate"]})
+    if vacuous:
+        detail = "\n".join(
+            f"  {v['unit']}\n    gate: {v['gate']}\n    matches nothing: "
+            f"{', '.join(v['matches_nothing'])}" for v in vacuous)
+        raise SystemExit(
+            "anthill: refusing to compile -- these gates select no test file, "
+            "so they would pass without proving anything:\n" + detail +
+            "\n\nA gate that cannot fail closes its unit on an empty result. "
+            "Point it at a path the unit or its paired .spec unit owns.")
 
     ex = ctx.config.get("execution") or {}
     contract = {
@@ -245,14 +419,29 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
     _write(current_path(ctx), sprint)
 
     ungated = [u["id"] for u in units if not u["gate"].strip()]
+    unmapped = [u["id"] for u in units if not mapped_by_blueprint(ctx, u["owns"])]
+    warnings = []
+    if ungated:
+        warnings.append("units without a gate cannot prove themselves")
+    if unverifiable:
+        warnings.append(
+            "these gates name no test path, so what they run is decided by a "
+            "runner config this cannot read -- check the config points at the "
+            "unit's tests: "
+            + ", ".join(v["unit"] for v in unverifiable))
+    if unmapped:
+        warnings.append(
+            "the blueprint step was left out for units the map does not cover "
+            "(every owned path is in source.exclude_parts): " + ", ".join(unmapped))
     return {
         "contract": str(dest),
         "unit_count": len(units),
         "units": [{"id": u["id"], "owns": u["owns"], "gate": u["gate"]} for u in units],
         "dangling_edges": dangling,
         "ungated_units": ungated,
-        "warning": ("units without a gate cannot prove themselves"
-                    if ungated else ""),
+        "unverifiable_gates": unverifiable,
+        "blueprint_skipped": unmapped,
+        "warning": "; ".join(warnings),
     }
 
 

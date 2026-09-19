@@ -397,6 +397,20 @@ DEFAULT_ARTEFACT_IGNORE = (
 )
 
 
+# A file that was already gone when the unit was claimed. `_digest` cannot
+# describe one -- there are no bytes to hash -- so the baseline used to skip it
+# and every in-place unit inherited a permanent violation for every file deleted
+# since its base. On LogiAstro that was 144 files, 41 of which surfaced; the
+# unit was charged with all of them and escalated. Absence is a state the
+# baseline has to be able to record, the same as any other.
+ABSENT_AT_CLAIM = "<absent>"
+
+
+def _state_of(path: Path) -> str:
+    """How a file looked, in the one vocabulary `seeded` speaks."""
+    return _digest(path) if path.is_file() else ABSENT_AT_CLAIM
+
+
 def check_ownership(worktree: Path, owns: list[str], base: str,
                     artefact_ignore: tuple[str, ...] | list[str] | None = None,
                     seeded: dict[str, str] | None = None
@@ -424,10 +438,12 @@ def check_ownership(worktree: Path, owns: list[str], base: str,
             ignored.append(f)
             continue
         # A seeded file is the orchestrator's doing, not the agent's -- but only
-        # while it is untouched. Comparing the digest keeps the boundary real: an
-        # agent that edits a seeded file outside its owns is still in violation.
+        # while it is untouched. Comparing the recorded state keeps the boundary
+        # real in both directions: an agent that edits a seeded file outside its
+        # owns is in violation, and so is one that recreates a file that was
+        # already deleted when it started.
         if f in seeded:
-            if _digest(worktree / f) == seeded[f]:
+            if _state_of(worktree / f) == seeded[f]:
                 ignored.append(f)
                 continue
             violations.append(f)
@@ -441,8 +457,41 @@ def check_ownership(worktree: Path, owns: list[str], base: str,
 def integration_branch(contract: dict) -> str:
     """Where passing units accumulate. Defaults to `integration` rather than the
     base branch so the operator's own checkout is never touched -- integration is
-    promoted in batches, after reading gate results."""
-    return contract.get("integration_branch", "integration")
+    promoted in batches, after reading gate results.
+
+    Falsy means unconfigured, not "the empty branch". `sprint compile` omits an
+    empty `integration_branch`, but a hand-written contract can carry `""`, and
+    `dict.get(key, default)` hands back the empty string whenever the key exists
+    and is falsy. `git diff "...HEAD"` against an empty base resolves to the
+    working tree and blames the unit for the whole of it.
+    """
+    return contract.get("integration_branch") or "integration"
+
+
+def head_commit(worktree: Path) -> str:
+    res = run(["git", "rev-parse", "HEAD"], cwd=worktree)
+    return res.stdout.strip() if res.returncode == 0 else ""
+
+
+def ownership_base(contract: dict, state: dict) -> str:
+    """The commit a unit's footprint is measured from.
+
+    A branch name is the wrong thing to diff a unit against: it names a moving
+    target the unit did not pick and cannot control. What the boundary actually
+    means is "what changed since this unit started", and the only honest
+    expression of that is the commit HEAD was on when the unit was claimed.
+
+    Measured on LogiAstro. The configured integration branch had fallen 147
+    commits behind, so a unit whose entire footprint was two new files inside
+    its own `owns` was charged with 41 violations -- every one of them a file
+    somebody else had deleted a fortnight earlier. The failure names the agent,
+    so it reads as a boundary mistake rather than as the configuration error it
+    is, and nothing in the output said which base produced it.
+
+    `base_commit` is recorded at claim time in both modes. The branch fallback
+    serves only states written before that field existed.
+    """
+    return state.get("base_commit") or integration_branch(contract)
 
 
 def ensure_integration(store: Store, contract: dict) -> tuple[Path | None, str]:
@@ -719,6 +768,9 @@ def claim(store: Store, worker: str, unit_id: str = "",
                 raise
             state["worktree"] = str(wt)
             state["branch"] = branch
+            # Where this unit started. Recorded now, while it is a fact, rather
+            # than re-derived at gate time from a branch that has moved since.
+            state["base_commit"] = head_commit(wt)
             # A fresh worktree has no gitignored artefacts -- no node_modules, no
             # local database. Whatever the gate needs to run, this hook supplies.
             if contract.get("seed_working_state"):
@@ -741,6 +793,11 @@ def claim(store: Store, worker: str, unit_id: str = "",
         else:
             state["worktree"] = str(store.repo)
             state["branch"] = contract.get("base_branch", "main")
+            # In place there is no branch that means "where this unit started",
+            # so the commit is the only thing that does. Everything below, and
+            # the ownership check at gate time, measures from here.
+            base = head_commit(store.repo)
+            state["base_commit"] = base
             # Working in place means the unit inherits whatever the operator had
             # already left dirty, and the ownership check would blame it for all
             # of it -- observed: an agent failed for CLAUDE.md, which install had
@@ -748,10 +805,10 @@ def claim(store: Store, worker: str, unit_id: str = "",
             # uses, so pre-existing content is exempt while any further change to
             # those files is still a violation.
             pre = {}
-            for rel in changed_files(store.repo, integration_branch(contract)):
+            for rel in changed_files(store.repo, base):
                 q = store.repo / rel
-                if q.is_file() and not q.is_symlink():
-                    pre[rel] = _digest(q)
+                if not q.is_symlink():
+                    pre[rel] = _state_of(q)
             state["seeded"] = pre
             state["seeded_count"] = len(pre)
             state["in_place"] = True
@@ -818,6 +875,16 @@ def record_gate(store: Store, unit: dict, state: dict, cmd: str,
     elif exit_code == EXIT_NOT_REVIEWED:
         state["status"] = CLAIMED
         state["awaiting_audit"] = True
+    elif exit_code == EXIT_OWNERSHIP:
+        # `escalate_after` exists to catch a unit that cannot make its tests
+        # pass. A boundary mistake is a different animal: the offending file is
+        # named in the output, reverting it is seconds of work, and the check
+        # runs before the gate command so nothing about the unit's actual work
+        # has been tested yet. Charging it an attempt spends half the budget on
+        # the cheapest, most self-evident class of failure there is -- two of
+        # them escalated a unit here before its gate had ever run once.
+        state.pop("awaiting_audit", None)
+        state["status"] = CLAIMED
     else:
         state.pop("awaiting_audit", None)
         state["attempts"] = state.get("attempts", 0) + 1
@@ -939,15 +1006,21 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
         return {"refused": f"{unit['id']} is already {state['status']}"}, EXIT_TERMINAL
 
     worktree = Path(state.get("worktree") or store.repo)
-    base = integration_branch(contract)
+    base = ownership_base(contract, state)
     violations, ignored = check_ownership(
         worktree, unit["owns"], base,
         artefact_ignore=contract.get("artefact_ignore"),
         seeded=state.get("seeded"))
     if violations:
+        # Name the base. Without it the failure reads as a pure accusation --
+        # "you wrote outside owns" -- and a misconfigured base is indistinguish-
+        # able from a real boundary breach, which is how 41 files somebody else
+        # deleted got charged to a unit that had touched none of them.
         record_gate(store, unit, state, cmd="<ownership>", exit_code=EXIT_OWNERSHIP,
-                    output="wrote outside owns:\n  " + "\n  ".join(violations))
+                    output=f"wrote outside owns, measured against {base}:\n  "
+                           + "\n  ".join(violations))
         return {"unit": unit["id"], "result": "ownership_violation",
+                "measured_against": base,
                 "violations": violations,
                 "ignored_artefacts": ignored}, EXIT_OWNERSHIP
 
