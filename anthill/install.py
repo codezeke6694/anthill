@@ -560,6 +560,18 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     cfg["protected_paths"] = PROTECTED_PATHS
     cfg["installed_mode"] = result["mode"]
 
+    # Settings the owner chose, carried across a re-install. `--force` is the
+    # sanctioned way to re-render CLAUDE.md and AGENTS.md after this tool
+    # changes, and it started from DEFAULT_CONFIG -- so re-rendering a doc also
+    # silently reset every execution decision the owner had made: which branches
+    # are protected, whether a push needs them, where the venv is, whether units
+    # run isolated. The one command an owner is told to run to stay current was
+    # the command that undid their configuration.
+    for block in ("execution", "audit", "blueprint", "gates"):
+        existing = ctx.config.get(block)
+        if isinstance(existing, dict) and existing:
+            cfg[block] = {**cfg.get(block, {}), **existing}
+
     written: list[str] = []
     if not write:
         result["created"] = False
