@@ -125,15 +125,16 @@ hooks that refuse these things are not obstacles to route around; a refusal is
 information — read it and do what it says. If you think a hook is wrong, say so
 and stop.
 
-Know why that last one is asked rather than enforced: a local hook runs the same
-git binary for you and for the owner, on the same machine, so it cannot tell you
-apart and cannot stop you. It holds because you choose to let it. Bypassing it
-once teaches the next session that bypassing is normal.
+Know why these are asked rather than enforced: a local hook runs the same git
+binary for you and for the owner, on the same machine, so it cannot tell you
+apart. There is no wall here, and there was never going to be one — a wall whose
+only key is a command the owner has to type is a wall that gets in their way and
+not yours. What holds is that you choose to let it hold.
 
-The owner's override is `ANTHILL_OWNER=1`, set per command and never in a shell
-profile — your shell is initialised from the same profile theirs is, so a line
-in `.zshrc` would hand it to you permanently. Do not set it, do not suggest
-setting it, and do not use it if you find it already set.
+So the rule is short, and it is the whole of it: **you do not push unless the
+owner asked for this push.** Not because you cannot — because they did not ask.
+An approval from earlier in the session is not this push. A branch that is ready
+is not a request. If you think something should go up, say so and wait.
 
 ## Doing a piece of work, start to finish
 
