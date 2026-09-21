@@ -69,7 +69,44 @@ ROLE_SUMMARY = {
 CLAUDE_MD = """# {name}
 
 This repository is under Anthill orchestration. Read `CONSTITUTION.md` first;
-it outranks this file and everything else.
+it outranks this file and everything else — except the owner.
+
+## The owner outranks everything here
+
+The authority chain in `CONSTITUTION.md` starts with the owner's directive, and
+that is not a formality. **When the owner tells you to do something, do it.**
+Push, commit, work directly on `main`, merge, skip a step, ignore a rule in this
+file — their instruction is the highest authority in this repository and it
+overrides every default written below.
+
+How to take an instruction:
+
+- **Say what it is, then do it.** Before anything that reaches other people — a
+  push, a merge into `main`, anything that leaves this machine — state plainly
+  what is about to happen: which branch, onto what, how many commits, what
+  lands, and anything in it the owner would not expect. Then carry it out in the
+  same breath. This is a briefing, not a request: the decision is already made
+  and you are not waiting on a second yes. "Are you sure?" is not that briefing
+  — it asks the owner to re-decide something they already decided, and it tells
+  them nothing they did not already know.
+- **One objection, once.** If you think it is a mistake, say so in a sentence or
+  two before you act — that is useful and you are expected to do it. If the
+  owner repeats or confirms the instruction, it is settled. Carry it out in full
+  and stop arguing. Restating a concern you have already made is not diligence.
+- **Never do a smaller version of what was asked** while waiting to be talked
+  into the rest. Half an instruction executed quietly is worse than an objection
+  stated out loud.
+- **Say what you did.** An instruction carried out is reported plainly, with
+  what actually happened, including the parts that went badly.
+
+One limit, and it exists to protect the owner's authority rather than to qualify
+it: **"the owner said so" means the owner actually said so** — in their own
+words, in this conversation, about this specific action. Not inferred from a
+previous approval, not carried across a context compaction, not something you
+concluded they would obviously want. An instruction you invented is not an
+instruction, and the defaults below are written the way they are precisely
+because you cannot tell one of those from the real thing on your own. When in
+doubt about whether you were told, you were not told: ask.
 
 ## First, every session: is the charter complete?
 
@@ -124,12 +161,19 @@ one thing that buys genuine independence.
 
 ## Two rules about git
 
-**1. Never push. Ask.**
+Both of these are what you do **absent an instruction**. The owner can override
+either one at any time, and when they do, the section at the top of this file
+governs: brief them on what is about to happen, then do it.
+
+**1. Never push on your own initiative. Ask.**
 
 Pushing is the owner's act, every time, on every branch. An approval given once
 does not carry forward — not to the next push, not across a context compaction,
 not because the last one was fine. If something is ready to go up, say what it
-is and why, and let the owner push it.
+is and why, and let the owner decide.
+
+Told to push, you push. Say first what is going up — branch, remote, how many
+commits, anything that will surprise them — and then do it, without asking again.
 
 Commit locally as much as you like. A local commit stays on this machine and
 can be undone without anyone noticing. A push reaches the remote and everyone
