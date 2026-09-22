@@ -128,3 +128,12 @@ def test_status_reads_the_board(project):
     assert after["source"] == "board"
     assert "core.spec" in after["by_status"]["in flight"]
     assert "core.impl" in after["by_status"]["blocked"]
+
+
+def test_spec_gate_that_must_pass_is_warned(project):
+    backlog.new(project, "S1", "goal", owner="o")
+    backlog.add_unit(project, "core", "Core", ["pkg/**"], "pytest tests/core",
+                     split=True, spec_gate="pytest tests/core")
+    out = backlog.compile_contract(project)
+    assert out["spec_gates_requiring_pass"] == ["core.spec"]
+    assert "require the tests to PASS" in out["warning"]

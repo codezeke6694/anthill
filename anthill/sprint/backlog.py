@@ -488,9 +488,20 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
 
     ungated = [u["id"] for u in units if not u["gate"].strip()]
     unmapped = [u["id"] for u in units if not mapped_by_blueprint(ctx, u["owns"])]
+    # A spec unit whose gate needs its tests to *pass* can only close once the
+    # implementation exists, which is the deadlock the split was built to
+    # avoid. Two units here were created that way with an explicit --spec-gate.
+    spec_must_pass = [u["id"] for u in units
+                      if u["id"].endswith(".spec") and "pytest" in u["gate"]
+                      and "--collect-only" not in _test_command(u["gate"])]
     warnings = []
     if ungated:
         warnings.append("units without a gate cannot prove themselves")
+    if spec_must_pass:
+        warnings.append(
+            "these .spec gates require the tests to PASS, so they cannot close "
+            "before the implementation exists (use --collect-only): "
+            + ", ".join(spec_must_pass))
     if unverifiable:
         warnings.append(
             "these gates name no test path, so what they run is decided by a "
@@ -506,6 +517,7 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
         "unit_count": len(units),
         "units": [{"id": u["id"], "owns": u["owns"], "gate": u["gate"]} for u in units],
         "mode": rules.mode(ctx),
+        "spec_gates_requiring_pass": spec_must_pass,
         "dangling_edges": dangling,
         "ungated_units": ungated,
         "unverifiable_gates": unverifiable,
