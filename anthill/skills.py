@@ -186,9 +186,12 @@ def install_library(ctx: _ctx.Context, source: Path, categories: list[str] | Non
 
 # ---------------------------------------------------------------- indexing
 
-# A directory that is a template for authoring skills, not a skill. Indexing it
-# advertises `your-skill-name` as something an agent could load.
-TEMPLATE_DIRS = {"_template"}
+# Directories that hold no loadable skill. `_template` is the authoring
+# template; indexing it advertises `your-skill-name` as something an agent
+# could load. `_archive` is where a retired instruction set goes instead of
+# being deleted -- `.anthill/` has no other copy -- and an archived skill that
+# still appears in INDEX.md is a retired rule an agent will follow anyway.
+TEMPLATE_DIRS = {"_template", "_archive"}
 
 # Peregrine kept its state in `.agent/`; this system keeps it in `.anthill/`,
 # with a different shape. A skill that cites a path which does not exist sends an
