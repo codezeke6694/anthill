@@ -111,3 +111,43 @@ def test_done_refused_without_a_gate(project):
     work.claim(st, "solo", "core.impl", isolate=False)
     out, code = work.done(st, "core.impl")
     assert code == work.EXIT_NO_GATE
+
+
+def test_a_file_another_unit_owns_is_not_this_unit_s_violation(project):
+    """Districts partition the tree, so a file in somebody else's district is
+    by construction not this unit's doing. Reported, never charged."""
+    st = _store(project)
+    two = dict(CONTRACT)
+    two["units"] = [
+        CONTRACT["units"][0],
+        {"id": "web.impl", "owns": ["web/**"], "gate": "true",
+         "needs_iface": [], "needs_data": [], "escalate_after": 0},
+    ]
+    work.write_json_atomic(st.contract_path, two)
+    work.claim(st, "solo", "core.impl", isolate=False)
+    (project.root / "web" / "app.ts").write_text("export const x = 2;\n")
+    out, code = work.gate(st, "core.impl")
+    assert code == 0, out
+    assert out["belongs_to_another_unit"] == {"web/app.ts": "web.impl"}
+
+
+def test_an_unowned_file_is_still_a_violation(project):
+    st = _store(project)
+    work.claim(st, "solo", "core.impl", isolate=False)
+    (project.root / "stray.py").write_text("x = 1\n")
+    out, code = work.gate(st, "core.impl")
+    assert code == work.EXIT_OWNERSHIP
+    assert out["violations"] == ["stray.py"]
+
+
+def test_control_files_the_tool_rewrites_are_not_charged(project):
+    """`install --force` re-renders CLAUDE.md and AGENTS.md. A unit claimed
+    before that was charged with both -- the tool blaming an agent for its own
+    edit, the same bug the .anthill/** exemption was added for."""
+    st = _store(project)
+    work.claim(st, "solo", "core.impl", isolate=False)
+    (project.root / "CLAUDE.md").write_text("# re-rendered\n")
+    (project.root / "AGENTS.md").write_text("# re-rendered\n")
+    out, code = work.gate(st, "core.impl")
+    assert code == 0, out
+    assert set(out["ignored_artefacts"]) >= {"CLAUDE.md", "AGENTS.md"}

@@ -394,6 +394,12 @@ DEFAULT_ARTEFACT_IGNORE = (
     # agent that had touched nothing but its own district.
     ".anthill/**", "**/.anthill/**", ".claude/**", "**/.claude/**",
     ".venv/**", "**/.venv/**", "venv/**",
+    # The control files `anthill install` writes. Same reason as `.anthill/**`
+    # directly above, and missed for the same reason the deny rules miss them:
+    # they sit at the repository root rather than under the state directory. A
+    # unit claimed before `install --force` re-rendered them was charged with
+    # both -- the tool blaming an agent for the tool's own edit.
+    "CLAUDE.md", "AGENTS.md", "CONSTITUTION.md",
 )
 
 
@@ -413,22 +419,36 @@ def _state_of(path: Path) -> str:
 
 def check_ownership(worktree: Path, owns: list[str], base: str,
                     artefact_ignore: tuple[str, ...] | list[str] | None = None,
-                    seeded: dict[str, str] | None = None
-                    ) -> tuple[list[str], list[str]]:
-    """Returns (violations, ignored_artefacts).
+                    seeded: dict[str, str] | None = None,
+                    other_owns: dict[str, list[str]] | None = None
+                    ) -> tuple[list[str], list[str], dict[str, str]]:
+    """Returns (violations, ignored_artefacts, belongs_to_another_unit).
 
     An empty violations list means the agent stayed inside its boundary. The
-    second list is returned rather than dropped so the exclusion is visible: a
+    other two are returned rather than dropped so every exclusion is visible: a
     silently ignored path is how a real violation would hide.
 
     Symlinks are skipped for the same reason as artefacts -- a setup hook creates
     them to supply gitignored build output, and blaming a worker for the link the
     orchestrator asked for is a false positive.
+
+    `other_owns` maps unit id -> owns for every *other* unit on the contract. A
+    file one of them owns is that unit's business and its gate will check it, so
+    charging it here says the wrong name: districts partition the tree, and a
+    file inside somebody else's district is by construction not this unit's
+    doing. Measured on LogiAstro, where two sessions shared one checkout: a unit
+    whose own district had not changed at all was charged with nine files across
+    two other districts, and re-claiming to clear them would have moved the
+    baseline and passed on an empty diff -- gaming the check rather than
+    satisfying it. Reported, not ignored: the owner still needs to see that the
+    tree moved underneath the unit.
     """
     ignore = list(artefact_ignore if artefact_ignore is not None
                   else DEFAULT_ARTEFACT_IGNORE)
     seeded = seeded or {}
+    others = other_owns or {}
     violations, ignored = [], []
+    elsewhere: dict[str, str] = {}
     for f in changed_files(worktree, base):
         if f.startswith(WORK_DIR + "/") or matches_any(f, owns):
             continue
@@ -436,6 +456,10 @@ def check_ownership(worktree: Path, owns: list[str], base: str,
             continue
         if matches_any(f, ignore):
             ignored.append(f)
+            continue
+        holder = next((uid for uid, pats in others.items() if matches_any(f, pats)), "")
+        if holder:
+            elsewhere[f] = holder
             continue
         # A seeded file is the orchestrator's doing, not the agent's -- but only
         # while it is untouched. Comparing the recorded state keeps the boundary
@@ -449,7 +473,7 @@ def check_ownership(worktree: Path, owns: list[str], base: str,
             violations.append(f)
             continue
         violations.append(f)
-    return violations, ignored
+    return violations, ignored, elsewhere
 
 
 # ------------------------------------------------------------------ worktrees
@@ -1020,10 +1044,12 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
 
     worktree = Path(state.get("worktree") or store.repo)
     base = ownership_base(contract, state)
-    violations, ignored = check_ownership(
+    others = {str(u["id"]): (u.get("owns") or []) for u in contract["units"]
+              if str(u["id"]) != unit["id"]}
+    violations, ignored, elsewhere = check_ownership(
         worktree, unit["owns"], base,
         artefact_ignore=contract.get("artefact_ignore"),
-        seeded=state.get("seeded"))
+        seeded=state.get("seeded"), other_owns=others)
     if violations:
         # Name the base. Without it the failure reads as a pure accusation --
         # "you wrote outside owns" -- and a misconfigured base is indistinguish-
@@ -1035,6 +1061,7 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
         return {"unit": unit["id"], "result": "ownership_violation",
                 "measured_against": base,
                 "violations": violations,
+                "belongs_to_another_unit": elsewhere,
                 "ignored_artefacts": ignored}, EXIT_OWNERSHIP
 
     # The gate's steps that diff the tree -- `anthill blueprint`, `anthill audit
@@ -1051,6 +1078,7 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
     return {"unit": unit["id"], "gate": unit["gate"], "exit": res.returncode,
             "result": "passed" if res.returncode == 0 else "failed",
             "ignored_artefacts": ignored,
+            "belongs_to_another_unit": elsewhere,
             "status": after["status"], "attempts": after.get("attempts", 0),
             "output_tail": output[-2000:]}, res.returncode
 
