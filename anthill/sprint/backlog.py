@@ -28,11 +28,13 @@ defence available.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any
 
 from anthill import context as _ctx
+from anthill import rules
 
 MAX_FILES = 3               # the mother product's cap; a larger unit is unreasonable
 STATUS = ("pending", "in_flight", "blocked", "done")
@@ -240,9 +242,17 @@ def gate_selection(ctx: _ctx.Context, gate: str, owns_union: list[str]) -> tuple
       `selects`          -- names at least one path that exists, or that a unit
                             in this sprint is going to create
       `selects_nothing`  -- names paths, and not one of them can ever match
+      `wrong_extension`  -- names a concrete file that does not exist while a
+                            file with the same name and a different extension
+                            does (`tokens.test.ts` beside `tokens.test.mjs`)
       `unverifiable`     -- names no paths at all (`npm test`, bare `pytest`);
                             what it runs is decided by a config file this cannot
                             read
+
+    The extension case is separate because directory overlap cannot see it: the
+    path is inside a unit's `owns`, so it "resolves", and `test -s` on it fails
+    forever. That failure charges an attempt, so it was about to send a unit
+    back to escalation the moment its real problem was fixed.
 
     This exists because of the worst outcome the system can produce. A gate
     pointed at a glob that matches nothing exits 0, `work done` accepts it, and
@@ -263,17 +273,39 @@ def gate_selection(ctx: _ctx.Context, gate: str, owns_union: list[str]) -> tuple
     if not tokens:
         return ("unverifiable" if command.strip() else "selects_nothing"), []
     unresolved = []
+    misnamed = []
     for tok in tokens:
         if list(ctx.root.glob(tok)):
+            continue
+        sib = _sibling_with_other_suffix(ctx.root, tok)
+        if sib:
+            misnamed.append(f"{tok} (found {sib})")
             continue
         if any(PurePath(tok).full_match(g) for g in owns_union):
             continue
         if any(_overlaps(tok, g) for g in owns_union):
             continue
         unresolved.append(tok)
+    if misnamed:
+        return "wrong_extension", misnamed
     if unresolved and len(unresolved) == len(tokens):
         return "selects_nothing", unresolved
     return "selects", unresolved
+
+
+def _sibling_with_other_suffix(root: Path, token: str) -> str:
+    """`tests/x/tokens.test.ts` when only `tests/x/tokens.test.mjs` exists."""
+    if "*" in token:
+        return ""
+    p = PurePath(token)
+    d = root / p.parent
+    if not d.is_dir() or not p.suffix:
+        return ""
+    stem = p.name[: -len(p.suffix)]
+    for q in d.iterdir():
+        if q.is_file() and q.name != p.name and q.name.startswith(stem + "."):
+            return str(PurePath(p.parent) / q.name)
+    return ""
 
 
 def mapped_by_blueprint(ctx: _ctx.Context, owns: list[str]) -> bool:
@@ -315,8 +347,7 @@ def assemble_gate(ctx: _ctx.Context, unit_id: str, tests: str,
     tests = spec_gate_for(tests) if kind == "spec" else tests.strip()
     parts = [tests] if tests.strip() else []
     if owns is not None and not mapped_by_blueprint(ctx, owns):
-        if (ctx.config.get("audit") or {}).get("required", True):
-            parts.append(f"anthill audit check {unit_id}")
+        parts.extend(audit_step(ctx, unit_id))
         return " && ".join(parts)
     bp = ctx.config.get("blueprint") or {}
     flags = ""
@@ -325,9 +356,30 @@ def assemble_gate(ctx: _ctx.Context, unit_id: str, tests: str,
     if int(bp.get("min_coverage", -1)) >= 0:
         flags += f" --min-coverage {int(bp['min_coverage'])}"
     parts.append("anthill blueprint" + flags)
-    if (ctx.config.get("audit") or {}).get("required", True):
-        parts.append(f"anthill audit check {unit_id}")
+    parts.extend(audit_step(ctx, unit_id))
     return " && ".join(parts)
+
+
+def audit_step(ctx: _ctx.Context, unit_id: str) -> list[str]:
+    """The audit condition, honest about what it is worth here.
+
+    `audit check` exits 3 while nobody has reviewed the unit, and a required
+    audit makes that block the close. When the builder and the auditor are the
+    same identity the tool itself says a PASS "carries almost no information" --
+    yet the step was mandatory, and its absence produced the first false
+    escalation on the first real sprint. So with no independence the step runs
+    `--optional`: a recorded FAIL still refuses, a missing review no longer
+    holds the unit hostage to a formality.
+    """
+    if not (ctx.config.get("audit") or {}).get("required", True):
+        return []
+    from anthill import roles as roles_mod
+    try:
+        ind = roles_mod.independence(ctx).get("independence", "")
+    except Exception:                                   # pragma: no cover
+        ind = ""
+    flag = " --optional" if ind == "none" else ""
+    return [f"anthill audit check {unit_id}{flag}"]
 
 
 def compile_contract(ctx: _ctx.Context, out: Path | None = None,
@@ -365,7 +417,9 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
             "depends_on": list(u.get("depends_on") or []),
             "needs_iface": u.get("depends_on") or [],
             "needs_data": [],
-            "escalate_after": 2,
+            # 0 means never: in solo mode one interactive agent escalates by
+            # judgement, not by count. See rules.escalation_rule.
+            "escalate_after": 2 if rules.mode(ctx) == "pool" else 0,
         })
 
     ids = {u["id"] for u in units}
@@ -378,7 +432,7 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
     # failure on this list that lets bad work through rather than blocking good
     # work, so it is refused here rather than reported.
     owns_union = [g for u in units for g in u["owns"]]
-    vacuous, unverifiable = [], []
+    vacuous, unverifiable, misnamed = [], [], []
     for u in units:
         if not u["gate"].strip():
             continue
@@ -386,8 +440,20 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
         if verdict == "selects_nothing":
             vacuous.append({"unit": u["id"], "gate": u["gate"],
                             "matches_nothing": unresolved})
+        elif verdict == "wrong_extension":
+            misnamed.append({"unit": u["id"], "gate": u["gate"], "files": unresolved})
         elif verdict == "unverifiable":
             unverifiable.append({"unit": u["id"], "gate": u["gate"]})
+    if misnamed:
+        detail = "\n".join(
+            f"  {m['unit']}\n    gate: {m['gate']}\n    "
+            f"names a file that does not exist, next to one that does: "
+            f"{', '.join(m['files'])}" for m in misnamed)
+        raise SystemExit(
+            "anthill: refusing to compile -- these gates name the wrong file "
+            "extension, so they would fail forever and charge the unit for it:\n"
+            + detail + "\n\nFix the gate with `anthill sprint set-gate <unit> "
+            "\"<command>\"` and compile again.")
     if vacuous:
         detail = "\n".join(
             f"  {v['unit']}\n    gate: {v['gate']}\n    matches nothing: "
@@ -402,6 +468,8 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
     contract = {
         "version": 1,
         "project": (ctx.config.get("project") or {}).get("name") or ctx.root.name,
+        "mode": rules.mode(ctx),
+        "isolate": bool(ex.get("isolate", False)),
         "base_branch": base_branch or ex.get("base_branch") or "main",
         "kernel_path": "",
         "sprint": sprint["name"],
@@ -437,6 +505,7 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
         "contract": str(dest),
         "unit_count": len(units),
         "units": [{"id": u["id"], "owns": u["owns"], "gate": u["gate"]} for u in units],
+        "mode": rules.mode(ctx),
         "dangling_edges": dangling,
         "ungated_units": ungated,
         "unverifiable_gates": unverifiable,
@@ -456,10 +525,11 @@ def _brief(ctx: _ctx.Context, unit: dict, sprint: dict) -> str:
         lines.append(f"Context: {unit['context']}")
     if unit.get("spec"):
         lines.append(f"Spec:\n{unit['spec']}")
-    lines.append("Before calling the gate: run your tests, run `anthill map build`, "
-                 "and update the knowledge page for this area (re-pin "
-                 "verified_against, correct any rule your change made untrue, add "
-                 "a History line). The gate refuses a stale blueprint.")
+    lines.append("Before calling the gate: run your tests and update the knowledge "
+                 "page for this area (re-pin verified_against, correct any rule "
+                 "your change made untrue, add a History line). "
+                 + rules.map_build_rule(ctx))
+    lines.append(rules.escalation_rule(ctx))
     lines.append("Never fill intent_attested_by — that is a human's signature.")
     return "\n".join(lines)
 
@@ -493,18 +563,90 @@ def lessons_for(ctx: _ctx.Context, area: str) -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def status(ctx: _ctx.Context) -> dict[str, Any]:
-    """One screen: what the human needs to know and nothing else."""
+def set_gate(ctx: _ctx.Context, unit_id: str, gate: str = "",
+             spec_gate: str = "") -> dict[str, Any]:
+    """Change what proves a unit, after the fact.
+
+    `add-unit` was the only writer, so a gate typed with the wrong extension
+    could only be corrected by editing the sprint JSON by hand -- the thing every
+    other part of this tool refuses to require. The sprint is re-marked as
+    needing a compile, because the contract still carries the old command.
+    """
     sprint = load(ctx)
+    unit = next((u for u in sprint["units"] if u["id"] == unit_id), None)
+    if unit is None:
+        raise SystemExit(f"anthill: no unit {unit_id!r} in this sprint")
+    if not gate and not spec_gate:
+        raise SystemExit("anthill: give --gate, --spec-gate, or both")
+    before = {"gate": unit.get("gate", ""), "spec_tests": unit.get("spec_tests", "")}
+    if gate:
+        unit["gate"] = gate.strip()
+    if spec_gate:
+        unit["spec_tests"] = spec_gate.strip()
+    unit.setdefault("gate_history", []).append(
+        {"at": _now(), "from": before,
+         "to": {"gate": unit.get("gate", ""), "spec_tests": unit.get("spec_tests", "")}})
+    sprint["next_action"] = "`anthill sprint compile`, then `anthill work load`"
+    _write(current_path(ctx), sprint)
+    return {"unit": unit_id, "gate": unit.get("gate", ""),
+            "spec_tests": unit.get("spec_tests", ""),
+            "next": "anthill sprint compile && anthill work load --repo ."}
+
+
+def board_states(ctx: _ctx.Context) -> dict[str, str]:
+    """Unit status as the board computes it, keyed by unit id. Empty if no board.
+
+    Computed, not read off disk: a unit nobody has touched has no state file
+    yet, and the board still knows whether it is blocked or ready.
+    """
+    from anthill.orchestrate import orchestrator as work
+    root = ctx.state / "build" / "work" / re.sub(r"[^A-Za-z0-9._-]+", "-", ctx.root.name)
+    if not (root / "contract.json").exists():
+        return {}
+    store = work.Store(ctx.root, root=root)
+    try:
+        st = work.status(store)
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    for label, key in (("done", "done"), ("ready", "ready"),
+                       ("escalated", "escalated")):
+        for uid in st.get(key) or []:
+            out[uid] = label
+    for uid in st.get("in_flight") or []:
+        out[uid] = "in flight"
+    try:
+        for u in store.load_contract().get("units") or []:
+            out.setdefault(str(u["id"]), "blocked")
+    except Exception:
+        pass
+    return out
+
+
+def status(ctx: _ctx.Context) -> dict[str, Any]:
+    """One screen: what the human needs to know and nothing else.
+
+    Unit status comes from the board when there is one. The sprint file kept
+    its own `pending` on every unit forever -- nothing ever wrote back -- so
+    `sprint status` said sixteen pending while `work status` said eight done.
+    Two records of one fact, never reconciled, is how a reader stops trusting
+    both.
+    """
+    sprint = load(ctx)
+    board = board_states(ctx)
     by_status: dict[str, list[str]] = {}
     for u in sprint["units"]:
-        by_status.setdefault(u["status"], []).append(u["id"])
+        st = board.get(u["id"]) or u.get("status", "pending")
+        if u["id"] not in board and u.get("status") == "pending":
+            st = "not on board"
+        by_status.setdefault(st, []).append(u["id"])
     return {
         "sprint": sprint["name"],
         "goal": sprint["goal"],
         "status": sprint["status"],
         "units": len(sprint["units"]),
         "by_status": by_status,
+        "source": "board" if board else "sprint file (no board yet)",
         "next_action": sprint.get("next_action", ""),
         "decisions": sprint.get("decisions", []),
     }

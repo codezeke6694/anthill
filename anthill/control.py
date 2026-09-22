@@ -85,9 +85,7 @@ def _fresh_render(ctx: _ctx.Context) -> dict[str, str]:
     """What install would write right now, without writing it."""
     from anthill import install as inst, roles as roles_mod
     name = (ctx.config.get("project") or {}).get("name") or ctx.root.name
-    values = {"PROJECT_NAME": name, "PROJECT_DESCRIPTION": "", "STACK": "",
-              "WHAT_WE_ARE_BUILDING": "", "ARCHITECTURE": "", "KEY_DECISIONS": "",
-              "CODING_STANDARDS": ""}
+    values = inst.render_values(ctx, name)
     protected_block = "\n".join(f"- `{p}`" for p in inst.PROTECTED_PATHS)
     cmd = inst.invocation(ctx)
     out: dict[str, str] = {}
@@ -133,11 +131,20 @@ def check(ctx: _ctx.Context) -> dict:
             continue
         d = digest(live)
         was = recorded.get(rel)
+        fresh_d = digest(fresh[rel]) if rel in fresh else None
         if was is None:
             state = "unrecorded"
+        elif d == was and fresh_d is not None and fresh_d != d:
+            # Nobody touched the file, but what install would write today is
+            # different: a setting or a template moved on. The prose is now
+            # describing a mechanism that no longer works that way -- the
+            # exact drift that left an agent under a push rule the hook would
+            # not let it obey. Reported separately from EDITED because the
+            # remedy is the opposite: re-render, do not investigate.
+            state = "stale"
         elif d == was:
             state = "unchanged"
-        elif rel in fresh and digest(fresh[rel]) == d:
+        elif fresh_d == d:
             state = "render pending"
         else:
             state = "EDITED"
@@ -159,9 +166,11 @@ def check(ctx: _ctx.Context) -> dict:
         "note": ("Deny rules stop an agent editing these directly; they do not "
                  "stop a program the agent runs. This check is what makes such "
                  "a change visible."),
+        "stale_count": len([r for r in rows if r["state"] == "stale"]),
         "next": ("`anthill install --force` to re-render, or `anthill control "
                  "--accept` if the change was intended"
-                 ) if edited or any(r["state"] == "render pending" for r in rows) else "",
+                 ) if edited or any(r["state"] in ("render pending", "stale")
+                                    for r in rows) else "",
     }
 
 
@@ -189,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"control: {out['verdict']}  (recorded {out['recorded_at']})")
         for r in out["files"]:
-            mark = "!!" if r["state"] == "EDITED" else "  "
+            mark = "!!" if r["state"] == "EDITED" else (" !" if r["state"] == "stale" else "  ")
             print(f"  {mark} {r['state']:34s} {r['file']}")
         if out["next"]:
             print(f"\n  {out['next']}")

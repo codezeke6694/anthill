@@ -82,6 +82,36 @@ existing `settings.json` rather than replacing it.
 | **greenfield** — no source | zone first: name the districts, author a cold contract. Nothing to survey yet. |
 | **brownfield** — source found | survey first: `anthill integrate` draws the blueprint, then the intent gap ranks the largest code with no page. That ranking *is* your knowledge backlog. |
 
+## Solo or pool
+
+`execution.mode` decides how much of the machinery is in play.
+
+| | `solo` (default) | `pool` |
+|---|---|---|
+| Who works | one interactive agent, in the repository itself | several headless agents, each in its own worktree |
+| Escalation | by the agent's judgement; a failed gate is reported and the unit stays claimed | automatic after `escalate_after` failed gates |
+| `work next --worker` | optional | required |
+| `work done` | closes the unit; commits nothing, merges nothing | commits the unit's paths and merges into the integration branch |
+
+Ownership, the gate, the spec/impl split and the compile-time gate check are
+the same in both. Solo is the default because it is how the tool is actually
+used: a person and one agent on one laptop. The pool exists to coordinate
+agents that cannot talk to each other, and a single agent pays its whole cost
+for nothing.
+
+Change a setting through the one sanctioned writer, never by editing the JSON:
+
+```bash
+anthill config show
+anthill config set execution.push_requires_owner false --by "<owner>"
+anthill install --force        # re-render CLAUDE.md, AGENTS.md, roles from the config
+```
+
+The git rules, the map-build rule and the escalation rule in `CLAUDE.md`,
+`AGENTS.md`, the role files and every compiled brief are rendered from the
+config by `anthill/rules.py`. `anthill control` reports `stale` when a setting
+has changed and the prose has not been re-rendered.
+
 ## The loop
 
 ```bash
@@ -168,6 +198,16 @@ anthill/
 ```
 
 All state lives in `<project>/.anthill/`. Uninstalling is deleting one directory.
+
+## Tests
+
+```bash
+python -m pytest tests -q
+```
+
+The suite installs the tool into a throwaway repository, with the real hooks,
+and drives the modules through a claim, a gate and a close. Every fix in the
+field report is covered here rather than verified by hand.
 
 ## Known limits
 

@@ -44,6 +44,7 @@ DELEGATED = [
     ("integrate", "Redraw the blueprint after a merge"),
     ("guard", "Pre-commit and pre-push checks (invoked by the hooks)"),
     ("control", "Has a control file drifted from what install wrote?"),
+    ("config", "Read or change a setting; the only writer of anthill.config.json"),
     ("tidy", "Stray artefacts that belong to nobody"),
 ]
 
@@ -91,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "control":
         from anthill import control
         return control.main(argv[1:])
+    if argv and argv[0] == "config":
+        from anthill import configure
+        return configure.main(argv[1:])
     if argv and argv[0] == "tidy":
         from anthill import tidy
         return tidy.main(argv[1:])
@@ -162,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
                         "any other runner, since the tests must NOT pass yet.")
     c = sps.add_parser("compile", help="Turn the sprint into an enforced contract")
     c.add_argument("--out", default=""); c.add_argument("--base", default="")
+    sg = sps.add_parser("set-gate", help="Change what proves a unit; recompile after")
+    sg.add_argument("unit"); sg.add_argument("--gate", default="")
+    sg.add_argument("--spec-gate", default="",
+                    help="Verbatim gate for a .spec unit (must not require passing)")
     sps.add_parser("status")
 
     # ---------------------------------------------------------------- audit
@@ -230,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.sub == "compile":
             _out(backlog.compile_contract(
                 ctx, Path(args.out) if args.out else None, args.base))
+        elif args.sub == "set-gate":
+            _out(backlog.set_gate(ctx, args.unit, args.gate, args.spec_gate))
         else:
             _out(backlog.status(ctx))
         return 0

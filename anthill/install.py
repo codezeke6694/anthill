@@ -159,54 +159,7 @@ work shares its blind spots exactly, so its approval means little. Tests stay
 the only real proof either way, but a different tool on the auditor seat is the
 one thing that buys genuine independence.
 
-## Two rules about git
-
-Both of these are what you do **absent an instruction**. The owner can override
-either one at any time, and when they do, the section at the top of this file
-governs: brief them on what is about to happen, then do it.
-
-**1. Never push on your own initiative. Ask.**
-
-Pushing is the owner's act, every time, on every branch. An approval given once
-does not carry forward — not to the next push, not across a context compaction,
-not because the last one was fine. If something is ready to go up, say what it
-is and why, and let the owner decide.
-
-Told to push, you push. Say first what is going up — branch, remote, how many
-commits, anything that will surprise them — and then do it, without asking again.
-
-Commit locally as much as you like. A local commit stays on this machine and
-can be undone without anyone noticing. A push reaches the remote and everyone
-working from it, and cannot be taken back the same way.
-
-**2. Work on a branch, not on `main`.**
-
-```bash
-git switch -c work/<what-you-are-doing>
-```
-
-Not only because `main` is the owner's. Other people work on this codebase from
-the same remote — a colleague already has a branch of their own here. `main` is
-the thing everybody branches from and merges into, so a change sitting directly
-on it is a change nobody agreed to and everybody inherits. Your branch is yours
-to be wrong on.
-
-**And never bypass the hooks.** No `--no-verify`, on commit or on push. The
-hooks that refuse these things are not obstacles to route around; a refusal is
-information — read it and do what it says. If you think a hook is wrong, say so
-and stop.
-
-Know why these are asked rather than enforced: a local hook runs the same git
-binary for you and for the owner, on the same machine, so it cannot tell you
-apart. There is no wall here, and there was never going to be one — a wall whose
-only key is a command the owner has to type is a wall that gets in their way and
-not yours. What holds is that you choose to let it hold. Bypassing it once
-teaches the next session that bypassing is normal.
-
-So the rule is short, and it is the whole of it: **you do not push unless the
-owner asked for this push.** Not because you cannot — because they did not ask.
-An approval from earlier in the session is not this push. A branch that is ready
-is not a request. If you think something should go up, say so and wait.
+{git_rules}
 
 ## Before you touch anything
 
@@ -305,14 +258,18 @@ is a real answer and a useful one; inventing a workaround is neither.
 
 ## Keeping the blueprint current
 
-Before calling the gate, rebuild the map and update your page:
+{blueprint_rule}
 
-```bash
-anthill map build
-```
+Update your knowledge page as part of the same step: re-pin `verified_against`,
+correct any rule your change made untrue, add a History line.
 
-The gate refuses a unit whose blueprint no longer matches the code, so this is
-not optional bookkeeping — it is part of finishing.
+## Escalation
+
+{escalation_rule}
+
+## The audit
+
+{audit_note}
 """
 
 
@@ -335,6 +292,32 @@ def invocation(ctx: _ctx.Context) -> str:
         # succeeded, so the guard looked installed and enforced nothing.
         return str(tool_root / "bin" / "anthill")
     return f"./{rel.as_posix()}/bin/anthill"
+
+
+def render_values(ctx: _ctx.Context, name: str = "", description: str = "",
+                  stack: str = "") -> dict[str, str]:
+    """Every `{{PLACEHOLDER}}` the templates know, from one place.
+
+    `install` and `control` each built this dict by hand and drifted; a value
+    added to one and not the other made `control` report every role file as
+    EDITED forever. The rule-shaped values come from `rules`, so the role files
+    say what the config does.
+    """
+    from anthill import rules
+    return {
+        "PROJECT_NAME": name or (ctx.config.get("project") or {}).get("name") or ctx.root.name,
+        "PROJECT_DESCRIPTION": description,
+        "STACK": stack,
+        "WHAT_WE_ARE_BUILDING": "",
+        "ARCHITECTURE": "",
+        "KEY_DECISIONS": "",
+        "CODING_STANDARDS": "",
+        "MAP_BUILD_RULE": rules.map_build_rule(ctx),
+        "ESCALATION_RULE": rules.escalation_rule(ctx),
+        "GIT_RULES": rules.git_rules(ctx),
+        "AUDIT_NOTE": rules.audit_note(ctx),
+        "MAX_FILES": "3",
+    }
 
 
 def _slug(text: str) -> str:
@@ -475,8 +458,13 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
     60-character absolute path and made the section unreadable; one export the
     agent runs first is both shorter and how a person would actually work.
     """
+    from anthill import rules
     cmd = invocation(ctx)
-    text = CLAUDE_MD.format(name=name, protected=protected_block)
+    text = CLAUDE_MD.format(name=name, protected=protected_block,
+                            git_rules=rules.git_rules(ctx),
+                            blueprint_rule=rules.map_build_rule(ctx),
+                            escalation_rule=rules.escalation_rule(ctx),
+                            audit_note=rules.audit_note(ctx))
     if cmd == "anthill":
         return text
     bindir = cmd.rsplit("/bin/", 1)[0] + "/bin"
@@ -585,15 +573,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     ctx.save_config()
     written.append(str(ctx.config_path))
 
-    values = {
-        "PROJECT_NAME": name,
-        "PROJECT_DESCRIPTION": description,
-        "STACK": stack,
-        "WHAT_WE_ARE_BUILDING": "",
-        "ARCHITECTURE": "",
-        "KEY_DECISIONS": "",
-        "CODING_STANDARDS": "",
-    }
+    values = render_values(ctx, name, description, stack)
 
     # The constitution is human-owned, so an existing one is never overwritten
     # even under --force: that is exactly the file a human will have edited.

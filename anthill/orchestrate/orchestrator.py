@@ -473,6 +473,11 @@ def head_commit(worktree: Path) -> str:
     return res.stdout.strip() if res.returncode == 0 else ""
 
 
+def current_branch(worktree: Path) -> str:
+    res = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=worktree)
+    return res.stdout.strip() if res.returncode == 0 else ""
+
+
 def ownership_base(contract: dict, state: dict) -> str:
     """The commit a unit's footprint is measured from.
 
@@ -792,7 +797,10 @@ def claim(store: Store, worker: str, unit_id: str = "",
                         f"{(res.stderr or res.stdout).strip()[:400]}")
         else:
             state["worktree"] = str(store.repo)
-            state["branch"] = contract.get("base_branch", "main")
+            # The branch actually checked out, not the contract's base. In place
+            # the unit works on whatever the operator has open; recording `main`
+            # here sent `done` off to merge a branch the unit never touched.
+            state["branch"] = current_branch(store.repo) or contract.get("base_branch", "main")
             # In place there is no branch that means "where this unit started",
             # so the commit is the only thing that does. Everything below, and
             # the ownership check at gate time, measures from here.
@@ -888,7 +896,12 @@ def record_gate(store: Store, unit: dict, state: dict, cmd: str,
     else:
         state.pop("awaiting_audit", None)
         state["attempts"] = state.get("attempts", 0) + 1
-        if state["attempts"] >= unit.get("escalate_after", 2):
+        # `escalate_after: 0` means never. In solo mode the contract is compiled
+        # that way: one interactive agent escalates when it has judged it
+        # cannot finish, and a counter that decides for it produced three
+        # escalations on this tool's first project -- every one of them false.
+        limit = int(unit.get("escalate_after", 2) or 0)
+        if limit and state["attempts"] >= limit:
             state["status"] = ESCALATED
             write_escalation(store, unit, state)
             store.release_lock(unit["id"])
@@ -1052,7 +1065,15 @@ def done(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
     # Integrate before closing. Without this a unit's output stays on its own
     # branch, and every downstream worktree -- cut from the integration branch --
     # starts from a tree that does not contain its dependencies.
-    if state.get("branch") and state["branch"] != integration_branch(contract):
+    #
+    # Not in place. There the unit's work is already in the operator's tree, on
+    # the branch they have open, next to their own uncommitted edits -- and
+    # `commit_unit_work` stages by `owns` glob, so it would commit whatever of
+    # theirs happened to fall inside the unit's paths. The unit closes; what to
+    # commit, and when, stays the operator's call.
+    in_place = bool(state.get("in_place"))
+    if (not in_place and state.get("branch")
+            and state["branch"] != integration_branch(contract)):
         ok, detail = integrate(store, contract, unit, state)
         if not ok:
             state["status"] = ESCALATED

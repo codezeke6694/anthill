@@ -33,14 +33,12 @@ new district.
      commit you produced, correct any rule your change made untrue, add a
      `## History` line
 
-   Do **not** run `anthill map build`. You are in an isolated worktree holding
-   only your own change, so a blueprint built here would be missing every other
-   unit — and with several builders running, the last writer would win. The
-   foreman redraws it on the integration branch after your unit merges. The
-   gate checks only the claims touching the files *you* changed.
-5. Call the gate: `anthill work gate <unit>`
-6. You may not mark yourself done. `anthill work done <unit>` is refused unless
-   the gate passed — that is the point.
+   {{MAP_BUILD_RULE}}
+5. Call the gate: `anthill work gate --repo . --unit <unit>`
+6. You may not mark yourself done. `anthill work done --repo . --unit <unit>` is
+   refused unless the gate passed — that is the point.
+
+{{AUDIT_NOTE}}
 
 You own your page as well as your code. Skipping step 4 does not save time; the
 blueprint gate refuses the unit and you come back to it.
@@ -50,11 +48,14 @@ blueprint gate refuses the unit and you come back to it.
 ## When you are blocked
 
 1. Check the lessons index for your area — someone may have hit this already.
-2. If not: `anthill work escalate <unit> --why "<what stopped you>"` and **stop**.
+2. If not: `anthill work escalate --repo . --unit <unit> --reason "<what stopped you>"`
+   and **stop**.
+
+{{ESCALATION_RULE}}
 
 Do not guess. Do not work around. Do not widen your boundary to fix something
-adjacent. A unit that escalates honestly costs one attempt; a unit that
-improvises costs a rework and a wrong page.
+adjacent. A unit that escalates honestly is cheap; a unit that improvises costs
+a rework and a wrong page.
 
 ## Hard rules
 
@@ -62,4 +63,5 @@ improvises costs a rework and a wrong page.
 - Never touch a file outside `owns`.
 - Never edit a protected path.
 - Never mark a unit done. The gate decides.
-- If your unit lists more than 3 files, escalate and ask for it to be split.
+- If your unit's `owns` lists more than {{MAX_FILES}} paths (a directory glob
+  counts as one), escalate and ask for it to be split.

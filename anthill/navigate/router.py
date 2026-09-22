@@ -845,7 +845,9 @@ def cmd_work_status(args: argparse.Namespace) -> int:
 def cmd_work_next(args: argparse.Namespace) -> int:
     """Claim the next ready unit. The exit code is the worker protocol:
     0 = work claimed, 3 = wait, 4 = nothing left that can ever run."""
-    payload, code = work_mod.claim(_store(args), worker=args.worker,
+    import os as _os
+    worker = args.worker or _os.environ.get("ANTHILL_WORKER", "") or "solo"
+    payload, code = work_mod.claim(_store(args), worker=worker,
                                    unit_id=args.unit,
                                    isolate=False if args.no_isolate else None)
     _print_json(payload)
@@ -1072,7 +1074,9 @@ def build_parser() -> argparse.ArgumentParser:
     _repo(wsub.add_parser("status", help="Where every unit stands")).set_defaults(func=cmd_work_status)
 
     wn = _repo(wsub.add_parser("next", help="Claim the next ready unit (0=claimed, 3=wait, 4=drained)"))
-    wn.add_argument("--worker", required=True, help="Worker identity holding the claim")
+    wn.add_argument("--worker", default="",
+                    help="Worker identity holding the claim (default: the value of "
+                         "$ANTHILL_WORKER, else 'solo')")
     wn.add_argument("--unit", default="", help="Claim only this unit")
     wn.add_argument("--no-isolate", action="store_true",
                     help="Work in the repo itself instead of a fresh worktree")

@@ -50,6 +50,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "knowledge": {"dir": "knowledge", "areas": [], "registries": []},
     "execution": {"base_branch": "main", "integration_branch": "",
+                  # `solo`: one interactive agent working in place; nothing
+                  # escalates by count and no worker identity is required.
+                  # `pool`: several headless agents, isolated worktrees,
+                  # attempt budgets. Solo is how the tool is actually used.
+                  "mode": "solo",
                   "seed_paths": [], "seed_working_state": False,
                   # Directories prepended to PATH when a gate or an agent runs.
                   # Empty means "discover the project's virtualenv".
