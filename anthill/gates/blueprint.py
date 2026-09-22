@@ -79,6 +79,13 @@ def _detect_base(cwd: Path, given: str) -> str:
     worth reporting rather than silently widening the check to everything."""
     if given:
         return given
+    # Set by `work gate`: the commit the unit was claimed at. The only honest
+    # scope for "what this unit changed", and the branch fallbacks below are
+    # what blamed a unit for 404 files of drift it never touched.
+    import os as _os
+    unit_base = _os.environ.get("ANTHILL_UNIT_BASE", "").strip()
+    if unit_base and _git(["rev-parse", "--verify", "--quiet", unit_base], cwd).returncode == 0:
+        return unit_base
     for cand in ("integration", "main", "master"):
         if _git(["rev-parse", "--verify", "--quiet", cand], cwd).returncode == 0:
             return cand

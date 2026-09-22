@@ -1037,7 +1037,13 @@ def gate(store: Store, unit_id: str) -> tuple[dict[str, Any], int]:
                 "violations": violations,
                 "ignored_artefacts": ignored}, EXIT_OWNERSHIP
 
-    res = run(unit["gate"], cwd=worktree, env=exec_env())
+    # The gate's steps that diff the tree -- `anthill blueprint`, `anthill audit
+    # check` -- used to pick their own base, and picked `integration`: a branch
+    # 147 commits stale here, so a unit that changed nothing was refused for 404
+    # files' worth of somebody else's drift. The base a unit is measured from is
+    # a fact this function already holds; hand it down.
+    env = dict(exec_env(), ANTHILL_UNIT=unit["id"], ANTHILL_UNIT_BASE=base)
+    res = run(unit["gate"], cwd=worktree, env=env)
     output = (res.stdout or "") + (res.stderr or "")
     record_gate(store, unit, state, cmd=unit["gate"],
                 exit_code=res.returncode, output=output[-4000:])

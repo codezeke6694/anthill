@@ -81,6 +81,25 @@ def _loc(f: dict) -> str:
     return f" {f['file']}:{f['line']}" if f.get("line") is not None else f" {f['file']}"
 
 
+def unit_base(ctx: _ctx.Context, unit: str) -> str:
+    """The commit this unit was claimed at, from the board's own record.
+
+    Read here rather than taken from the environment because two callers have
+    to agree: `record` runs in the auditor's shell and `assess` runs inside the
+    gate, and a fingerprint computed from two different bases never matches.
+    """
+    if not unit:
+        return ""
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9._-]", "_", unit)
+    for p in sorted((ctx.state / "build" / "work").glob(f"*/state/{safe}.json")):
+        try:
+            return str(json.loads(p.read_text(encoding="utf-8")).get("base_commit") or "")
+        except (OSError, json.JSONDecodeError):
+            continue
+    return ""
+
+
 def work_fingerprint(cwd: Path, base: str = "") -> str:
     """A digest of the work as it stands, not just the commit it sits on.
 
@@ -89,6 +108,11 @@ def work_fingerprint(cwd: Path, base: str = "") -> str:
     existed, and neither verdict refused. A builder that leaves work
     uncommitted does not move HEAD, so such an audit stays "current" and
     satisfies the gate for code the auditor never saw.
+
+    `base` is the unit's claim commit when the caller knows it. It used to fall
+    back to `integration`/`main`/`master`, which dragged a 404-file diff into a
+    digest that only needed to pin *this* unit's work; HEAD already pins every
+    committed byte, so with no base the diff term is simply left out.
     """
     import hashlib
     import subprocess as _sp
@@ -101,11 +125,6 @@ def work_fingerprint(cwd: Path, base: str = "") -> str:
             return ""
         return r.stdout if r.returncode == 0 else ""
 
-    if not base:
-        for cand in ("integration", "main", "master"):
-            if _git(["rev-parse", "--verify", "--quiet", cand]).strip():
-                base = cand
-                break
     # The tool's own state is excluded, and this is load-bearing: writing the
     # audit record itself changes `.anthill/`, so including it made every audit
     # stale the instant it was written.
@@ -185,7 +204,7 @@ def record(ctx: _ctx.Context, unit: str, auditor: str, findings: list[dict],
             f"  If this is deliberate, pass --allow-unknown.")
     where = cwd or ctx.root
     commit = commit or head_commit(where)
-    work = work_fingerprint(where)
+    work = work_fingerprint(where, unit_base(ctx, unit))
     clean: list[dict] = []
     for f in findings:
         v = str(f.get("verdict", "")).upper().strip()
@@ -245,7 +264,7 @@ def assess(ctx: _ctx.Context, unit: str, cwd: Path | None = None,
     # The commit can be identical while the work has changed -- uncommitted
     # edits do not move HEAD. The content pin is the one that actually binds.
     rec_work = str(rec.get("work_fingerprint", ""))
-    live_work = work_fingerprint(where)
+    live_work = work_fingerprint(where, unit_base(ctx, unit))
     if not rec_work:
         return ({"unit": unit, "verdict": "unpinned",
                  "reason": "this audit carries no work fingerprint, so there is "
