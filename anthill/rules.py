@@ -136,6 +136,14 @@ def git_rules(ctx: _ctx.Context) -> str:
                      "(`execution.protected_branches` is empty). `main` is the "
                      "owner's by rule, not by mechanism.")
     parts.append("")
+    if ex.get("guard_hygiene", False):
+        parts.append("The hooks also refuse what no shared repository survives "
+                     "(`execution.guard_hygiene`): a commit that adds a secret — a "
+                     "key, a token, a `.env` — or a junk file like `.DS_Store` or "
+                     "`__pycache__/`, and a push that rewrites a remote branch "
+                     "instead of adding to it. Unstage the file and `.gitignore` "
+                     "it; catch up with a merge, not a force push.")
+        parts.append("")
     parts.append("**And never bypass the hooks.** No `--no-verify`, on commit or on "
                  "push. A refusal is information: read it and do what it says. If you "
                  "think a hook is wrong, say so and stop.")

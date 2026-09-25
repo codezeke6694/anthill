@@ -76,7 +76,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
                   # decided every change goes through the board, and until then
                   # it refuses ordinary work on a branch -- measured, 21 files
                   # at once. Branch and push protection are separate and stay on.
-                  "guard_ownership": False},
+                  "guard_ownership": False,
+                  # Refuse secrets and junk files on commit, and a force push.
+                  # Off by default because these defaults merge into every
+                  # existing install: on here would start refusing commits in
+                  # repos whose owner never decided to refuse them.
+                  "guard_hygiene": False},
     "gates": {},
     # Blueprint conditions compiled into every gate. `require_page` is off by
     # default because a project's first sprints legitimately have no pages yet;

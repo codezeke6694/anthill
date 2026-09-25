@@ -40,6 +40,8 @@ ALLOWED: dict[str, tuple[str, str]] = {
     "execution.protected_branches": ("list", "branches the pre-commit hook refuses"),
     "execution.push_requires_owner": ("bool", "pre-push hook refuses every push"),
     "execution.guard_ownership": ("bool", "pre-commit refuses unowned product source"),
+    "execution.guard_hygiene": ("bool", "pre-commit refuses secrets and junk files; "
+                                        "pre-push refuses a force push"),
     "execution.venv": ("str", "virtualenv gates run with"),
     "audit.required": ("bool", "a unit cannot close without an audit record"),
     "audit.escalate_verdicts": ("list", "verdicts that escalate to a human"),
@@ -112,7 +114,7 @@ def set_value(ctx: _ctx.Context, key: str, raw: str, by: str,
            "written": write}
     # These are rendered into the agent docs and the hooks; say so.
     if block == "execution" and field in ("push_requires_owner", "protected_branches",
-                                          "isolate", "mode"):
+                                          "guard_hygiene", "isolate", "mode"):
         out["next"] = ("`anthill install --force` re-renders CLAUDE.md, AGENTS.md "
                        "and the role files so the prose matches this setting")
     if key in ("execution.mode", "audit.required"):

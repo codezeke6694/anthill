@@ -36,6 +36,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from anthill import context as _ctx
+from anthill import hygiene as _hygiene
 
 ALLOW, REFUSE, ERROR = 0, 1, 2
 
@@ -114,6 +115,62 @@ def check_branch(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
     }, REFUSE)
 
 
+def hygiene_on(ctx: _ctx.Context) -> bool:
+    """Off unless the owner turned it on (`execution.guard_hygiene`)."""
+    ex = ctx.config.get("execution") or {}
+    return bool(ex.get("guard_hygiene", False))
+
+
+def check_hygiene(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
+    """Secrets and junk in what is staged. No owner exception: a key committed
+    by the owner is exactly as public as one committed by an agent."""
+    if not hygiene_on(ctx):
+        return None
+    problems = _hygiene.scan_staged(cwd)
+    if not problems:
+        return None
+    return ({
+        "verdict": "refused",
+        "hygiene": problems,
+        "why": ("a secret in history is public from the first push, and removing "
+                "it later does not take it back; junk files are noise in every "
+                "diff and conflict on files nobody meant to share"),
+        "next": ("git restore --staged <file>   # unstage it\n"
+                 "  then add it to .gitignore so it cannot come back.\n"
+                 "  A real key that was ever committed should be rotated."),
+    }, REFUSE)
+
+
+def check_force(ctx: _ctx.Context, cwd: Path,
+                updates: list[tuple[str, str, str, str]]) -> tuple[dict, int] | None:
+    """A push that rewrites a remote branch instead of adding to it.
+
+    The owner may rewrite their own work branch -- they are the one who knows
+    nobody else has it. Nobody rewrites a protected branch, because everybody
+    has it.
+    """
+    if not hygiene_on(ctx):
+        return None
+    rewritten = _hygiene.forced_updates(updates, cwd)
+    if not rewritten:
+        return None
+    names = protected(ctx)
+    blocking = [b for b in rewritten if b in names or not is_owner()]
+    if not blocking:
+        return None
+    return ({
+        "verdict": "refused",
+        "rewriting": blocking,
+        "why": ("this push replaces commits the remote already has instead of "
+                "adding to them; anyone who pulled them now holds a history that "
+                "no longer exists"),
+        "next": ("git fetch && git merge origin/<branch>   # then push normally\n"
+                 "  If the branch is yours alone and you are the owner: "
+                 f"{OWNER_ENV}=1 git push --force-with-lease\n"
+                 "  A protected branch is never rewritten."),
+    }, REFUSE)
+
+
 def staged(cwd: Path) -> list[str]:
     out = _git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
     return [f for f in out.splitlines() if f.strip()]
@@ -178,6 +235,10 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
     on_protected = check_branch(ctx, cwd)
     if on_protected is not None:
         return on_protected
+
+    dirty = check_hygiene(ctx, cwd)
+    if dirty is not None:
+        return dirty
 
     ex = ctx.config.get("execution") or {}
     if not ex.get("guard_ownership", False):
@@ -256,6 +317,16 @@ def check_push(ctx: _ctx.Context, cwd: Path, refs: list[str]) -> tuple[dict, int
     }, REFUSE)
 
 
+def _pushed_updates(stdin_text: str) -> list[tuple[str, str, str, str]]:
+    """Pre-push stdin as (local ref, local sha, remote ref, remote sha)."""
+    out = []
+    for line in stdin_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 4:
+            out.append((parts[0], parts[1], parts[2], parts[3]))
+    return out
+
+
 def _pushed_refs(stdin_text: str) -> list[str]:
     """Remote branch names from pre-push stdin: `<local ref> <sha> <remote ref> <sha>`."""
     out = []
@@ -282,7 +353,19 @@ def main(argv: list[str] | None = None) -> int:
         return ALLOW                      # never block a commit on our own fault
 
     if args.push:
-        refs = _pushed_refs(sys.stdin.read() if not sys.stdin.isatty() else "")
+        stdin_text = sys.stdin.read() if not sys.stdin.isatty() else ""
+        refs = _pushed_refs(stdin_text)
+        forced = check_force(ctx, cwd, _pushed_updates(stdin_text))
+        if forced is not None:
+            report, code = forced
+            if args.json:
+                print(json.dumps(report, indent=2))
+                return code
+            print(f"\nanthill: push refused — it rewrites "
+                  f"{', '.join(report['rewriting'])}.\n", file=sys.stderr)
+            print(f"  {report['why']}\n", file=sys.stderr)
+            print(f"  {report['next']}\n", file=sys.stderr)
+            return REFUSE
         report, code = check_push(ctx, cwd, refs)
         if args.json:
             print(json.dumps(report, indent=2))
@@ -307,6 +390,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nanthill: commit refused — {report['branch']} is the owner's "
               f"branch.\n", file=sys.stderr)
         print(f"  {report['why']}\n", file=sys.stderr)
+        print(f"  {report['next']}\n", file=sys.stderr)
+        return REFUSE
+    if report.get("hygiene"):
+        print("\nanthill: commit refused — this should not be shared.\n",
+              file=sys.stderr)
+        for p in report["hygiene"]:
+            print(f"  {p['problem']:<6}  {p['file']}  — {p['why']}", file=sys.stderr)
+        print(f"\n  {report['why']}\n", file=sys.stderr)
         print(f"  {report['next']}\n", file=sys.stderr)
         return REFUSE
     print("\nanthill: commit refused — the board is the way in.\n", file=sys.stderr)
