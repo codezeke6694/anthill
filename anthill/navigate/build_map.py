@@ -33,7 +33,7 @@ if str(Path(__file__).resolve().parents[2]) not in _sys.path:
 
 from anthill import context as _ctx
 from anthill.knowledge import claims
-from anthill.navigate import structure
+from anthill.navigate import scripts, structure
 
 # The project the tool was pointed at -- not the directory the tool lives in.
 _conf = _ctx.current()
@@ -50,6 +50,12 @@ INCLUDE_DIRS, INCLUDE_TOPLEVEL, EXCLUDE_PARTS = _conf.source_roots()
 # Short, readable node-id prefixes per top package. Unset means "use the
 # directory name", which `_district()` already falls back to.
 PREFIX: dict[str, str] = (_conf.config.get("source") or {}).get("district_prefix") or {}
+SCRIPT_DIRS = scripts.discover(REPO_ROOT, (_conf.config.get("source") or {}).get("script_dirs"))
+
+# How many past commit subjects a node keeps. They are the only text in the map
+# written in the words people use when they ask for work -- "stop shouting",
+# "keep a beat's verdicts" -- rather than the words the code is written in.
+HISTORY_PER_FILE = 40
 
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
@@ -88,7 +94,15 @@ def _dotted(rel: str) -> str:
     return d[:-9] if d.endswith(".__init__") else d
 
 
+def _script_id(rel: str) -> str:
+    """web/src/pages/Risk.tsx -> web.pages.Risk. `src` carries no meaning."""
+    parts = [x for x in Path(rel).with_suffix("").parts if x != "src"]
+    return ".".join(parts)
+
+
 def _node_id(rel: str) -> str:
+    if Path(rel).suffix in scripts.SUFFIXES:
+        return _script_id(rel)
     dotted = _dotted(rel)
     top = dotted.split(".", 1)[0]
     rest = dotted[len(top):]
@@ -138,7 +152,16 @@ def _imports(tree: ast.AST) -> set[str]:
     return out
 
 
+def _about(mod: dict[str, Any]) -> str:
+    """The module's opening paragraph -- the why, not just the one-line what."""
+    para = re.split(r"\n\s*\n", mod["mod_doc"].strip(), maxsplit=1)[0] if mod["mod_doc"] else ""
+    para = re.sub(r"\s+", " ", para).strip()
+    return para if len(para) <= 600 else para[:597] + "..."
+
+
 def _responsibility(mod: dict[str, Any]) -> str:
+    if mod.get("script") and mod["mod_doc"]:
+        return scripts.first_sentence(mod["mod_doc"])
     if mod["mod_doc"]:
         first = mod["mod_doc"].splitlines()[0].strip()
         if first:
@@ -147,6 +170,9 @@ def _responsibility(mod: dict[str, Any]) -> str:
     nfun = sum(1 for s in pubs if s["kind"] == "function")
     ncls = sum(1 for s in pubs if s["kind"] == "class")
     name = mod["dotted"].split(".")[-1]
+    if mod.get("script"):
+        names = ", ".join(x["name"] for x in pubs[:4]) or "nothing"
+        return f"{name} -- exports {names}."
     return f"{name} module -- {nfun} function(s), {ncls} class(es)."
 
 
@@ -183,6 +209,8 @@ def _anchors(mod: dict[str, Any]) -> list[dict[str, Any]]:
     for sym in chosen[:10]:
         symbol_id = f"{mod['rel']}::{sym['name']}"
         anchor: dict[str, Any] = {"symbol_id": symbol_id, "role": sym["kind"]}
+        if mod.get("script") and sym["kind"] == "type":
+            continue          # a type is vocabulary, not a place to work
         # The recorded fingerprint is what lets a later run tell a harmless body
         # edit from a change that invalidates anything citing this address.
         fp = structure.fingerprint(symbol_id)
@@ -193,15 +221,79 @@ def _anchors(mod: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def build() -> dict[str, Any]:
-    mods = [m for m in (_extract(p) for p in _active_files()) if m]
-    # Modules with no defined symbols (e.g. empty __init__) are containers, not
-    # navigation locations -- skip them (spec: functions are addresses).
-    mods = [m for m in mods if m["symbols"]]
+def _history() -> dict[str, list[dict[str, str]]]:
+    """file -> the subjects of the commits that touched it, newest first.
 
-    dotted_to_node = {m["dotted"]: _node_id(m["rel"]) for m in mods}
-    node_ids = set(dotted_to_node.values())
+    One `git log` pass. Merges are skipped because their subject describes the
+    merge, and bulk commits because a subject spread over thirty files says
+    nothing about any one of them.
+    """
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "log", "--no-merges", "--format=@@%h|%s", "--name-only", "-n", "3000"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    by_file: dict[str, list[dict[str, str]]] = defaultdict(list)
+    commit: dict[str, Any] | None = None
 
+    def flush() -> None:
+        if commit and 0 < len(commit["files"]) <= 12:
+            for f in commit["files"]:
+                if len(by_file[f]) < HISTORY_PER_FILE:
+                    by_file[f].append({"h": commit["h"], "s": commit["s"]})
+
+    for line in out.splitlines():
+        if line.startswith("@@"):
+            flush()
+            h, _, subj = line[2:].partition("|")
+            commit = {"h": h, "s": subj, "files": []}
+        elif line.strip() and commit is not None:
+            commit["files"].append(line.strip())
+    flush()
+    return dict(by_file)
+
+
+def _test_files() -> list[Path]:
+    """Every test the repository has, wherever it lives."""
+    skip = scripts._NOT_SOURCE
+    out: list[Path] = []
+    for pat in ("test_*.py", "*_test.py", "*.test.*", "*.spec.*"):
+        for p in REPO_ROOT.rglob(pat):
+            rel = p.relative_to(REPO_ROOT)
+            if skip & set(rel.parts) or not p.is_file():
+                continue
+            if p.suffix == ".py" or p.suffix in scripts.SUFFIXES:
+                out.append(p)
+    return sorted(set(out))
+
+
+def _tests_by_node(dotted_to_node: dict[str, str], file_to_node: dict[str, str]) -> dict[str, list[str]]:
+    """node -> the test files that import it. The proof an agent runs after a change."""
+    resolve_py = _resolver(dotted_to_node)
+    found: dict[str, set[str]] = defaultdict(set)
+    for p in _test_files():
+        rel = _rel(p)
+        targets: set[str] = set()
+        if p.suffix == ".py":
+            try:
+                tree = ast.parse(p.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            targets = {t for t in (resolve_py(i) for i in _imports(tree)) if t}
+        else:
+            try:
+                text = p.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            targets = {file_to_node[f] for f in scripts.imports(text, p, REPO_ROOT) if f in file_to_node}
+        for t in targets:
+            found[t].add(rel)
+    return {k: sorted(v) for k, v in found.items()}
+
+
+def _resolver(dotted_to_node: dict[str, str]):
     def resolve(imp: str) -> str | None:
         # Longest-prefix match: "al.validation.pii.foo" -> node for al.validation.pii
         parts = imp.split(".")
@@ -210,6 +302,26 @@ def build() -> dict[str, Any]:
             if cand in dotted_to_node:
                 return dotted_to_node[cand]
         return None
+    return resolve
+
+
+def build() -> dict[str, Any]:
+    mods = [m for m in (_extract(p) for p in _active_files()) if m]
+    for p in scripts.files(REPO_ROOT, SCRIPT_DIRS):
+        m = scripts.extract(p, REPO_ROOT)
+        if m:
+            m["dotted"] = _script_id(m["rel"])
+            m["imports"] = set()
+            mods.append(m)
+    # Modules with no defined symbols (e.g. empty __init__) are containers, not
+    # navigation locations -- skip them (spec: functions are addresses).
+    mods = [m for m in mods if m["symbols"]]
+
+    dotted_to_node = {m["dotted"]: _node_id(m["rel"]) for m in mods if not m.get("script")}
+    file_to_node = {m["rel"]: _node_id(m["rel"]) for m in mods}
+    resolve = _resolver(dotted_to_node)
+    history = _history()
+    tests = _tests_by_node(dotted_to_node, file_to_node)
 
     downstream: dict[str, set[str]] = defaultdict(set)  # node -> nodes it imports
     upstream: dict[str, set[str]] = defaultdict(set)     # node -> nodes importing it
@@ -219,8 +331,9 @@ def build() -> dict[str, Any]:
         resp_by_node[nid] = _responsibility(m)
     for m in mods:
         nid = _node_id(m["rel"])
-        for imp in m["imports"]:
-            tgt = resolve(imp)
+        targets = [resolve(i) for i in m["imports"]] + \
+                  [file_to_node.get(f) for f in m.get("file_imports") or ()]
+        for tgt in targets:
             if tgt and tgt != nid:
                 downstream[nid].add(tgt)
                 upstream[tgt].add(nid)
@@ -237,7 +350,9 @@ def build() -> dict[str, Any]:
         ]
         nodes.append({
             "node_id": nid,
+            "file": m["rel"],
             "responsibility": _responsibility(m),
+            "about": _about(m),
             "district": district,
             "lexical_signature": _lexical_signature(m),
             "anchors": _anchors(m),
@@ -246,14 +361,15 @@ def build() -> dict[str, Any]:
                 f"A symbol defined in {m['rel']} is wrong or is being traced.",
             ],
             "routes": routes,
-            "tests": [],
+            "tests": tests.get(nid, [])[:8],
             "consumers": sorted(upstream[nid])[:10],
+            "history": history.get(m["rel"], []),
         })
 
     return {
         "map_id": "codebase_v1",
         "name": "Whole active codebase (auto-generated, deterministic)",
-        "scope": " + ".join(INCLUDE_DIRS + INCLUDE_TOPLEVEL) or "(no source discovered)",
+        "scope": " + ".join(INCLUDE_DIRS + INCLUDE_TOPLEVEL + SCRIPT_DIRS) or "(no source discovered)",
         "generated_by": "anthill/navigate/build_map.py",
         "built_at_commit": claims.head_commit(),
         "principles": [

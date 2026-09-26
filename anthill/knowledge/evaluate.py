@@ -135,3 +135,93 @@ def routing(knowledge_dir: Path, source_root: Path, log: Path,
                    "A shared module or a large file makes that label wrong in both "
                    "directions, so top-1 here is a lower bound, not an accuracy."),
     }
+
+
+# ------------------------------------------------------------------ from history
+
+def history_questions(repo: Path, node_files: dict[str, str],
+                      max_files: int = 4) -> list[dict[str, Any]]:
+    """Past commits as exam questions: the subject is the task, the files are the answer.
+
+    The learning log above needs a log, and most repositories never keep one.
+    Every repository keeps this. A commit subject is written by whoever did the
+    work, in the words they would have used to ask for it, before any map
+    existed -- so it is independent of the map in the way that matters.
+
+    Only commits touching 1..`max_files` files the map knows are used: a subject
+    spread over twenty files names none of them. Files that no longer exist are
+    dropped from the answer, and a commit left with no answer is skipped.
+    """
+    import subprocess
+    try:
+        out = subprocess.run(["git", "log", "--no-merges", "--format=@@%h|%s", "--name-only"],
+                             cwd=repo, capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    known = set(node_files.values())
+    qs: list[dict[str, Any]] = []
+    cur: dict[str, Any] | None = None
+    for line in out.splitlines():
+        if line.startswith("@@"):
+            h, _, subj = line[2:].partition("|")
+            cur = {"commit": h, "question": subj, "files": []}
+            qs.append(cur)
+        elif line.strip() and cur is not None:
+            cur["files"].append(line.strip())
+    usable = []
+    for q in qs:
+        hit = sorted(set(q.pop("files")) & known)
+        if 1 <= len(hit) <= max_files:
+            q["expected_files"] = hit
+            usable.append(q)
+    return usable
+
+
+def routing_from_history(repo: Path, nodes: list[dict[str, Any]],
+                         rank: Callable[..., list[dict[str, Any]]],
+                         top_k: int = 3, limit: int = 0) -> dict[str, Any]:
+    """How often the router sends a past task to the files that task changed.
+
+    Each question is asked with its own commit hidden from the index
+    (`exclude`), because a node that carries the question's subject as history
+    would otherwise find the answer by reading the answer key.
+
+    `one_step` also counts a question as found when an expected file is a
+    direct route or consumer of a top-k node: the card lists both, so an agent
+    standing there is one read away.
+    """
+    node_files = {n["node_id"]: n["file"] for n in nodes if n.get("file")}
+    by_id = {n["node_id"]: n for n in nodes}
+    qs = history_questions(repo, node_files)
+    if limit:
+        qs = qs[:limit]
+    rows = []
+    for q in qs:
+        want = set(q["expected_files"])
+        ranked = [r["node_id"] for r in rank(q["question"], top_k,
+                                             exclude=frozenset([q["commit"]]))]
+        files = [node_files.get(n) for n in ranked]
+        near = set()
+        for n in ranked:
+            node = by_id.get(n) or {}
+            near.update(r.get("go_to") for r in node.get("routes") or [])
+            near.update(node.get("consumers") or [])
+        near_files = {node_files.get(n) for n in near}
+        rows.append({
+            "commit": q["commit"], "question": q["question"],
+            "expected_files": q["expected_files"], "ranked_files": files,
+            "top1": bool(files) and files[0] in want,
+            "topk": any(f in want for f in files),
+            "one_step": any(f in want for f in files) or bool(near_files & want),
+        })
+    n = max(1, len(rows))
+    pct = lambda k: round(100 * sum(1 for r in rows if r[k]) / n)
+    return {
+        "questions": len(rows),
+        "top1_pct": pct("top1"),
+        f"top{top_k}_pct": pct("topk"),
+        "one_step_pct": pct("one_step"),
+        "misses": [r for r in rows if not r["topk"]],
+        "note": ("each question is a past commit subject, asked with that commit "
+                 "hidden; the answer is the files it changed"),
+    }

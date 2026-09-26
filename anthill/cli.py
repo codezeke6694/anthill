@@ -22,7 +22,7 @@ from anthill import context as _ctx
 # Commands the ported router already implements, dispatched to it verbatim.
 ROUTER_COMMANDS = {
     "start", "observe", "card", "nodes", "impact", "grep", "read-slice",
-    "pin", "verify", "pages", "index-pages", "eval-routing", "coverage",
+    "pin", "verify", "pages", "index-pages", "eval-routing", "eval-map", "orient", "coverage",
     "readiness", "board", "harvest", "kb", "work",
 }
 

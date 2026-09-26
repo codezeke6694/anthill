@@ -66,9 +66,13 @@ STOPWORDS = {
 }
 # Field weights: the curated lexical_signature is the intended match surface, so
 # it counts more than descriptive prose in responsibility/arrive_when.
-_W_SIGNATURE = 3
+_W_SIGNATURE = 2
 _W_RESPONSIBILITY = 1
 _W_ARRIVE_WHEN = 1
+# The opening paragraph says why the module exists, in prose.
+_W_ABOUT = 1
+# Past commit subjects are the only text phrased the way work is asked for.
+_W_HISTORY = 1
 # BM25 params. b<1 length-normalizes so a broad node (large signature) cannot win
 # on surface area alone -- the v0 failure mode where `decomposition` buried the
 # precise `chunk_combination`. k1 damps term-frequency saturation.
@@ -168,9 +172,24 @@ def _tokens(text: str) -> list[str]:
     return [_stem(tok) for tok in raw if tok not in STOPWORDS and len(tok) > 1]
 
 
-def _node_doc(node: dict[str, Any]) -> Counter:
-    """Weighted bag-of-stems for one node."""
+def _node_doc(node: dict[str, Any], exclude: frozenset[str] = frozenset()) -> Counter:
+    """Weighted bag-of-stems for one node.
+
+    `exclude` drops the named commits from the node's history. It exists for
+    measurement: asking the router about a past commit while that commit's own
+    subject sits in the index is asking it to find the answer key.
+    """
     doc: Counter = Counter()
+    for tok in _tokens(node.get("about") or ""):
+        doc[tok] += _W_ABOUT
+    for entry in node.get("history") or []:
+        if entry.get("h") in exclude:
+            continue
+        # Not divided by how many files the commit touched: tried, and it cost
+        # seven points of top-1 on this repository's own history. A wide
+        # commit's subject is still true of each file it names.
+        for tok in _tokens(entry.get("s") or ""):
+            doc[tok] += _W_HISTORY
     for phrase in node.get("lexical_signature") or []:
         for tok in _tokens(phrase):
             doc[tok] += _W_SIGNATURE
@@ -206,12 +225,16 @@ def _idf(stem: str) -> float:
     return math.log(1 + (n - df + 0.5) / (df + 0.5))
 
 
-def _score_node(query: str, node: dict[str, Any]) -> tuple[float, list[str]]:
+def _score_node(query: str, node: dict[str, Any],
+                exclude: frozenset[str] = frozenset()) -> tuple[float, list[str]]:
     query_stems = set(_tokens(query))
     if not query_stems:
         return 0.0, []
     c = _corpus()
-    doc: Counter = c["docs"].get(node["node_id"], _node_doc(node))
+    if exclude and any(e.get("h") in exclude for e in node.get("history") or []):
+        doc: Counter = _node_doc(node, exclude)
+    else:
+        doc = c["docs"].get(node["node_id"]) or _node_doc(node)
     dl = sum(doc.values()) or 1
     score = 0.0
     matches: list[str] = []
@@ -238,10 +261,11 @@ def _score_node(query: str, node: dict[str, Any]) -> tuple[float, list[str]]:
     return score, sorted(set(matches))
 
 
-def _rank_nodes(query: str, limit: int = 5) -> list[dict[str, Any]]:
+def _rank_nodes(query: str, limit: int = 5,
+                exclude: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
     for node in _nodes():
-        score, matches = _score_node(query, node)
+        score, matches = _score_node(query, node, exclude)
         if score <= 0:
             continue
         ranked.append({
@@ -407,14 +431,46 @@ def _default_next_action(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@lru_cache(maxsize=1)
+def _rules_by_file() -> dict[str, list[dict[str, str]]]:
+    """file -> the knowledge-page rules that cite a symbol in it.
+
+    A rule is the one thing on a card an agent cannot rediscover by reading the
+    code: why it is shaped this way, and what must not be undone.
+    """
+    out: dict[str, list[dict[str, str]]] = {}
+    kd = _ctx.current().knowledge_dir
+    if not kd.exists():
+        return out
+    try:
+        loaded = pages_mod.load_pages(kd)
+    except Exception:          # a malformed page must not take navigation down
+        return out
+    for page in loaded:
+        for rule in page["rules"]:
+            text = re.sub(r"\s+", " ", rule["text"]).strip()
+            first = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+            for sid in rule["cites"]:
+                f = sid.split("::", 1)[0]
+                rows = out.setdefault(f, [])
+                if not any(r["rule"] == rule["rule_id"] for r in rows):
+                    rows.append({"rule": rule["rule_id"], "says": first[:300],
+                                 "page": page["path"]})
+    return out
+
+
 def _card(node: dict[str, Any], goal: str = "", latest_finding: str = "") -> dict[str, Any]:
     anchors = [_anchor_summary(anchor) for anchor in node.get("anchors") or []]
+    file = node.get("file") or (_anchor_files(node) or [""])[0]
     return {
         "you_are_here": {
             "node_id": node["node_id"],
+            "file": file,
             "responsibility": node["responsibility"],
             "district": node.get("district", ""),
         },
+        "rules_here": _rules_by_file().get(file, [])[:6],
+        "recent_changes": [e.get("s", "") for e in (node.get("history") or [])[:4]],
         "current_goal": goal,
         "why_you_arrived": (node.get("arrive_when") or ["Best lexical match for the goal."])[0],
         "latest_finding": latest_finding,
@@ -424,10 +480,20 @@ def _card(node: dict[str, Any], goal: str = "", latest_finding: str = "") -> dic
         "possible_routes": node.get("routes") or [],
         "validation_stops": node.get("tests") or [],
         "direct_consumers": node.get("consumers") or [],
+        # Measured: a cold agent that trusted the top card stopped there and
+        # named the right area but not the cause, while one reading without the
+        # map followed the call chain and found it -- in twice the steps. The
+        # card's job is the first step; this says the walk is not over.
+        "how_to_use_this": (
+            "This is where to start, not where it ends. Read the live code here, "
+            "then follow possible_routes (what this calls) and direct_consumers "
+            "(who calls it) until you reach the line that actually decides the "
+            "behaviour. The top candidate is right about half the time; check the "
+            "others before committing to one."),
         "done_when": [
             "The live code at the relevant anchor has been inspected.",
-            "The finding points to the next node, a test, or the edit site.",
-            "Relevant validation stops are checked after any change."
+            "You followed the routes or consumers until the deciding line was found.",
+            "The finding points to the edit site and the test that proves it.",
         ],
     }
 
@@ -758,6 +824,26 @@ def cmd_eval_routing(args: argparse.Namespace) -> None:
     _print_json(res)
 
 
+def cmd_orient(args: argparse.Namespace) -> None:
+    """What an agent is walking into, on one page."""
+    from anthill.navigate import orient as orient_mod
+    o = orient_mod.orient(_ctx.current(), _nodes())
+    if args.json:
+        _print_json(o)
+    else:
+        print(orient_mod.render(o), end="")
+
+
+def cmd_eval_map(args: argparse.Namespace) -> None:
+    """Score the map against the repository's own history."""
+    res = eval_mod.routing_from_history(REPO_ROOT, _nodes(),
+                                        rank=lambda q, k, exclude=frozenset(): _rank_nodes(q, k, exclude),
+                                        top_k=args.top_k, limit=args.limit)
+    if not args.all:
+        res["misses"] = res["misses"][:10]
+    _print_json(res)
+
+
 def cmd_board(args: argparse.Namespace) -> None:
     """Generate a Peregrine contract from pages that verify."""
     kd, sr = _knowledge_args(args)
@@ -1009,6 +1095,18 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--all", action="store_true")
     ev.add_argument("--map", default="knowledge", dest="map_name")
     ev.set_defaults(func=cmd_eval_routing)
+
+    orp = sub.add_parser("orient", help="Start here: what this codebase is, its "
+                         "chambers, how they connect, how to prove a change, the rules")
+    orp.add_argument("--json", action="store_true")
+    orp.set_defaults(func=cmd_orient)
+
+    em = sub.add_parser("eval-map", help="Score routing against this repository's own "
+                        "commit history: each past subject is a task, its files the answer")
+    em.add_argument("--top-k", type=int, default=3)
+    em.add_argument("--limit", type=int, default=0)
+    em.add_argument("--all", action="store_true", help="list every miss")
+    em.set_defaults(func=cmd_eval_map)
 
     cv = _kn(sub.add_parser("coverage", help="Code the maps know but no page explains"))
     cv.add_argument("--top", type=int, default=15, help="How many unexplained files to list")

@@ -159,6 +159,8 @@ work shares its blind spots exactly, so its approval means little. Tests stay
 the only real proof either way, but a different tool on the auditor seat is the
 one thing that buys genuine independence.
 
+{cold_start}
+
 {git_rules}
 
 ## Before you touch anything
@@ -315,6 +317,7 @@ def render_values(ctx: _ctx.Context, name: str = "", description: str = "",
         "MAP_BUILD_RULE": rules.map_build_rule(ctx),
         "ESCALATION_RULE": rules.escalation_rule(ctx),
         "GIT_RULES": rules.git_rules(ctx),
+        "COLD_START": rules.cold_start_rule(ctx),
         "AUDIT_NOTE": rules.audit_note(ctx),
         "MAX_FILES": "3",
     }
@@ -462,6 +465,7 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
     cmd = invocation(ctx)
     text = CLAUDE_MD.format(name=name, protected=protected_block,
                             git_rules=rules.git_rules(ctx),
+                            cold_start=rules.cold_start_rule(ctx),
                             blueprint_rule=rules.map_build_rule(ctx),
                             escalation_rule=rules.escalation_rule(ctx),
                             audit_note=rules.audit_note(ctx))

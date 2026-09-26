@@ -70,6 +70,35 @@ def escalation_rule(ctx: _ctx.Context) -> str:
             "it; a counter does not judge that for you.")
 
 
+def cold_start_rule(ctx: _ctx.Context) -> str:
+    """How an agent that knows nothing finds its way in.
+
+    Two commands, and a warning measured rather than assumed: a cold agent that
+    trusted the top card named the right area and missed the cause, where one
+    reading without the map found it by following the calls -- in twice the
+    steps. The map is fast because it points; the walk after it is still yours.
+    """
+    return "\n".join([
+        "## Before any task: learn where you are",
+        "",
+        "```bash",
+        "anthill orient                                  # the codebase on one page",
+        'anthill start "<the task, in your own words>"   # where that task lives',
+        "```",
+        "",
+        "`orient` says what this product is, its chambers and what each does, how "
+        "they connect, what changed recently, how to prove a change, and the rules. "
+        "`start` names the file a task most likely lives in, with what it calls, "
+        "who calls it, the tests that cover it, and the rules written about it.",
+        "",
+        "The map says where to start, not where it ends. Read the live code, then "
+        "follow the card's routes and consumers until you reach the line that "
+        "actually decides the behaviour. The top suggestion is right about half "
+        "the time (`anthill eval-map` measures it against this repository's own "
+        "history), so look at the other candidates before committing to one.",
+    ])
+
+
 def git_rules(ctx: _ctx.Context) -> str:
     """The two git rules, as they actually stand in this installation.
 

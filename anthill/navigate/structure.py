@@ -219,6 +219,28 @@ def find_elsewhere(symbol_name: str, exclude_file: str = "") -> list[str]:
     return sorted(hits)
 
 
+def _script_fingerprint(file_part: str, symbol_name: str) -> dict[str, Any]:
+    """A frontend symbol: its declaration line stands in for a signature.
+
+    There is no callee or caller set without a real parser, so a TS claim can
+    go stale by vanishing or by being re-declared, never by being rewired.
+    """
+    from anthill.navigate import scripts
+    path = REPO_ROOT / file_part
+    if not path.exists():
+        return {"exists": False, "reason": f"file not found: {file_part}"}
+    hit = scripts.locate(path, symbol_name)
+    if hit is None:
+        return {"exists": False, "reason": f"symbol not found: {file_part}::{symbol_name}"}
+    return {"exists": True, "file": file_part, "symbol": symbol_name, "kind": "script",
+            **hit, "hash": hit["sig"]}
+
+
+def is_script(file_part: str) -> bool:
+    from anthill.navigate import scripts
+    return Path(file_part).suffix in scripts.SUFFIXES
+
+
 def fingerprint(symbol_id: str, with_callers: bool = True) -> dict[str, Any]:
     """Structural fingerprint of one symbol, or an explanation of its absence.
 
@@ -227,6 +249,8 @@ def fingerprint(symbol_id: str, with_callers: bool = True) -> dict[str, Any]:
     uses the full three-part fingerprint.
     """
     file_part, symbol_name = split_symbol_id(symbol_id)
+    if is_script(file_part):
+        return _script_fingerprint(file_part, symbol_name)
     node, reason = _locate(file_part, symbol_name)
     if node is None:
         return {"exists": False, "reason": reason}
@@ -298,6 +322,8 @@ def fingerprint_at_commit(symbol_id: str, sha: str, repo: Path | None = None) ->
     import subprocess
 
     file_part, symbol_name = split_symbol_id(symbol_id)
+    if is_script(file_part):
+        return {"exists": False, "reason": "frontend symbols are not fingerprinted at a past commit"}
     try:
         proc = subprocess.run(
             ["git", "show", f"{sha}:{file_part}"],
