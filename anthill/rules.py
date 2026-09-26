@@ -99,6 +99,32 @@ def cold_start_rule(ctx: _ctx.Context) -> str:
     ])
 
 
+def upkeep_rule(ctx: _ctx.Context) -> str:
+    """After a commit: hand the paperwork to a helper, and keep working.
+
+    The owner's measured complaint: when the agent doing the work also does the
+    admin -- glossary, knowledge pages, test notes -- development slows down.
+    So the admin goes to a background helper that writes only the knowledge
+    directory, and the agent in the code never waits for it.
+    """
+    return "\n".join([
+        "## After you commit: hand off the upkeep, keep working",
+        "",
+        "The commit prints `anthill upkeep: N thing(s) to bring up to date` when a "
+        "change left the glossary, a knowledge page, or test coverage behind. When "
+        "it does:",
+        "",
+        "1. Start the `anthill-keeper` agent **in the background** with that list.",
+        "2. Carry on with the work. Do not wait for it and do not do its job "
+        "yourself; it writes only the knowledge directory, so it cannot collide "
+        "with your code.",
+        "3. When it reports, pass its test suggestions to the owner in one line.",
+        "",
+        "Anything left undone stays on the list: `anthill upkeep --open` shows it, "
+        "and `anthill work status` repeats it to the next session.",
+    ])
+
+
 def git_rules(ctx: _ctx.Context) -> str:
     """The two git rules, as they actually stand in this installation.
 

@@ -43,6 +43,35 @@ INCLUDE_DIRS, INCLUDE_TOPLEVEL, EXCLUDE_PARTS = _conf.source_roots()
 
 _SYMBOL_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
+
+class _Constant:
+    """A module-level assignment, standing in for a symbol.
+
+    Rules cite constants as often as functions -- GATE_KM, MOVEMENT, PROMPT --
+    and the locator knew only def and class, so every such citation reported
+    as missing code. Measured: the blueprint had flagged COUNTRY_BOX,
+    MECHANISMS and PROMPT as gone for weeks while all three sat in place.
+
+    The contract is the name and its annotation; the value is the body, and is
+    excluded for the same reason a function's body is: changing a threshold is
+    a content change, renaming or re-typing it is structural.
+    """
+
+    def __init__(self, node: ast.AST, name: str):
+        self.node, self.name = node, name
+        self.lineno = node.lineno
+        self.end_lineno = getattr(node, "end_lineno", node.lineno)
+
+
+def _constants(tree: ast.AST) -> list[_Constant]:
+    out = []
+    for node in getattr(tree, "body", []):
+        if isinstance(node, ast.Assign):
+            out += [_Constant(node, t.id) for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            out.append(_Constant(node, node.target.id))
+    return out
+
 # Drift kinds, ordered most to least threatening to a recorded claim.
 DRIFT_MISSING = "missing"            # symbol is gone entirely
 DRIFT_MOVED = "moved"                # same name, different file
@@ -119,6 +148,9 @@ def _arg_spec(args: ast.arguments) -> str:
 
 def normalized_signature(node: ast.AST) -> str:
     """The symbol's public contract as a stable string. Body excluded."""
+    if isinstance(node, _Constant):
+        ann = _annotation(getattr(node.node, "annotation", None))
+        return f"const {node.name}:{ann}"
     decorators = sorted(ast.unparse(d) for d in getattr(node, "decorator_list", []))
     if isinstance(node, ast.ClassDef):
         bases = sorted(ast.unparse(b) for b in node.bases)
@@ -136,6 +168,8 @@ def normalized_signature(node: ast.AST) -> str:
 
 def callee_names(node: ast.AST) -> list[str]:
     """Sorted set of names this symbol calls. The *set*, never the body text."""
+    if isinstance(node, _Constant):
+        node = node.node
     names: set[str] = set()
     for child in ast.walk(node):
         if not isinstance(child, ast.Call):
@@ -198,6 +232,9 @@ def _locate(file_part: str, symbol_name: str) -> tuple[ast.AST | None, str]:
     for node in ast.walk(tree):
         if isinstance(node, _SYMBOL_NODES) and node.name == symbol_name:
             return node, ""
+    for const in _constants(tree):
+        if const.name == symbol_name:
+            return const, ""
     return None, f"symbol not found: {file_part}::{symbol_name}"
 
 
@@ -212,10 +249,9 @@ def find_elsewhere(symbol_name: str, exclude_file: str = "") -> list[str]:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, _SYMBOL_NODES) and node.name == symbol_name:
-                hits.append(f"{rel}::{symbol_name}")
-                break
+        if any(isinstance(n, _SYMBOL_NODES) and n.name == symbol_name for n in ast.walk(tree)) \
+                or any(c.name == symbol_name for c in _constants(tree)):
+            hits.append(f"{rel}::{symbol_name}")
     return sorted(hits)
 
 
@@ -337,13 +373,15 @@ def fingerprint_at_commit(symbol_id: str, sha: str, repo: Path | None = None) ->
         tree = ast.parse(proc.stdout)
     except SyntaxError as exc:
         return {"exists": False, "reason": f"could not parse {file_part} at {sha}: {exc}"}
-    for node in ast.walk(tree):
-        if isinstance(node, _SYMBOL_NODES) and node.name == symbol_name:
-            return {
-                "exists": True,
-                "file": file_part,
-                "symbol": symbol_name,
-                "sig": _digest(normalized_signature(node)),
-                "callees": _digest("|".join(callee_names(node))),
-            }
+    found = next((n for n in ast.walk(tree)
+                  if isinstance(n, _SYMBOL_NODES) and n.name == symbol_name), None) \
+        or next((c for c in _constants(tree) if c.name == symbol_name), None)
+    if found is not None:
+        return {
+            "exists": True,
+            "file": file_part,
+            "symbol": symbol_name,
+            "sig": _digest(normalized_signature(found)),
+            "callees": _digest("|".join(callee_names(found))),
+        }
     return {"exists": False, "reason": f"symbol not found at {sha}: {symbol_id}"}

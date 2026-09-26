@@ -1253,7 +1253,13 @@ NEW_HERE = {
 
 def cmd_work_status(args: argparse.Namespace) -> int:
     st = _store(args)
-    _print_json({**work_mod.status(st), **_behind_note(st), "new_here": NEW_HERE})
+    from anthill import upkeep as upkeep_mod
+    left = upkeep_mod.load(_ctx.current()).get("open") or []
+    extra = {"upkeep_left_undone": {
+        "count": len(left), "items": [f"{i['kind']}: {i['detail']}" for i in left[:8]],
+        "next": "start the anthill-keeper agent in the background with these, then carry on",
+    }} if left else {}
+    _print_json({**work_mod.status(st), **_behind_note(st), **extra, "new_here": NEW_HERE})
     return 0
 
 

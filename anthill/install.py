@@ -161,6 +161,8 @@ one thing that buys genuine independence.
 
 {cold_start}
 
+{upkeep_rule}
+
 {git_rules}
 
 ## Before you touch anything
@@ -318,6 +320,7 @@ def render_values(ctx: _ctx.Context, name: str = "", description: str = "",
         "ESCALATION_RULE": rules.escalation_rule(ctx),
         "GIT_RULES": rules.git_rules(ctx),
         "COLD_START": rules.cold_start_rule(ctx),
+        "UPKEEP_RULE": rules.upkeep_rule(ctx),
         "AUDIT_NOTE": rules.audit_note(ctx),
         "MAX_FILES": "3",
     }
@@ -387,9 +390,13 @@ POST_HOOK = """#!/usr/bin/env bash
 # the board is used at all, and a blueprint that updates only when someone
 # remembers the orchestrator is a blueprint that is usually wrong. ~0.25s.
 # post-commit cannot abort anything, so failure here never costs a commit.
+# Then says what the commit left undone -- glossary, knowledge pages, tests --
+# and records it, so the list survives into the next session. It is printed to
+# the terminal that committed, which is where the agent doing the work sees it.
 ANTHILL="{cmd}"
 if command -v "$ANTHILL" >/dev/null 2>&1 || [ -x "$ANTHILL" ]; then
   "$ANTHILL" map build >/dev/null 2>&1 || true
+  "$ANTHILL" upkeep --record 2>/dev/null | grep -v "nothing left undone" || true
 fi
 exit 0
 """
@@ -430,6 +437,67 @@ def _write_hook(ctx: _ctx.Context, name: str, body: str, marker: str,
     return {"installed": True, "path": str(hook)}
 
 
+KEEPER_AGENT = """---
+name: anthill-keeper
+description: Brings the anthill up to date after a commit -- the glossary, the knowledge pages, and a note of any code no test covers -- so the agent doing the work never stops for it. Use it in the background whenever `anthill upkeep` lists anything.
+tools: Bash, Read, Grep, Glob, Edit, Write
+model: sonnet
+---
+
+You keep the anthill's records true after someone else changed the code. You
+do not change the code, and you do not commit.
+
+## Where you may write
+
+Only under `{knowledge}/`. Nothing else in the repository -- not source, not
+tests, not CLAUDE.md, not `.claude/`. The agent that asked you is working in the
+code right now; touching it would collide with them.
+
+## What to do
+
+1. `{cmd} upkeep --open --json` -- the list you were sent to clear.
+2. For each item:
+   - **glossary, a line names code that is gone**: find what the code calls it
+     now (`{cmd} start "<the owner's words on that line>"`, then read), and fix
+     the words after the arrow. Never change the owner's words before it.
+   - **glossary, a screen has no line**: add one under a heading
+     `## Added by the keeper -- not yet confirmed`, in the form
+     `- **<what a person would call it>** → <ComponentName>, <file stem>`.
+   - **knowledge, a rule cites a symbol that moved**: read the rule, then the
+     live code at the citation. If the rule is still true, fix only the
+     citation. If the code now does something else, rewrite the rule to say
+     what it does and add a History line saying what changed and when.
+   - **tests, changed code no test imports**: do not write the test. Say in one
+     line what a test for it would need to check.
+3. `{cmd} upkeep --record` -- items you fixed clear themselves.
+4. Report in at most five lines: what you fixed, what is still open, and the
+   one-line test suggestions.
+
+## Never
+
+- Fill `intent_attested_by` or `intent_attested_on`. Those are the owner's
+  signature; a page you edited stays unconfirmed until they look.
+- Change the owner's words on the left of a glossary arrow.
+- Edit, stage or commit anything outside `{knowledge}/`.
+"""
+
+
+def render_keeper(ctx: _ctx.Context) -> str:
+    return KEEPER_AGENT.format(cmd=invocation(ctx),
+                               knowledge=str(ctx.knowledge_dir.relative_to(ctx.root)))
+
+
+def install_keeper(ctx: _ctx.Context) -> dict[str, Any]:
+    """Write the upkeep helper's definition where Claude Code loads agents from."""
+    path = ctx.root / ".claude" / "agents" / "anthill-keeper.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = render_keeper(ctx)
+    already = path.exists() and path.read_text(encoding="utf-8") == body
+    if not already:
+        path.write_text(body, encoding="utf-8")
+    return {"installed": True, "path": str(path), "already": already}
+
+
 def install_hook(ctx: _ctx.Context) -> dict[str, Any]:
     cmd = invocation(ctx)
     return _write_hook(ctx, "pre-commit", HOOK.format(cmd=cmd), HOOK_MARKER,
@@ -466,6 +534,7 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
     text = CLAUDE_MD.format(name=name, protected=protected_block,
                             git_rules=rules.git_rules(ctx),
                             cold_start=rules.cold_start_rule(ctx),
+                            upkeep_rule=rules.upkeep_rule(ctx),
                             blueprint_rule=rules.map_build_rule(ctx),
                             escalation_rule=rules.escalation_rule(ctx),
                             audit_note=rules.audit_note(ctx))
@@ -663,6 +732,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     result["pre_commit_hook"] = install_hook(ctx)
     result["pre_push_hook"] = install_push_hook(ctx)
     result["post_commit_hook"] = install_post_hook(ctx)
+    result["keeper_agent"] = install_keeper(ctx)
 
     # Stamped after everything above is on disk, so the fingerprints cover what
     # is actually there. Without this, `control` compares against whatever was

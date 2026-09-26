@@ -46,6 +46,7 @@ DELEGATED = [
     ("control", "Has a control file drifted from what install wrote?"),
     ("config", "Read or change a setting; the only writer of anthill.config.json"),
     ("tidy", "Stray artefacts that belong to nobody"),
+    ("upkeep", "What a change left undone: glossary, knowledge pages, tests"),
 ]
 
 # The ported navigation and knowledge surface. Grouped rather than listed one by
@@ -125,6 +126,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "config":
         from anthill import configure
         return configure.main(argv[1:])
+    if argv and argv[0] == "upkeep":
+        from anthill import upkeep
+        return upkeep.main(argv[1:])
     if argv and argv[0] == "tidy":
         from anthill import tidy
         return tidy.main(argv[1:])
