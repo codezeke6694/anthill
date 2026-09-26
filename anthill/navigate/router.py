@@ -261,11 +261,63 @@ def _score_node(query: str, node: dict[str, Any],
     return score, sorted(set(matches))
 
 
+# How much a node's best-matching symbol adds to the node's own score. Measured
+# on LogiAstro's history: 0 -> 50/63 (top-1/top-3), 0.5 -> 55/70, 0.75 ->
+# 53/71, 1.0 -> 50/71, 2.0 -> 47/63. Past about 1 the symbol outvotes the file.
+_W_BEST_SYMBOL = 0.75
+
+
+@lru_cache(maxsize=1)
+def _symbol_corpus() -> dict[str, Any]:
+    """BM25 statistics over every symbol in the map: name and docstring."""
+    docs: dict[tuple[str, str], Counter] = {}
+    df: Counter = Counter()
+    for node in _nodes():
+        for sym in node.get("symbols") or []:
+            doc: Counter = Counter()
+            for tok in _tokens(sym.get("name") or ""):
+                doc[tok] += 2
+            for tok in _tokens(sym.get("doc") or ""):
+                doc[tok] += 1
+            if not doc:
+                continue
+            docs[(node["node_id"], sym["name"])] = doc
+            for tok in doc:
+                df[tok] += 1
+    n = max(1, len(docs))
+    avgdl = sum(sum(d.values()) for d in docs.values()) / n
+    return {"docs": docs, "df": df, "n": n, "avgdl": avgdl or 1.0}
+
+
+def _best_symbol_scores(query: str) -> dict[str, tuple[float, str]]:
+    """node -> (score, name) of its best-matching symbol for this query."""
+    q = set(_tokens(query))
+    c = _symbol_corpus()
+    best: dict[str, tuple[float, str]] = {}
+    for (nid, name), doc in c["docs"].items():
+        dl = sum(doc.values()) or 1
+        score = 0.0
+        for stem in q:
+            f = doc.get(stem, 0)
+            if not f:
+                continue
+            idf = math.log(1 + (c["n"] - c["df"][stem] + 0.5) / (c["df"][stem] + 0.5))
+            score += idf * (f * (_BM25_K1 + 1)) / (f + _BM25_K1 * (1 - _BM25_B + _BM25_B * dl / c["avgdl"]))
+        if score > best.get(nid, (0.0, ""))[0]:
+            best[nid] = (score, name)
+    return best
+
+
 def _rank_nodes(query: str, limit: int = 5,
                 exclude: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
+    best = _best_symbol_scores(query) if _W_BEST_SYMBOL else {}
     for node in _nodes():
         score, matches = _score_node(query, node, exclude)
+        sym_score, sym_name = best.get(node["node_id"], (0.0, ""))
+        if sym_score:
+            score += _W_BEST_SYMBOL * sym_score
+            matches = matches + [f"{sym_name}()"]
         if score <= 0:
             continue
         ranked.append({

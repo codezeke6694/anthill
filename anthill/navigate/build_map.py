@@ -221,6 +221,23 @@ def _anchors(mod: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _symbol_index(rel: str) -> list[dict[str, Any]]:
+    """Every function, method and constant in a file, with its own words.
+
+    Measured: on tasks whose answer was a documented constant -- RUBRIC_VERSION,
+    SAME_PLACE_KM, TOKEN_KEY -- plain grep beat the map, because the map only
+    knew files and looked inside one after choosing it. Indexing what each
+    symbol says lets routing find the line and the file at once.
+    """
+    from anthill.navigate import router
+    out = []
+    for sym in router._symbols_in(rel):
+        doc = re.sub(r"\s+", " ", sym.get("doc") or "").strip()
+        out.append({"name": sym["symbol"], "line": sym.get("line"), "doc": doc[:600],
+                    **({"type": True} if sym.get("type") else {})})
+    return out[:80]
+
+
 def _history() -> dict[str, list[dict[str, str]]]:
     """file -> the subjects of the commits that touched it, newest first.
 
@@ -364,6 +381,7 @@ def build() -> dict[str, Any]:
             "tests": tests.get(nid, [])[:8],
             "consumers": sorted(upstream[nid])[:10],
             "history": history.get(m["rel"], []),
+            "symbols": _symbol_index(m["rel"]),
         })
 
     return {
