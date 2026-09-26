@@ -431,6 +431,86 @@ def _default_next_action(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _symbols_in(file: str) -> list[dict[str, Any]]:
+    """Every named thing in a file an agent might be sent to, with what it says.
+
+    Top-level functions and classes, their methods, and module-level constants
+    -- a constant is often the whole answer (`GATE_KM`, `INSTRUMENTS`), and in
+    a well-kept codebase it carries its own docstring on the next line.
+    """
+    path = REPO_ROOT / file
+    out: list[dict[str, Any]] = []
+    if path.suffix == ".py":
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            return out
+        body = tree.body
+        for i, node in enumerate(body):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                out.append({"symbol": node.name, "line": node.lineno,
+                            "doc": ast.get_docstring(node) or ""})
+                if isinstance(node, ast.ClassDef):
+                    for m in node.body:
+                        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            out.append({"symbol": f"{node.name}.{m.name}", "line": m.lineno,
+                                        "doc": ast.get_docstring(m) or ""})
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = [x.id for x in targets if isinstance(x, ast.Name)]
+                nxt = body[i + 1] if i + 1 < len(body) else None
+                doc = (nxt.value.value if isinstance(nxt, ast.Expr) and isinstance(
+                    getattr(nxt, "value", None), ast.Constant) and isinstance(nxt.value.value, str)
+                    else "")
+                for name in names:
+                    out.append({"symbol": name, "line": node.lineno, "doc": doc})
+    else:
+        from anthill.navigate import scripts
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return out
+        for sym in scripts.exports(text):
+            hit = scripts.locate(path, sym["name"])
+            out.append({"symbol": sym["name"], "line": hit["line_start"] if hit else None,
+                        "doc": sym.get("doc", ""), "type": sym["kind"] == "type"})
+    return out
+
+
+def _look_here(node: dict[str, Any], goal: str, k: int = 3) -> list[dict[str, Any]]:
+    """The lines in this node's file that best match the goal.
+
+    Measured reason: cold agents reached the right file and then spent their
+    steps searching inside it for the deciding line -- `GATE_KM`, `_cached`,
+    `INSTRUMENTS` -- which the map knew nothing below file level about.
+    """
+    q = set(_tokens(goal))
+    if not q:
+        return []
+    scored = []
+    for s in _symbols_in(node.get("file") or ""):
+        doc = s["doc"].strip()
+        para = re.split(r"\n\s*\n", doc, maxsplit=1)[0] if doc else ""
+        # The opening paragraph counts in full and the rest of the docstring at
+        # half: `INSTRUMENTS` says "readings" up front and "merged" three
+        # sentences later, but in a 1,700-line module the long docstrings would
+        # otherwise out-talk the short one that is the answer.
+        head = set(_tokens(s["symbol"])) | set(_tokens(para))
+        rest = set(_tokens(doc[:1200])) - head
+        hit = (q & head) | (q & rest)
+        if not hit:
+            continue
+        score = sum(_idf(w) for w in q & head) + 0.5 * sum(_idf(w) for w in q & rest)
+        if s.get("type"):
+            score *= 0.5    # a type names the vocabulary; the function decides
+        scored.append((score, s["line"] or 0, {
+            "symbol": s["symbol"], "line": s["line"],
+            "says": re.sub(r"\s+", " ", para)[:200],
+            "matched": sorted(hit)}))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [x[2] for x in scored[:k]]
+
+
 @lru_cache(maxsize=1)
 def _rules_by_file() -> dict[str, list[dict[str, str]]]:
     """file -> the knowledge-page rules that cite a symbol in it.
@@ -469,6 +549,7 @@ def _card(node: dict[str, Any], goal: str = "", latest_finding: str = "") -> dic
             "responsibility": node["responsibility"],
             "district": node.get("district", ""),
         },
+        "look_here_first": _look_here(node, goal) if goal else [],
         "rules_here": _rules_by_file().get(file, [])[:6],
         "recent_changes": [e.get("s", "") for e in (node.get("history") or [])[:4]],
         "current_goal": goal,

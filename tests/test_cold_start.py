@@ -145,3 +145,18 @@ def test_agent_docs_tell_a_cold_agent_to_orient_first(project):
     for doc in ("CLAUDE.md", "AGENTS.md"):
         text = (project.root / doc).read_text()
         assert "anthill orient" in text and rules.cold_start_rule(project) in text
+
+
+def test_card_points_at_the_deciding_line_including_constants(project):
+    write(project.root, "pkg/gate.py",
+          '"""Where signals are gated."""\n\n'
+          'GATE_KM = 650.0\n"""How close to a corridor a signal must be to be judged."""\n\n\n'
+          'def unrelated():\n    """Formats a date."""\n')
+    frontend(project.root)
+    commit_all(project.root, "gate")
+    built(project.root)
+    out = json.loads(anthill(project.root, "card", "pkg.gate", "--goal",
+                             "how close must a signal be to the corridor"))
+    look = out["card"]["look_here_first"]
+    assert look[0]["symbol"] == "GATE_KM" and look[0]["line"] == 3
+    assert all(x["symbol"] != "unrelated" for x in look)
