@@ -1238,9 +1238,22 @@ def _behind_note(store) -> dict:
         "pick up the change; until then this reflects the old plan.")}
 
 
+# Said by the one command every session is told to run first. Measured: an
+# agent that followed CLAUDE.md exactly -- onboard, roles, work status, skill
+# list -- was never pointed at orient or start, concluded `start` did not
+# exist, and navigated by grep alone.
+NEW_HERE = {
+    "orient": "anthill orient",
+    "find_a_task": 'anthill start "<the task, in your own words>"',
+    "why": ("orient is the codebase on one page; start names the file and line a task "
+            "lives at, what a change there reaches, and the tests that prove it. Both "
+            "only read."),
+}
+
+
 def cmd_work_status(args: argparse.Namespace) -> int:
     st = _store(args)
-    _print_json({**work_mod.status(st), **_behind_note(st)})
+    _print_json({**work_mod.status(st), **_behind_note(st), "new_here": NEW_HERE})
     return 0
 
 

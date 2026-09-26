@@ -404,11 +404,35 @@ def build() -> dict[str, Any]:
     }
 
 
+def _explain_authored_dir() -> None:
+    """Leave a note in the authored-maps directory, which is usually empty.
+
+    Measured: an agent listed `.anthill/maps/`, found nothing, and concluded
+    there was no map -- the generated one lives under `build/maps/`, which it
+    had no reason to look in.
+    """
+    authored = claims.MAPS_DIR
+    note = authored / "README.md"
+    if note.exists():
+        return
+    authored.mkdir(parents=True, exist_ok=True)
+    note.write_text(
+        "# Authored maps\n\n"
+        "Hand-written maps go here, as `<name>.json`. This directory is usually empty.\n\n"
+        "The map of the whole codebase is generated, not written: it lives at\n"
+        f"`{OUT_PATH.relative_to(REPO_ROOT)}` and is redrawn after every commit.\n"
+        "You do not need to read it. Ask it instead:\n\n"
+        "    anthill orient                    # the codebase on one page\n"
+        '    anthill start "<your task>"       # where that task lives\n',
+        encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Build the whole-codebase blueprint")
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
     m = build()
+    _explain_authored_dir()
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(m, indent=2), encoding="utf-8")
     nodes = m["nodes"]

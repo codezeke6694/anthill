@@ -92,7 +92,10 @@ These change state: `work next|gate|done|escalate` (the board),
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv:
+    if not argv or argv[0] in ("help", "start-here"):
+        # `anthill help` is what a person types; it used to be an argparse
+        # error, and an agent that got one concluded the command it was
+        # looking for did not exist.
         print(START_HERE, end="")
         print("\nEvery command: anthill --help")
         return 0
