@@ -225,6 +225,62 @@ def _idf(stem: str) -> float:
     return math.log(1 + (n - df + 0.5) / (df + 0.5))
 
 
+GLOSSARY_FILE = "GLOSSARY.md"
+_GLOSS_LINE = re.compile(r"^\s*[-*]\s+(?P<terms>.+?)\s+(?:→|->)\s+(?P<code>.+?)\s*$")
+
+
+@lru_cache(maxsize=1)
+def _glossary() -> list[tuple[tuple[str, ...], list[str]]]:
+    """The owner's words, and the code's words for the same thing.
+
+    Measured: three of twelve cold-agent tasks could not be routed because the
+    task and the code never share a word -- "how far from a supply chain can a
+    news item be before it goes to the model" is, in the code, how close to a
+    corridor a signal must be to be judged. No ranking closes that; only
+    somebody writing down that the two mean the same thing does.
+
+    One line per idea: `- **supply chain**, **chain** → corridor, lane, node`.
+    """
+    path = _ctx.current().knowledge_dir / GLOSSARY_FILE
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = _GLOSS_LINE.match(line)
+        if not m:
+            continue
+        code = [w for w in re.split(r"[,;]", m.group("code")) if w.strip()]
+        code_stems = [s for w in code for s in _tokens(w)]
+        for term in re.findall(r"\*\*(.+?)\*\*", m.group("terms")):
+            stems = tuple(_tokens(term))
+            if stems and code_stems:
+                out.append((stems, code_stems))
+    return out
+
+
+def _expansion(query: str) -> str:
+    """The code's words for any owner's phrase in the query, and only those.
+
+    Returned separately so they can count for less than the words actually
+    asked: added at full weight, a glossary entry for a word in nearly every
+    task ("chain") pulled every query toward the same chamber -- measured, it
+    cost twelve points of top-1.
+    """
+    toks = _tokens(query)
+    asked = set(toks)
+    extra: list[str] = []
+    for stems, code in _glossary():
+        n = len(stems)
+        if any(tuple(toks[i:i + n]) == stems for i in range(len(toks) - n + 1)):
+            extra.extend(s for s in code if s not in asked)
+    return " ".join(dict.fromkeys(extra))
+
+
+# Measured on LogiAstro: 0 -> 53/71 (top-1/top-3), 0.2 -> 54/74, 0.3 -> 53/72,
+# 0.5 -> 47/68, 1.0 -> 41/63. The glossary is a hint, never a vote.
+_W_GLOSSARY = 0.2
+
+
 def _score_node(query: str, node: dict[str, Any],
                 exclude: frozenset[str] = frozenset()) -> tuple[float, list[str]]:
     query_stems = set(_tokens(query))
@@ -311,9 +367,16 @@ def _best_symbol_scores(query: str) -> dict[str, tuple[float, str]]:
 def _rank_nodes(query: str, limit: int = 5,
                 exclude: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
+    extra = _expansion(query) if _W_GLOSSARY else ""
     best = _best_symbol_scores(query) if _W_BEST_SYMBOL else {}
+    best_x = _best_symbol_scores(extra) if extra and _W_BEST_SYMBOL else {}
     for node in _nodes():
         score, matches = _score_node(query, node, exclude)
+        if extra:
+            xs, xm = _score_node(extra, node, exclude)
+            xs += _W_BEST_SYMBOL * best_x.get(node["node_id"], (0.0, ""))[0]
+            score += _W_GLOSSARY * xs
+            matches = matches + [f"~{m}" for m in xm[:3]]
         sym_score, sym_name = best.get(node["node_id"], (0.0, ""))
         if sym_score:
             score += _W_BEST_SYMBOL * sym_score

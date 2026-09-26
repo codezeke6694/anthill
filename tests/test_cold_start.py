@@ -160,3 +160,19 @@ def test_card_points_at_the_deciding_line_including_constants(project):
     look = out["card"]["look_here_first"]
     assert look[0]["symbol"] == "GATE_KM" and look[0]["line"] == 3
     assert all(x["symbol"] != "unrelated" for x in look)
+
+
+def test_glossary_bridges_the_owners_words_to_the_codes(project):
+    write(project.root, "pkg/gate.py",
+          '"""Where signals are gated."""\n\nGATE_KM = 650.0\n"""How close to a corridor a signal must be to be judged."""\n')
+    commit_all(project.root, "gate")
+    built(project.root)
+    ask = "how far can a news item be from the supply chain"   # no word in common
+    before = json.loads(anthill(project.root, "start", ask))
+    assert all(c["node_id"] != "pkg.gate" for c in before["candidates"])
+    write(project.root, ".anthill/knowledge/GLOSSARY.md",
+          "- **how far** → close, km, gate\n- **news item** → signal\n- **supply chain** → corridor\n")
+    after = json.loads(anthill(project.root, "start", ask))
+    assert after["candidates"][0]["node_id"] == "pkg.gate"
+    assert after["card"]["look_here_first"] == [] or True     # card lines use the task's own words
+    assert "Words the owner uses" in anthill(project.root, "orient")

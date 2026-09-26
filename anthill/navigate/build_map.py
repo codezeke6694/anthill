@@ -332,7 +332,11 @@ def build() -> dict[str, Any]:
             mods.append(m)
     # Modules with no defined symbols (e.g. empty __init__) are containers, not
     # navigation locations -- skip them (spec: functions are addresses).
-    mods = [m for m in mods if m["symbols"]]
+    # A file of documented constants is a place too -- the threshold an agent is
+    # sent to change often lives in one -- so it stays when it has any.
+    mods = [m for m in mods if m["symbols"] or (m["rel"].endswith(".py")
+                                                and not m["rel"].endswith("__init__.py")
+                                                and _symbol_index(m["rel"]))]
 
     dotted_to_node = {m["dotted"]: _node_id(m["rel"]) for m in mods if not m.get("script")}
     file_to_node = {m["rel"]: _node_id(m["rel"]) for m in mods}

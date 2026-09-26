@@ -142,6 +142,19 @@ def _knowledge(ctx: _ctx.Context) -> list[dict[str, Any]]:
     return out
 
 
+def _glossary(ctx: _ctx.Context) -> dict[str, Any]:
+    """The owner's words for things, if anyone has written them down."""
+    path = ctx.knowledge_dir / "GLOSSARY.md"
+    if not path.exists():
+        return {}
+    text = path.read_text(encoding="utf-8")
+    lines = [ln.strip()[2:] for ln in text.splitlines()
+             if ln.strip().startswith(("- **", "* **")) and ("→" in ln or "->" in ln)]
+    attested = bool(re.search(r"^intent_attested_by:\s*\S", text, re.M))
+    return {"page": str(path.relative_to(ctx.root)), "entries": lines,
+            "confirmed_by_owner": attested}
+
+
 def _proofs(ctx: _ctx.Context) -> list[dict[str, str]]:
     """How to prove a change, as commands that run here."""
     out: list[dict[str, str]] = []
@@ -198,6 +211,7 @@ def orient(ctx: _ctx.Context, nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "chambers": chambers(ctx, nodes),
         "recent_work": _recent_work(ctx, nodes),
         "knowledge": _knowledge(ctx),
+        "glossary": _glossary(ctx),
         "prove_a_change": _proofs(ctx),
         "rules": _rules(ctx),
         "find_your_task": 'anthill start "<the task, in your own words>"',
@@ -240,6 +254,14 @@ def render(o: dict[str, Any]) -> str:
             L.append(f"- `{k['page']}` — {k['title']} ({k['rules']} rules){mark}")
     else:
         L.append("- No knowledge pages yet. The docstrings are the knowledge.")
+    g = o.get("glossary") or {}
+    if g.get("entries"):
+        mark = "" if g["confirmed_by_owner"] else " (drafted by an agent, not yet confirmed by the owner)"
+        L += ["", "## Words the owner uses", "",
+              f"From `{g['page']}`{mark}. The owner's words, then the code's:", ""]
+        L += [f"- {e}" for e in g["entries"][:12]]
+        if len(g["entries"]) > 12:
+            L.append(f"- … {len(g['entries']) - 12} more in the page")
     L += ["", "## How to prove a change", ""]
     for pr in o["prove_a_change"]:
         L.append(f"- {pr['what']}: `{pr['run']}`")
