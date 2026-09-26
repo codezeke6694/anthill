@@ -176,3 +176,21 @@ def test_glossary_bridges_the_owners_words_to_the_codes(project):
     assert after["candidates"][0]["node_id"] == "pkg.gate"
     assert after["card"]["look_here_first"] == [] or True     # card lines use the task's own words
     assert "Words the owner uses" in anthill(project.root, "orient")
+
+
+def test_card_says_what_a_change_reaches_and_when_nothing_proves_it(project):
+    write(project.root, "pkg/gate.py",
+          '"""Where signals are gated."""\n\nGATE_KM = 650.0\n"""How close to a corridor a signal must be."""\n')
+    write(project.root, "pkg/use.py", "from pkg.gate import GATE_KM\n\ndef near(d):\n    return d < GATE_KM\n")
+    write(project.root, "tests/core/test_gate.py", "from pkg.gate import GATE_KM\n\ndef test_it():\n    assert GATE_KM\n")
+    write(project.root, "pkg/lonely.py", '"""Nothing tests this."""\n\ndef alone():\n    """Alone and untested."""\n')
+    commit_all(project.root, "gate")
+    built(project.root)
+    c = json.loads(anthill(project.root, "card", "pkg.gate", "--goal", "how close to a corridor"))["card"]
+    reach = c["if_you_change_this"]
+    line = reach["by_line"][0]
+    assert line["symbol"] == "GATE_KM"
+    assert line["used_in"] == ["pkg/use.py"] and line["tests_that_name_it"] == ["tests/core/test_gate.py"]
+    assert reach["files_that_import_this"] == ["pkg/use.py"] and "warning" not in reach
+    lonely = json.loads(anthill(project.root, "card", "pkg.lonely", "--goal", "alone"))["card"]
+    assert "no test covers this file" in lonely["if_you_change_this"]["warning"]

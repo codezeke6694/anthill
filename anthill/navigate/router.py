@@ -644,6 +644,72 @@ def _look_here(node: dict[str, Any], goal: str, k: int = 3) -> list[dict[str, An
 
 
 @lru_cache(maxsize=1)
+def _searchable_files() -> tuple[str, ...]:
+    """Every source and test file a symbol's users could be in."""
+    from anthill.navigate import scripts
+    files = {n.get("file") for n in _nodes() if n.get("file")}
+    for base in ("tests", "test"):
+        root = REPO_ROOT / base
+        if root.is_dir():
+            files.update(str(p.relative_to(REPO_ROOT)) for p in root.rglob("*")
+                         if p.is_file() and (p.suffix == ".py" or p.suffix in scripts.SUFFIXES)
+                         and "node_modules" not in p.parts)
+    return tuple(sorted(f for f in files if f))
+
+
+def _who_uses(file: str, symbol: str, limit: int = 12) -> dict[str, list[str]]:
+    """Where a symbol's name appears outside its own file: code, then tests.
+
+    Name-based, so an over-approximation: two things called `rank` look like
+    one. That is the safe direction for "what could break" -- a false entry
+    costs a glance, a missing one costs a regression.
+    """
+    name = symbol.split(".")[-1]
+    if len(name) < 3:
+        return {"code": [], "tests": []}
+    rx = re.compile(r"(?<![\w$])" + re.escape(name) + r"(?![\w$])")
+    code, tests = [], []
+    for f in _searchable_files():
+        if f == file:
+            continue
+        try:
+            text = (REPO_ROOT / f).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not rx.search(text):
+            continue
+        is_test = f.startswith(("tests/", "test/")) or "/test" in f or ".test." in f
+        (tests if is_test else code).append(f)
+    return {"code": code[:limit], "tests": tests[:limit]}
+
+
+def _if_you_change(node: dict[str, Any], look: list[dict[str, Any]]) -> dict[str, Any]:
+    """What a change here reaches: the one question search cannot answer.
+
+    Measured: in four rounds of cold agents, the thing they reported saving
+    them time was never the file -- search found that as fast -- but the list
+    of tests and the rules. This puts the reach of the line itself first.
+    """
+    file = node.get("file") or ""
+    out: dict[str, Any] = {}
+    # Every pointed-at line, not only the first: the ranking is a guess at
+    # which one decides, and the reach of the wrong one is no use.
+    reach = []
+    for x in look[:3]:
+        users = _who_uses(file, x["symbol"])
+        reach.append({"symbol": x["symbol"], "used_in": users["code"],
+                      "tests_that_name_it": users["tests"]})
+    if reach:
+        out["by_line"] = reach
+    out["files_that_import_this"] = [(_node_by_id(c).get("file") or c)
+                                     for c in (node.get("consumers") or [])][:10]
+    out["tests_that_import_this"] = node.get("tests") or []
+    if not any(r["tests_that_name_it"] for r in reach) and not out["tests_that_import_this"]:
+        out["warning"] = "no test covers this file -- a change here is unproven until one does"
+    return out
+
+
+@lru_cache(maxsize=1)
 def _rules_by_file() -> dict[str, list[dict[str, str]]]:
     """file -> the knowledge-page rules that cite a symbol in it.
 
@@ -681,7 +747,8 @@ def _card(node: dict[str, Any], goal: str = "", latest_finding: str = "") -> dic
             "responsibility": node["responsibility"],
             "district": node.get("district", ""),
         },
-        "look_here_first": _look_here(node, goal) if goal else [],
+        "look_here_first": (look := _look_here(node, goal) if goal else []),
+        "if_you_change_this": _if_you_change(node, look),
         "rules_here": _rules_by_file().get(file, [])[:6],
         "recent_changes": [e.get("s", "") for e in (node.get("history") or [])[:4]],
         "current_goal": goal,
@@ -781,8 +848,10 @@ def cmd_nodes(args: argparse.Namespace) -> None:
 
 def cmd_impact(args: argparse.Namespace) -> None:
     node = _node_by_id(args.node_id)
+    look = [{"symbol": args.symbol}] if getattr(args, "symbol", "") else []
     _print_json({
         "node_id": node["node_id"],
+        "if_you_change_this": _if_you_change(node, look),
         "validation_stops": node.get("tests") or [],
         "direct_consumers": node.get("consumers") or [],
         "possible_routes": node.get("routes") or [],
@@ -1251,8 +1320,10 @@ def build_parser() -> argparse.ArgumentParser:
     nodes.add_argument("--top", type=int, default=10)
     nodes.set_defaults(func=cmd_nodes)
 
-    impact = _with_map(sub.add_parser("impact", help="Show validation stops and consumers for a node"))
+    impact = _with_map(sub.add_parser("impact", help="What a change here reaches: callers, "
+                                      "importers, and the tests that prove it"))
     impact.add_argument("node_id")
+    impact.add_argument("--symbol", default="", help="a function or constant in the node's file")
     impact.set_defaults(func=cmd_impact)
 
     grep = _with_map(sub.add_parser("grep", help="Run a directed grep scoped to one node's territory"))
