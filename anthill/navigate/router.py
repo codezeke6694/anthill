@@ -594,8 +594,13 @@ def _symbols_in(file: str) -> list[dict[str, Any]]:
                 doc = (nxt.value.value if isinstance(nxt, ast.Expr) and isinstance(
                     getattr(nxt, "value", None), ast.Constant) and isinstance(nxt.value.value, str)
                     else "")
+                values = sorted({c.value for c in ast.walk(node.value)
+                                 if isinstance(c, ast.Constant) and isinstance(c.value, str)
+                                 and 4 <= len(c.value) <= 60 and "\n" not in c.value})[:8] \
+                    if node.value is not None else []
                 for name in names:
-                    out.append({"symbol": name, "line": node.lineno, "doc": doc})
+                    out.append({"symbol": name, "line": node.lineno, "doc": doc,
+                                **({"values": values} if values else {})})
     else:
         from anthill.navigate import scripts
         try:
@@ -683,6 +688,25 @@ def _who_uses(file: str, symbol: str, limit: int = 12) -> dict[str, list[str]]:
     return {"code": code[:limit], "tests": tests[:limit]}
 
 
+def _same_values_elsewhere(file: str, values: list[str], limit: int = 10) -> list[dict[str, Any]]:
+    """Other files that spell out one of these string values in quotes."""
+    if not values:
+        return []
+    rx = re.compile(r"""(['"])(""" + "|".join(re.escape(v) for v in values) + r""")\1""")
+    out = []
+    for f in _searchable_files():
+        if f == file:
+            continue
+        try:
+            text = (REPO_ROOT / f).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        found = sorted({m.group(2) for m in rx.finditer(text)})
+        if found:
+            out.append({"file": f, "values": found})
+    return out[:limit]
+
+
 def _if_you_change(node: dict[str, Any], look: list[dict[str, Any]]) -> dict[str, Any]:
     """What a change here reaches: the one question search cannot answer.
 
@@ -695,10 +719,20 @@ def _if_you_change(node: dict[str, Any], look: list[dict[str, Any]]) -> dict[str
     # Every pointed-at line, not only the first: the ranking is a guess at
     # which one decides, and the reach of the wrong one is no use.
     reach = []
+    values = {s["symbol"]: s.get("values") or [] for s in _symbols_in(file)}
     for x in look[:3]:
         users = _who_uses(file, x["symbol"])
-        reach.append({"symbol": x["symbol"], "used_in": users["code"],
-                      "tests_that_name_it": users["tests"]})
+        row = {"symbol": x["symbol"], "used_in": users["code"],
+               "tests_that_name_it": users["tests"]}
+        # A constant of names -- which collectors are readings -- is often
+        # half the rule; the other half is code elsewhere comparing to the
+        # same strings, which no import graph shows. Measured: the related
+        # bug beside a missing collector name was three `== "open-meteo"`
+        # checks in other files, found only by grep.
+        same = _same_values_elsewhere(file, values.get(x["symbol"]) or [])
+        if same:
+            row["same_values_elsewhere"] = same
+        reach.append(row)
     if reach:
         out["by_line"] = reach
     out["files_that_import_this"] = [(_node_by_id(c).get("file") or c)

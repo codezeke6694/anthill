@@ -194,3 +194,16 @@ def test_card_says_what_a_change_reaches_and_when_nothing_proves_it(project):
     assert reach["files_that_import_this"] == ["pkg/use.py"] and "warning" not in reach
     lonely = json.loads(anthill(project.root, "card", "pkg.lonely", "--goal", "alone"))["card"]
     assert "no test covers this file" in lonely["if_you_change_this"]["warning"]
+
+
+def test_card_shows_where_a_constants_values_are_spelled_out_elsewhere(project):
+    write(project.root, "pkg/kinds.py",
+          '"""Which collectors are readings."""\n\nINSTRUMENTS = frozenset({"rain-gauge", "quake-feed"})\n'
+          '"""Collectors that take readings."""\n')
+    write(project.root, "pkg/tiles.py", 'def tile(row):\n    return row == "rain-gauge"\n')
+    commit_all(project.root, "kinds")
+    built(project.root)
+    c = json.loads(anthill(project.root, "card", "pkg.kinds", "--goal", "collectors that take readings"))["card"]
+    line = c["if_you_change_this"]["by_line"][0]
+    assert line["symbol"] == "INSTRUMENTS"
+    assert line["same_values_elsewhere"] == [{"file": "pkg/tiles.py", "values": ["rain-gauge"]}]

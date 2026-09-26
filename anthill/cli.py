@@ -67,8 +67,35 @@ def _ctx_or_die(args) -> _ctx.Context:
     return ctx
 
 
+# What a newcomer needs before anything else, at the top of `--help`.
+#
+# Measured: an agent told nothing about Anthill found it through CLAUDE.md,
+# then ran `--help` five times to work out which commands to use, never found
+# `start`, and avoided others for fear they would change the board. So the
+# first thing help says is where to begin and which commands only read.
+START_HERE = """\
+Starting cold? These only read -- none of them changes anything:
+
+  anthill orient                         the codebase on one page: chambers,
+                                         how they connect, tests, rules, words
+  anthill start "<task, in your words>"  where that task lives: the file, the
+                                         line, what a change reaches, its tests
+  anthill card <node> --goal "<task>"    the same card for another candidate
+  anthill impact <node> --symbol <name>  what a change to one symbol reaches
+  anthill work status --repo .           what is on the board, and whose
+
+These change state: `work next|gate|done|escalate` (the board),
+`map build` (redraws the map -- safe, the post-commit hook runs it anyway),
+`install`, `config set`, `onboard` (the owner's).
+"""
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv:
+        print(START_HERE, end="")
+        print("\nEvery command: anthill --help")
+        return 0
 
     # Delegate first, so the ported surface keeps its exact flags and output.
     if argv and argv[0] in ROUTER_COMMANDS:
@@ -116,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(
         prog="anthill",
-        description="A development agent system: blueprint, intent, foreman.",
+        description="A development agent system: blueprint, intent, foreman.\n\n" + START_HERE,
         epilog="navigation and knowledge (`anthill <cmd> --help`):\n  "
                + "\n  ".join(", ".join(NAVIGATION[i:i + 6])
                              for i in range(0, len(NAVIGATION), 6)),
