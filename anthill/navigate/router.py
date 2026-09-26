@@ -64,6 +64,23 @@ STOPWORDS = {
     "que", "that", "the", "then", "this", "to", "was", "were", "what", "when",
     "where", "which", "why", "with",
 }
+# The words a person wraps around a request. Measured: "the weather along a
+# road -- where do we go and fetch it?" went to the place-name lookup because
+# "we" scored, and the weather collector came fourth. A query is asked in
+# conversation and the map is written in docstrings; these carry meaning in
+# neither.
+STOPWORDS |= {
+    "i", "me", "my", "we", "us", "our", "you", "your", "they", "them", "their",
+    "he", "she", "him", "her", "its", "there", "here", "these", "those",
+    "am", "been", "being", "do", "did", "doing", "done", "can", "could", "would",
+    "should", "shall", "will", "may", "might", "must", "need", "want", "wants",
+    "like", "just", "also", "too", "very", "so", "if", "than", "about",
+    "again", "any", "some", "all", "each", "every", "more", "most", "much", "many",
+    "other", "own", "such", "only", "not", "no", "yes", "up", "out",
+    "get", "gets", "got", "go", "goes", "going", "make", "makes", "let", "put",
+    "give", "see", "look", "say", "tell", "actually", "really", "thing", "things",
+    "something", "someone", "somebody", "please", "ok", "now", "still", "who",
+}
 # Field weights: the curated lexical_signature is the intended match surface, so
 # it counts more than descriptive prose in responsibility/arrive_when.
 _W_SIGNATURE = 2
