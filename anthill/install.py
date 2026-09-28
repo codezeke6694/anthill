@@ -469,6 +469,12 @@ code right now; touching it would collide with them.
      what it does and add a History line saying what changed and when.
    - **tests, changed code no test imports**: do not write the test. Say in one
      line what a test for it would need to check.
+   - **something the agent learned** (sent to you in words, not on the list):
+     a word the owner uses goes in the glossary under the keeper heading; why
+     a piece of code is the way it is goes on the knowledge page for that
+     area as a rule citing the code (`(sg: path::name)`), under a heading
+     `## Added by the keeper -- not yet confirmed`. If no page covers the
+     area, say so in your report rather than creating one.
 3. `{cmd} upkeep --record` -- items you fixed clear themselves.
 4. Report in at most five lines: what you fixed, what is still open, and the
    one-line test suggestions.

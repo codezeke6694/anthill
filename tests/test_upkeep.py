@@ -103,3 +103,10 @@ def test_a_rule_citing_a_constant_is_not_reported_missing(project):
     (project.root / "pkg/gate.py").write_text("GATE_KM = 700.0\n")    # content, not shape
     commit_all(project.root, "wider")
     assert not [i for i in upkeep(project.root)["open"] if i["kind"] == "knowledge"]
+
+
+def test_the_rule_covers_tasks_that_never_commit(project):
+    text = (project.root / "CLAUDE.md").read_text()
+    assert "Before you finish any task, committed or not" in text
+    keeper = (project.root / ".claude/agents/anthill-keeper.md").read_text()
+    assert "something the agent learned" in keeper

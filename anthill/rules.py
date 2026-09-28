@@ -122,6 +122,17 @@ def upkeep_rule(ctx: _ctx.Context) -> str:
         "",
         "Anything left undone stays on the list: `anthill upkeep --open` shows it, "
         "and `anthill work status` repeats it to the next session.",
+        "",
+        "**Before you finish any task, committed or not**, ask two questions:",
+        "",
+        "- Did `anthill upkeep --open` list anything? Hand it to the keeper.",
+        "- Did you learn something the next agent should not have to rediscover -- "
+        "a word the owner uses for something, why a piece of code is the way it "
+        "is, a trap you hit? Hand the keeper that too, in a sentence, with the "
+        "file it is about.",
+        "",
+        "A task that only reads -- measuring, researching, answering -- commits "
+        "nothing, so no hook will remind you. This is the reminder.",
     ])
 
 
