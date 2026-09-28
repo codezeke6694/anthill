@@ -134,3 +134,27 @@ def test_an_uncommitted_edit_is_shown_with_the_work_it_belongs_to(project):
     out = anthill(project.root, "where")
     assert "Being edited right now" in out
     assert "`pkg/core.py` — adding" in out
+
+
+def test_a_fresh_install_shows_its_history_and_the_loop_starts_on_the_first_commit(project):
+    out = anthill(project.root, "where")
+    assert "No work page is open yet" in out
+    assert "What has been happening" in out and "initial" in out
+    git(project.root, "switch", "-q", "-c", "work/first-feature")
+    (project.root / "pkg/new.py").write_text("def x():\n    return 1\n")
+    commit_all(project.root, "Start the first feature")
+    items = json.loads(anthill(project.root, "upkeep", "--json"))["open"]
+    assert any(i["subject"] == "branch:work/first-feature" for i in items)
+
+
+def test_orient_does_not_repeat_the_stack_when_the_description_is_blank(project):
+    out = anthill(project.root, "orient")
+    assert out.count("**Stack:**") <= 1
+
+
+def test_untracked_work_is_found_in_a_repository_without_main(project):
+    git(project.root, "branch", "-m", "main", "trunk")
+    git(project.root, "switch", "-q", "-c", "work/on-trunk")
+    (project.root / "pkg/new.py").write_text("def x():\n    return 1\n")
+    commit_all(project.root, "Work on a trunk-based repo")
+    assert "work/on-trunk" in anthill(project.root, "where")

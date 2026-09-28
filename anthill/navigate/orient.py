@@ -28,7 +28,10 @@ def _charter(ctx: _ctx.Context) -> dict[str, str]:
     from anthill import onboard
     sections = onboard.read_sections(ctx.constitution)
     text = ctx.constitution.read_text(encoding="utf-8") if ctx.constitution.exists() else ""
-    field = lambda k: (m.group(1).strip() if (m := re.search(rf"^\*\*{k}:\*\*\s*(.+)$", text, re.M)) else "")
+    # `[ \t]*`, not `\s*`: with re.M, `\s` crosses the newline, so a blank
+    # Description read the next line -- measured, a fresh install printed its
+    # stack twice.
+    field = lambda k: (m.group(1).strip() if (m := re.search(rf"^\*\*{k}:\*\*[ \t]*(\S.*)$", text, re.M)) else "")
     # The charter's name first: the config's is whatever `install` was given,
     # and an install run without `--name` records the folder's name instead.
     name = field("Name") or ((ctx.config.get("project") or {}).get("name")) or ctx.root.name

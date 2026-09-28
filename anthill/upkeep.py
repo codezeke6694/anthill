@@ -148,8 +148,9 @@ def work_items(ctx: _ctx.Context) -> list[dict[str, str]]:
     true at, so every later commit on its branch is visible drift.
     """
     from anthill.knowledge import work
-    if not (ctx.knowledge_dir / work.WORK_DIR).is_dir():
-        return []
+    # No early return when the project has no work pages yet. That was the
+    # case on every fresh install, so the loop that writes the first page
+    # could never start: a commit on a new branch printed nothing at all.
     w = work.where(ctx)
     out = []
     for r in w["work"]:

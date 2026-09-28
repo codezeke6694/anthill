@@ -141,21 +141,33 @@ def broken_citations(root: Path, page: dict[str, Any]) -> list[str]:
     return gone
 
 
-def untracked(root: Path, tracked: set[str], days: int = 7) -> list[dict[str, Any]]:
+def base_branch(root: Path, configured: str = "") -> str:
+    """The branch work is measured against: the configured one if it exists,
+    else main, master, develop or trunk. Measured: a repository with no `main`
+    made `git log --not main` fail, and untracked work silently vanished."""
+    for cand in [configured, "main", "master", "develop", "trunk"]:
+        if cand and _git(root, "rev-parse", "--verify", "--quiet", f"{cand}^{{commit}}").strip():
+            return cand
+    return ""
+
+
+def untracked(root: Path, tracked: set[str], days: int = 7, base: str = "") -> list[dict[str, Any]]:
     """Local branches with recent commits that no work page names."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     out = []
     refs = _git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads")
     for branch in refs.split():
-        if branch in tracked or branch in ("main", "master"):
+        if branch in tracked or branch == base:
             continue
         # A branch already inside a tracked one is that work's history, not
         # separate work: work/two-views sits inside work/geotag-test-set.
         if any(subprocess.run(["git", "merge-base", "--is-ancestor", branch, t], cwd=root,
                               capture_output=True).returncode == 0 for t in tracked):
             continue
-        recent = [ln for ln in _git(root, "log", "--format=%h %s", f"--since={since}",
-                                    branch, "--not", "main").splitlines() if ln.strip()]
+        args = ["log", "--format=%h %s", f"--since={since}", branch]
+        if base:
+            args += ["--not", base]
+        recent = [ln for ln in _git(root, *args).splitlines() if ln.strip()]
         if recent:
             out.append({"branch": branch, "commits": len(recent), "latest": recent[0]})
     return out
@@ -279,13 +291,17 @@ def where(ctx: Any) -> dict[str, Any]:
     b = board(ctx)
     return {
         "uncommitted": uncommitted(root, active, work),
+        # A fresh install has history and no pages; this is its only "what".
+        "recent": [] if active else [ln for ln in _git(root, "log", "-8", "--format=%ad  %s",
+                                                           "--date=short").splitlines() if ln.strip()],
         "board": b,
         "board_disagrees": disagreements(active, b) if b else [],
         "branch": head,
         "unpushed_commits": unpushed,
         "work": active,
         "finished": [{"id": r["id"], "title": r["title"]} for r in finished],
-        "untracked": untracked(root, tracked),
+        "untracked": untracked(root, tracked, base=base_branch(
+            root, str((getattr(ctx, "config", {}) or {}).get("execution", {}).get("base_branch") or ""))),
         "decisions": [{"id": d["frontmatter"].get("id") or d["path"].stem,
                        "title": d["frontmatter"].get("title", ""),
                        "decided": str(d["frontmatter"].get("decided", "")),
@@ -317,8 +333,9 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
             L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
     L += ["", "## Work in progress", ""]
     if not w["work"]:
-        L.append("No work page is open. If you are starting something, it needs one "
-                 "(the keeper writes it).")
+        L.append("No work page is open yet. After your next commit the keeper writes one "
+                 "for any branch with work on it; until then, the history below is the "
+                 "record.")
     for r in w["work"]:
         L.append(f"**{r['title']}** — {r['state'].replace('-', ' ')}"
                  + (f" · `{r['branch']}`" if r["branch"] else "")
@@ -338,6 +355,9 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
         for c in r["broken_citations"]:
             L.append(f"  - ⚠ Cites code that is gone: {c}")
         L.append(f"  - Read: `{r['page']}`")
+    if not w["work"] and w.get("recent"):
+        L += ["", "## What has been happening (from git, no pages yet)", ""]
+        L += [f"- {r}" for r in w["recent"]]
     if w["untracked"]:
         L += ["", "## Work no page describes", "",
               "Recent commits on these branches are not on any work page. Read their log "

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Entry point. Resolves the installed package regardless of where it is invoked
 # from, so `anthill` works inside any target project.
+#
+# Not `python3 -m anthill.cli`: -m puts the current directory first on
+# sys.path, so inside a project that has its own `anthill/` folder -- a
+# vendored copy, or Anthill's own repository -- that folder silently ran
+# instead of this tool. Measured on a fresh install into a clone of Anthill.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONPATH="${HERE}/..:${PYTHONPATH:-}"
-exec python3 -m anthill.cli "$@"
+TOOL="$(cd "${HERE}/.." && pwd)"
+exec python3 -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from anthill.cli import main; sys.exit(main())' "$TOOL" "$@"
