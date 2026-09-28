@@ -13,7 +13,10 @@ So the project's state lives here, as pages every session reads and every
 commit checks:
 
   work/<id>.md       a piece of work in flight: what, where, how, the next
-                     step, what waits on the owner, the traps, its history
+                     step, what waits on the owner, the traps, its history.
+                     Its `state` is what the NEXT step waits on -- a page
+                     marked waiting-on-owner whose next step needed nobody
+                     made a cold chat report finished work as blocked.
   decisions/<id>.md  something the owner decided, in their words, and why
 
 A work page records the commit it was last true at (`true_at`). Commits on its
@@ -223,6 +226,26 @@ def disagreements(pages_: list[dict[str, Any]], b: dict[str, Any]) -> list[str]:
     return out
 
 
+def uncommitted(root: Path, active: list[dict[str, Any]], pages_: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tracked files changed but not committed, and the work each belongs to.
+
+    Measured: a chat asked "where are we" saw a 20-line edit to placing.py
+    only because it happened to run git status; another session was mid-edit
+    on the placement work at that moment. Two sessions on one file is the
+    collision this exists to prevent.
+    """
+    out = []
+    scopes = {pg["frontmatter"].get("id") or pg["path"].stem: page_scope(pg) for pg in pages_}
+    for line in _git(root, "status", "--porcelain", "--untracked-files=no").splitlines():
+        f = line[3:].strip().strip('"')
+        if not f or f.startswith(".anthill/"):
+            continue
+        owners = [pid for pid, dirs in scopes.items()
+                  if any(f == d or f.startswith(d.rstrip("/") + "/") for d in dirs)]
+        out.append({"file": f, "work": owners})
+    return out
+
+
 def where(ctx: Any) -> dict[str, Any]:
     kd, root = ctx.knowledge_dir, ctx.root
     work = load(kd, WORK_DIR)
@@ -255,6 +278,7 @@ def where(ctx: Any) -> dict[str, Any]:
                                       "--not", "--remotes").splitlines() if ln.strip()])
     b = board(ctx)
     return {
+        "uncommitted": uncommitted(root, active, work),
         "board": b,
         "board_disagrees": disagreements(active, b) if b else [],
         "branch": head,
@@ -285,6 +309,12 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
     L = ["# Where we are", ""]
     L.append(f"You are on `{w['branch']}`. {w['unpushed_commits']} commit(s) exist only on "
              "this machine." if w["unpushed_commits"] else f"You are on `{w['branch']}`.")
+    if w.get("uncommitted"):
+        L += ["", "## Being edited right now", "",
+              "These files have changes nobody has committed. Another session may be "
+              "working on them this minute: do not edit them without asking the owner.", ""]
+        for u in w["uncommitted"]:
+            L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
     L += ["", "## Work in progress", ""]
     if not w["work"]:
         L.append("No work page is open. If you are starting something, it needs one "

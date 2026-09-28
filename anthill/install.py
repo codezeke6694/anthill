@@ -477,6 +477,10 @@ code right now; touching it would collide with them.
      -- a claim about what `runner.py` does cites `runner.py`, not only the
      file the claim is about, or the page goes false the day runner changes.
      Set `true_at` to the branch's latest commit and `updated` to today.
+     `state` says what the **next step** waits on: `waiting-on-owner` only
+     when the next step cannot happen without the owner; `in-progress` when
+     it can, even if later steps need the owner; `paused` when it waits on
+     other work. A cold agent reads the state first.
    - **work, a branch no page describes**: write `{knowledge}/work/<id>.md`
      from its log, in the same shape as the others (What, Where, How,
      Waiting on the owner, Traps, History), `state: in-progress`.

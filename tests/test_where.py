@@ -126,3 +126,11 @@ def test_no_instruction_puts_anything_before_where(project):
         if (project.root / ".anthill/build/work").exists() else None
     from anthill.navigate import router
     assert router.NEW_HERE["first"].startswith("anthill where")
+
+
+def test_an_uncommitted_edit_is_shown_with_the_work_it_belongs_to(project):
+    work_page(project.root, head(project.root))                     # cites pkg/core.py
+    (project.root / "pkg/core.py").write_text("def add(a, b):\n    return a - -b\n")
+    out = anthill(project.root, "where")
+    assert "Being edited right now" in out
+    assert "`pkg/core.py` — adding" in out
