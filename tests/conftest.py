@@ -57,7 +57,8 @@ def project(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHILL_OWNER", raising=False)
     _ctx.current.cache_clear()
     ctx = _ctx.resolve(repo)
-    out = inst.install(ctx, project_name="Proj", stack="Python", write=True)
+    # The survey runs the CLI three times; the tests that need it ask for it.
+    out = inst.install(ctx, project_name="Proj", stack="Python", write=True, run_survey=False)
     assert out.get("created"), out
     # install put the real hooks in place, and they refuse commits on `main`;
     # every commit a test makes from here runs through them, on a work branch.

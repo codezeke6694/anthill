@@ -47,6 +47,7 @@ DELEGATED = [
     ("config", "Read or change a setting; the only writer of anthill.config.json"),
     ("tidy", "Stray artefacts that belong to nobody"),
     ("upkeep", "What a change left undone: glossary, knowledge pages, tests"),
+    ("survey", "Draw the map and report what Anthill knows (install runs it)"),
 ]
 
 # The ported navigation and knowledge surface. Grouped rather than listed one by
@@ -128,6 +129,15 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "config":
         from anthill import configure
         return configure.main(argv[1:])
+    if argv and argv[0] == "survey":
+        from anthill import install as inst
+        ctx = _ctx.resolve(None)
+        if not ctx.installed:
+            print(f"anthill: not installed in {ctx.root}", file=sys.stderr)
+            return 2
+        sv = inst.survey(ctx)
+        print(json.dumps(sv, indent=2) if "--json" in argv[1:] else inst.render_survey(sv))
+        return 0
     if argv and argv[0] == "upkeep":
         from anthill import upkeep
         return upkeep.main(argv[1:])
@@ -231,11 +241,15 @@ def main(argv: list[str] | None = None) -> int:
         from anthill import install as inst
         ctx = _ctx.resolve(args.project or None)
         areas = [x.strip() for x in args.areas.split(",") if x.strip()]
-        _out(inst.install(ctx, project_name=args.name, stack=args.stack,
-                          description=args.description, areas=areas,
-                          force=args.force, write=not args.dry_run,
-                          exclude=[x.strip() for x in args.exclude.split(",")
-                                   if x.strip()]))
+        result = inst.install(ctx, project_name=args.name, stack=args.stack,
+                              description=args.description, areas=areas,
+                              force=args.force, write=not args.dry_run,
+                              exclude=[x.strip() for x in args.exclude.split(",")
+                                       if x.strip()])
+        _out(result)
+        if result.get("survey"):
+            # For the person at the terminal; stdout stays valid JSON.
+            print("\n" + inst.render_survey(result["survey"]), file=sys.stderr)
         return 0
 
     if args.cmd == "status":

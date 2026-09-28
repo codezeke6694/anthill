@@ -607,9 +607,9 @@ def plan(ctx: _ctx.Context, project_name: str = "",
         ],
         "protected_paths": PROTECTED_PATHS,
         "first_move": (
-            "survey first: run `anthill integrate` — it draws the blueprint "
-            "and ranks the largest code with no page. That ranking is your "
-            "knowledge backlog. Develop ahead only after the blueprint exists."
+            "the install has already surveyed the code (see `survey`): the map "
+            "is drawn, and the largest code no page explains is the keeper's "
+            "first list. `anthill survey` redraws and re-reports at any time."
             if brownfield else
             "zone first: name the districts and their boundaries, then author a "
             "cold contract. There is nothing to survey yet."
@@ -617,10 +617,89 @@ def plan(ctx: _ctx.Context, project_name: str = "",
     }
 
 
+def brownfield_now(ctx: _ctx.Context) -> bool:
+    """Is there code to survey? A new, empty project has nothing to map."""
+    include, toplevel, _ = ctx.source_roots()
+    return bool(include or toplevel)
+
+
+def survey(ctx: _ctx.Context, exam_limit: int = 150) -> dict[str, Any]:
+    """What Anthill knows about the project the moment it is installed.
+
+    An install used to end by *suggesting* a survey. Until somebody ran it, or
+    until the first commit fired the hook, there was no map: an agent arriving
+    in between got a blank orient and a start that found nothing. Measured on a
+    fresh install, where the map had to be built by hand before anything else
+    worked. So the install does it, and says what it found:
+
+      map        every chamber, pathway and test
+      exam       how often a past task is sent to the right file, from day one
+      backlog    the largest code no page explains -- the keeper's first list
+      work       branches with recent work no page describes yet
+
+    Each step runs as its own process, because the map modules bind the
+    project root when they are imported.
+    """
+    import subprocess
+    tool = str(Path(__file__).resolve().parents[1] / "bin" / "anthill")
+
+    def run(*args: str, timeout: int = 180) -> tuple[int, str]:
+        try:
+            r = subprocess.run([tool, *args], cwd=ctx.root, capture_output=True,
+                               text=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return 1, str(exc)
+        return r.returncode, r.stdout
+
+    out: dict[str, Any] = {}
+    code, text = run("map", "build")
+    m = re.search(r"--\s*(\d+) nodes", text)
+    out["map"] = {"nodes": int(m.group(1)) if m else 0} if code == 0 else {"error": text[-300:]}
+    code, text = run("eval-map", "--limit", str(exam_limit))
+    try:
+        exam = json.loads(text) if code == 0 else {}
+        out["exam"] = {k: exam[k] for k in ("questions", "top1_pct", "top3_pct", "one_step_pct")}
+    except (ValueError, KeyError):
+        out["exam"] = {"note": "no history to score against yet"}
+    try:
+        from anthill import integrate
+        gap = integrate.report_gap(ctx)
+        out["backlog"] = gap.get("largest_unexplained") or []
+    except Exception:
+        out["backlog"] = []
+    code, text = run("where", "--json")
+    try:
+        w = json.loads(text)
+        out["work"] = [u["branch"] for u in w.get("untracked") or []]
+    except ValueError:
+        out["work"] = []
+    return out
+
+
+def render_survey(sv: dict[str, Any]) -> str:
+    L = ["What Anthill knows already:"]
+    mp = sv.get("map") or {}
+    L.append(f"  map      {mp.get('nodes', 0)} places in the code, with their pathways and tests"
+             if "nodes" in mp else f"  map      not built: {mp.get('error', '')}")
+    ex = sv.get("exam") or {}
+    if "top1_pct" in ex:
+        L.append(f"  finding  a past task goes to the right file first time {ex['top1_pct']}%, "
+                 f"top three {ex['top3_pct']}% ({ex['questions']} past commits)")
+    else:
+        L.append("  finding  no history yet to measure against")
+    if sv.get("backlog"):
+        L.append("  explain  the largest code no page explains yet: " + "; ".join(sv["backlog"][:3]))
+    if sv.get("work"):
+        L.append("  work     recent work with no page yet: " + ", ".join(sv["work"]))
+    L.append("Next: `anthill onboard` for the charter, then hand the lists above to the "
+             "anthill-keeper in the first chat.")
+    return "\n".join(L)
+
+
 def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
             description: str = "", areas: list[str] | None = None,
             force: bool = False, write: bool = True,
-            exclude: list[str] | None = None) -> dict[str, Any]:
+            exclude: list[str] | None = None, run_survey: bool = True) -> dict[str, Any]:
     """Scaffold control. Refuses to clobber unless forced."""
     result = plan(ctx, project_name, exclude)
     if ctx.installed and not force:
@@ -771,6 +850,8 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         gitignore.write_text("build/\nunits/\n", encoding="utf-8")
         written.append(str(gitignore))
 
+    if run_survey and write and brownfield_now(ctx):
+        result["survey"] = survey(ctx)
     result.update({
         "created": True,
         "written": written,

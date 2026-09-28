@@ -158,3 +158,20 @@ def test_untracked_work_is_found_in_a_repository_without_main(project):
     (project.root / "pkg/new.py").write_text("def x():\n    return 1\n")
     commit_all(project.root, "Work on a trunk-based repo")
     assert "work/on-trunk" in anthill(project.root, "where")
+
+
+def test_install_surveys_the_code_before_it_finishes(tmp_path, monkeypatch):
+    from anthill import context as _ctx, install as inst
+    repo = tmp_path / "fresh"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    (repo / "shop").mkdir()
+    (repo / "shop" / "pricing.py").write_text('"""Prices."""\n\nTAX = 0.18\n\ndef total(x):\n    return x\n')
+    commit_all(repo, "Start the shop")
+    monkeypatch.chdir(repo)
+    _ctx.current.cache_clear()
+    out = inst.install(_ctx.resolve(repo), project_name="Shop", stack="Python", write=True)
+    assert out["survey"]["map"]["nodes"] >= 1
+    assert (repo / ".anthill/build/maps/codebase.json").exists()
+    assert "What Anthill knows already" in inst.render_survey(out["survey"])
+    assert "places in the code" in anthill(repo, "survey")
