@@ -209,8 +209,10 @@ implements it is below.
 
 ## Doing a piece of work, start to finish
 
-**Every session, before anything else, find out whether a unit is already
-yours.** Context gets compacted and sessions restart; the board does not forget.
+**Every session, after `anthill where`, find out whether a board unit is
+already yours.** `where` comes first because it holds all the work, including
+work the board never saw; the board holds only units loaded onto it. Context
+gets compacted and sessions restart; neither forgets.
 
 ```bash
 anthill work status --repo .

@@ -115,3 +115,14 @@ def test_a_commit_outside_the_pages_code_is_not_drift(project):
     (project.root / "README.md").write_text("words\n")
     commit_all(project.root, "Edit the readme")
     assert "may be behind" not in anthill(project.root, "where")
+
+
+def test_no_instruction_puts_anything_before_where(project):
+    for doc in ("CLAUDE.md", "AGENTS.md"):
+        text = (project.root / doc).read_text()
+        assert "before anything else, find out whether a unit" not in text
+        assert "after `anthill where`" in text
+    status = json.loads(anthill(project.root, "work", "status", "--repo", ".")) \
+        if (project.root / ".anthill/build/work").exists() else None
+    from anthill.navigate import router
+    assert router.NEW_HERE["first"].startswith("anthill where")

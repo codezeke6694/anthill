@@ -1264,9 +1264,12 @@ def _behind_note(store) -> dict:
 # list -- was never pointed at orient or start, concluded `start` did not
 # exist, and navigated by grep alone.
 NEW_HERE = {
+    "first": "anthill where    # what is being worked on, and what waits on the owner",
     "orient": "anthill orient",
     "find_a_task": 'anthill start "<the task, in your own words>"',
-    "why": ("orient is the codebase on one page; start names the file and line a task "
+    "why": ("where says what to work on and what the owner is waiting to decide -- the board "
+            "below holds only work loaded onto it; orient is the codebase on one page; start "
+            "names the file and line a task "
             "lives at, what a change there reaches, and the tests that prove it. Both "
             "only read."),
 }
