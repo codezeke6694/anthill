@@ -110,3 +110,14 @@ def test_the_rule_covers_tasks_that_never_commit(project):
     assert "Before you finish any task, committed or not" in text
     keeper = (project.root / ".claude/agents/anthill-keeper.md").read_text()
     assert "something the agent learned" in keeper
+
+
+def test_a_file_of_only_types_is_not_listed_as_untested(project):
+    write(project.root, "web/package.json", "{}")
+    write(project.root, "web/src/lib/nav.ts",
+          "export interface Intent { id: string }\nexport type Mode = 'a' | 'b';\n")
+    write(project.root, "web/src/lib/run.ts", "export function run() { return 1; }\n")
+    commit_all(project.root, "types and code")
+    subjects = {i["subject"] for i in upkeep(project.root)["open"]}
+    assert "file:web/src/lib/nav.ts" not in subjects
+    assert "file:web/src/lib/run.ts" in subjects

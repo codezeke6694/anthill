@@ -130,6 +130,11 @@ def test_items(nodes: list[dict[str, Any]], files: set[str]) -> list[dict[str, s
         n = by_file.get(f)
         if n is None or n.get("tests") or f.endswith(("__init__.py", "types.ts")):
             continue
+        syms = n.get("symbols") or []
+        if syms and all(x.get("type") for x in syms):
+            # Only type declarations: nothing runs, so nothing can be tested.
+            # Measured: nav.ts (two interfaces) was listed as untested code.
+            continue
         out.append({"kind": "tests", "subject": f"file:{f}",
                     "detail": f"{f} changed and no test imports it"})
     return out
