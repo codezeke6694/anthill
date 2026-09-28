@@ -98,9 +98,31 @@ def drift(root: Path, page: dict[str, Any]) -> dict[str, Any]:
         return {"never_pinned": True}
     if not _git(root, "rev-parse", "--verify", "--quiet", f"{true_at}^{{commit}}").strip():
         return {"unknown_commit": true_at}
-    log = _git(root, "log", "--format=%h %s", f"{true_at}..{branch}")
-    behind = [ln for ln in log.splitlines() if ln.strip()]
+    scope = page_scope(page)
+    args = ["log", "--format=%h %s", f"{true_at}..{branch}"]
+    # Only commits that touch what the page is about. Measured: a commit that
+    # changed CLAUDE.md alone flagged the placement page as behind, and a
+    # warning that fires on every commit is one nobody reads.
+    if scope:
+        args += ["--", *scope]
+    behind = [ln for ln in _git(root, *args).splitlines() if ln.strip()]
     return {"behind": behind} if behind else {}
+
+
+_PATHISH = re.compile(r"`((?:logiastro|web|tests|[a-z_]+\.py)[^`\s]*)`")
+
+
+def page_scope(page: dict[str, Any]) -> list[str]:
+    """The directories a work page is about: those of every file it cites or
+    names. Empty means the page cites nothing, and every commit counts."""
+    files = {c.split("::", 1)[0] for c in page["cites"]}
+    files |= {m for m in _PATHISH.findall(page["text"]) if "/" in m or m.endswith(".py")}
+    dirs = set()
+    for f in files:
+        f = f.rstrip("/").split("*")[0]
+        parent = str(Path(f).parent) if "." in Path(f).name else f
+        dirs.add(parent if parent not in ("", ".") else f)
+    return sorted(d for d in dirs if d)
 
 
 def broken_citations(root: Path, page: dict[str, Any]) -> list[str]:
@@ -136,6 +158,71 @@ def untracked(root: Path, tracked: set[str], days: int = 7) -> list[dict[str, An
     return out
 
 
+def board(ctx: Any) -> dict[str, Any]:
+    """The job board as it stands: every unit that is not done, and why."""
+    import json
+    from anthill.knowledge import claims
+    from anthill.orchestrate import orchestrator
+    root_dir = claims.WORK_ROOT / re.sub(r"[^A-Za-z0-9._-]+", "-", ctx.root.name)
+    contract = root_dir / "contract.json"
+    if not contract.exists():
+        return {}
+    try:
+        st = orchestrator.Store(ctx.root, root=root_dir)
+        status = orchestrator.status(st)
+        units = {u["id"]: u for u in json.loads(contract.read_text()).get("units") or []}
+    except (Exception, SystemExit):
+        return {}
+    def title(uid: str) -> str:
+        return str((units.get(uid) or {}).get("title") or "")
+    def since(uid: str) -> str:
+        sp = root_dir / "state" / f"{uid.replace('/', '_')}.json"
+        try:
+            d = json.loads(sp.read_text())
+        except (OSError, ValueError):
+            return ""
+        return str(d.get("updated_at") or d.get("escalated_at") or d.get("claimed_at") or "")[:10]
+    def why_escalated(uid: str) -> str:
+        ep = root_dir / "escalations" / f"{uid}.md"
+        if not ep.exists():
+            return ""
+        text = ep.read_text(encoding="utf-8")
+        m = re.search(r"```\s*\n(.+?)\n", text)
+        line = m.group(1).strip() if m else ""
+        return re.sub(r",?\s*measured against [0-9a-f]{7,40}:?", "", line).strip()[:140]
+    by = status.get("by_status") or {}
+    blocked = [uid for uid in units if (st.read_state(uid) or {}).get("status") == "blocked"
+               and uid not in (status.get("ready") or [])] if hasattr(st, "read_state") else []
+    return {
+        "done": by.get("done", 0), "total": status.get("unit_count", 0),
+        "ready": [{"id": u, "title": title(u)} for u in status.get("ready") or []],
+        "in_flight": [{"id": u, "title": title(u)} for u in status.get("in_flight") or []],
+        "escalated": [{"id": u, "title": title(u), "since": since(u), "why": why_escalated(u)}
+                      for u in status.get("escalated") or []],
+        "blocked": [{"id": u, "title": title(u),
+                     "needs": [n for n in (units[u].get("needs_iface") or [])]} for u in blocked],
+    }
+
+
+def disagreements(pages_: list[dict[str, Any]], b: dict[str, Any]) -> list[str]:
+    """Where the board and the work pages tell a cold agent different things."""
+    out = []
+    by_unit = {u: r for r in pages_ for u in r.get("units") or []}
+    for u in b.get("ready") or []:
+        r = by_unit.get(u["id"])
+        if r and r["state"] in ("paused", "waiting-on-owner"):
+            out.append(f"The board says `{u['id']}` is ready, but its work page says "
+                       f"{r['state'].replace('-', ' ')}: {(r['next'] or r['title']).rstrip('.')}. "
+                       f"Follow the page.")
+    for u in b.get("escalated") or []:
+        r = by_unit.get(u["id"])
+        if r:
+            out.append(f"`{u['id']}` has been escalated since {u['since'] or '?'}, and the work "
+                       f"it belongs to has moved on without the board ({r['title']}, "
+                       f"{r['state'].replace('-', ' ')}). The owner can reopen or close it.")
+    return out
+
+
 def where(ctx: Any) -> dict[str, Any]:
     kd, root = ctx.knowledge_dir, ctx.root
     work = load(kd, WORK_DIR)
@@ -157,6 +244,7 @@ def where(ctx: Any) -> dict[str, Any]:
             "drift": drift(root, p),
             "broken_citations": broken_citations(root, p),
             "confirmed_by_owner": bool(str(fm.get("intent_attested_by") or "").strip()),
+            "units": [u.strip() for u in re.split(r"[,\s]+", str(fm.get("units") or fm.get("unit") or "").strip("[]")) if u.strip()],
         }
         (active if row["state"] in ACTIVE else finished).append(row)
     order = {"waiting-on-owner": 0, "in-progress": 1, "paused": 2}
@@ -165,7 +253,10 @@ def where(ctx: Any) -> dict[str, Any]:
     head = _git(root, "rev-parse", "--abbrev-ref", "HEAD").strip()
     unpushed = len([ln for ln in _git(root, "log", "--oneline", "--branches",
                                       "--not", "--remotes").splitlines() if ln.strip()])
+    b = board(ctx)
     return {
+        "board": b,
+        "board_disagrees": disagreements(active, b) if b else [],
         "branch": head,
         "unpushed_commits": unpushed,
         "work": active,
@@ -190,7 +281,7 @@ def _shared_traps(knowledge_dir: Path) -> list[str]:
     return _bullets(path.read_text(encoding="utf-8").split("---", 2)[-1])
 
 
-def render(w: dict[str, Any], board: dict[str, Any] | None = None) -> str:
+def render(w: dict[str, Any], _unused: Any = None) -> str:
     L = ["# Where we are", ""]
     L.append(f"You are on `{w['branch']}`. {w['unpushed_commits']} commit(s) exist only on "
              "this machine." if w["unpushed_commits"] else f"You are on `{w['branch']}`.")
@@ -234,12 +325,24 @@ def render(w: dict[str, Any], board: dict[str, Any] | None = None) -> str:
     if w.get("howto"):
         L += ["", "## How-to", ""]
         L += [f"- {h['title']} — `{h['page']}`" for h in w["howto"]]
-    if board:
-        L += ["", "## The board", "",
-              f"{board.get('done', 0)} of {board.get('total', 0)} units done"
-              + (f"; ready: {', '.join(board['ready'])}" if board.get("ready") else "")
-              + (f"; escalated: {', '.join(board['escalated'])}" if board.get("escalated") else "")
-              + ". The board holds only work that was loaded onto it; the pages above "
-                "are the fuller record."]
+    b = w.get("board") or {}
+    if b:
+        L += ["", "## The job board", "",
+              f"{b['done']} of {b['total']} units done. The board holds only work loaded onto "
+              "it with `anthill sprint`; work pages above that name no unit are real work "
+              "the board does not track.", ""]
+        for u in b["ready"]:
+            L.append(f"- **ready** `{u['id']}` — {u['title']}")
+        for u in b["in_flight"]:
+            L.append(f"- **in flight** `{u['id']}` — {u['title']}")
+        for u in b["escalated"]:
+            L.append(f"- **escalated** `{u['id']}` since {u['since'] or '?'} — {u['title']}"
+                     + (f"  _({u['why']})_" if u["why"] else ""))
+        for u in b["blocked"]:
+            need = f" — waits on {', '.join(u['needs'])}" if u["needs"] else " — not in the current plan"
+            L.append(f"- **blocked** `{u['id']}`{need}")
+        if w.get("board_disagrees"):
+            L += ["", "**Where the board and the pages disagree:**", ""]
+            L += [f"- ⚠ {d}" for d in w["board_disagrees"]]
     L += ["", "Then: `anthill orient` for the map, `anthill start \"<task>\"` for the place."]
     return "\n".join(L) + "\n"

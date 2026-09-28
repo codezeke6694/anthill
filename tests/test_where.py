@@ -94,3 +94,24 @@ def test_the_rules_send_a_cold_agent_to_where_first(project):
     assert "carry on" in text
     keeper = (project.root / ".claude/agents/anthill-keeper.md").read_text()
     assert "a page is behind its branch" in keeper and "decisions/" in keeper
+
+
+def test_the_board_and_the_pages_are_compared_where_they_disagree():
+    from anthill.knowledge import work
+    pages_ = [{"units": ["relevance.impl"], "state": "paused", "next": "Wait for the owner.",
+               "title": "Reach"},
+              {"units": ["risk-web.spec"], "state": "waiting-on-owner", "next": "",
+               "title": "Two views"}]
+    b = {"ready": [{"id": "relevance.impl", "title": ""}],
+         "escalated": [{"id": "risk-web.spec", "since": "2026-09-22", "why": ""}]}
+    said = work.disagreements(pages_, b)
+    assert any("says `relevance.impl` is ready" in d and "Follow the page" in d for d in said)
+    assert any("`risk-web.spec` has been escalated since 2026-09-22" in d for d in said)
+    assert work.disagreements(pages_, {"ready": [], "escalated": []}) == []
+
+
+def test_a_commit_outside_the_pages_code_is_not_drift(project):
+    work_page(project.root, head(project.root))                     # cites pkg/core.py
+    (project.root / "README.md").write_text("words\n")
+    commit_all(project.root, "Edit the readme")
+    assert "may be behind" not in anthill(project.root, "where")
