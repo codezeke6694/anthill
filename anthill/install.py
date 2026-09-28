@@ -469,6 +469,15 @@ code right now; touching it would collide with them.
      what it does and add a History line saying what changed and when.
    - **tests, changed code no test imports**: do not write the test. Say in one
      line what a test for it would need to check.
+   - **work, a page is behind its branch**: read `git log <true_at>..<branch>`
+     and the diffs, then bring the page's What, Where, Next, Waiting on the
+     owner and History up to date. Cite every file your statements depend on
+     -- a claim about what `runner.py` does cites `runner.py`, not only the
+     file the claim is about, or the page goes false the day runner changes.
+     Set `true_at` to the branch's latest commit and `updated` to today.
+   - **work, a branch no page describes**: write `{knowledge}/work/<id>.md`
+     from its log, in the same shape as the others (What, Where, How,
+     Waiting on the owner, Traps, History), `state: in-progress`.
    - **something the agent learned** (sent to you in words, not on the list):
      a word the owner uses goes in the glossary under the keeper heading; why
      a piece of code is the way it is goes on the knowledge page for that
@@ -481,6 +490,8 @@ code right now; touching it would collide with them.
 
 ## Never
 
+- Change a page under `{knowledge}/decisions/`. Those are the owner's words;
+  if the code now contradicts one, say so in your report.
 - Fill `intent_attested_by` or `intent_attested_on`. Those are the owner's
   signature; a page you edited stays unconfirmed until they look.
 - Change the owner's words on the left of a glossary arrow.

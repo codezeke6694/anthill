@@ -1140,6 +1140,27 @@ def cmd_eval_routing(args: argparse.Namespace) -> None:
     _print_json(res)
 
 
+def _board_summary() -> dict[str, Any]:
+    try:
+        st = work_mod.Store(REPO_ROOT, root=WORK_ROOT / re.sub(r"[^A-Za-z0-9._-]+", "-", REPO_ROOT.name))
+        s = work_mod.status(st)
+    except (Exception, SystemExit):     # no board is a fine answer here
+        return {}
+    by = s.get("by_status") or {}
+    return {"done": by.get("done", 0), "total": s.get("unit_count", 0),
+            "ready": s.get("ready") or [], "escalated": s.get("escalated") or []}
+
+
+def cmd_where(args: argparse.Namespace) -> None:
+    """What is being worked on, what waits on the owner, and what drifted."""
+    from anthill.knowledge import work as work_pages
+    w = work_pages.where(_ctx.current())
+    if args.json:
+        _print_json(w)
+    else:
+        print(work_pages.render(w, _board_summary()), end="")
+
+
 def cmd_orient(args: argparse.Namespace) -> None:
     """What an agent is walking into, on one page."""
     from anthill.navigate import orient as orient_mod
@@ -1432,6 +1453,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--all", action="store_true")
     ev.add_argument("--map", default="knowledge", dest="map_name")
     ev.set_defaults(func=cmd_eval_routing)
+
+    wh = sub.add_parser("where", help="Start here: the work in progress, what waits on the "
+                        "owner, the owner's decisions, the traps -- and what has drifted")
+    wh.add_argument("--json", action="store_true")
+    wh.set_defaults(func=cmd_where)
 
     orp = sub.add_parser("orient", help="Start here: what this codebase is, its "
                          "chambers, how they connect, how to prove a change, the rules")

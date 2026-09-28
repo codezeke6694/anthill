@@ -82,9 +82,18 @@ def cold_start_rule(ctx: _ctx.Context) -> str:
         "## Before any task: learn where you are",
         "",
         "```bash",
+        "anthill where                                   # what is being worked on, and what waits on the owner",
         "anthill orient                                  # the codebase on one page",
         'anthill start "<the task, in your own words>"   # where that task lives',
         "```",
+        "",
+        "`where` answers **what**: every piece of work in progress with its next "
+        "step, what waits on the owner, the owner's standing decisions, and the "
+        "traps. It says when a work page has fallen behind its branch, and names "
+        "recent work no page describes. Read it before answering any question "
+        "about where things stand, and before starting work: if the owner says "
+        "\"carry on\", the next step is on that page. Several sessions work here "
+        "at once and cannot see each other; this page is how they stay in step.",
         "",
         "`orient` says what this product is, its chambers and what each does, how "
         "they connect, what changed recently, how to prove a change, and the rules. "
@@ -126,6 +135,9 @@ def upkeep_rule(ctx: _ctx.Context) -> str:
         "**Before you finish any task, committed or not**, ask two questions:",
         "",
         "- Did `anthill upkeep --open` list anything? Hand it to the keeper.",
+        "- Did the work move -- a step done, a next step changed, a decision "
+        "taken or asked for? The keeper updates its work page; tell it what "
+        "moved in a sentence. New work of real size gets a page.",
         "- Did you learn something the next agent should not have to rediscover -- "
         "a word the owner uses for something, why a piece of code is the way it "
         "is, a trap you hit? Hand the keeper that too, in a sentence, with the "

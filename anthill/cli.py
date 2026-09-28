@@ -22,7 +22,7 @@ from anthill import context as _ctx
 # Commands the ported router already implements, dispatched to it verbatim.
 ROUTER_COMMANDS = {
     "start", "observe", "card", "nodes", "impact", "grep", "read-slice",
-    "pin", "verify", "pages", "index-pages", "eval-routing", "eval-map", "orient", "coverage",
+    "pin", "verify", "pages", "index-pages", "eval-routing", "eval-map", "orient", "where", "coverage",
     "readiness", "board", "harvest", "kb", "work",
 }
 
@@ -77,6 +77,8 @@ def _ctx_or_die(args) -> _ctx.Context:
 START_HERE = """\
 Starting cold? These only read -- none of them changes anything:
 
+  anthill where                          what is being worked on, what waits on
+                                         the owner, what they decided, the traps
   anthill orient                         the codebase on one page: chambers,
                                          how they connect, tests, rules, words
   anthill start "<task, in your words>"  where that task lives: the file, the

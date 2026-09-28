@@ -140,9 +140,38 @@ def test_items(nodes: list[dict[str, Any]], files: set[str]) -> list[dict[str, s
     return out
 
 
+def work_items(ctx: _ctx.Context) -> list[dict[str, str]]:
+    """A work page behind its own branch, and recent work no page describes.
+
+    Measured: a note written at 13:21 said the placement rule was not wired in;
+    at 18:09 it was, and nothing noticed. A work page pins the commit it was
+    true at, so every later commit on its branch is visible drift.
+    """
+    from anthill.knowledge import work
+    if not (ctx.knowledge_dir / work.WORK_DIR).is_dir():
+        return []
+    w = work.where(ctx)
+    out = []
+    for r in w["work"]:
+        behind = (r["drift"] or {}).get("behind")
+        if behind:
+            out.append({"kind": "work", "subject": f"work:{r['id']}",
+                        "detail": f"work page {r['page']} is {len(behind)} commit(s) behind "
+                                  f"{r['branch']} (latest: {behind[0]}); bring What, Next and "
+                                  f"History up to date and re-pin true_at"})
+        for c in r["broken_citations"]:
+            out.append({"kind": "work", "subject": f"work:{r['id']}@{c}",
+                        "detail": f"work page {r['page']} cites {c}, which no longer exists"})
+    for u in w["untracked"]:
+        out.append({"kind": "work", "subject": f"branch:{u['branch']}",
+                    "detail": f"{u['branch']} has {u['commits']} recent commit(s) no work page "
+                              f"describes (latest: {u['latest']}); write one from its log"})
+    return out
+
+
 def check(ctx: _ctx.Context, files: set[str]) -> list[dict[str, str]]:
     nodes = _nodes(ctx)
-    return (glossary_items(ctx, nodes) + knowledge_items(ctx, files)
+    return (work_items(ctx) + glossary_items(ctx, nodes) + knowledge_items(ctx, files)
             + test_items(nodes, files))
 
 
