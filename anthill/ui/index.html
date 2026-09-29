@@ -72,6 +72,7 @@
       <section><h2>Being edited right now</h2><div id="editing"></div></section>
       <section><h2>Work no page describes</h2><div id="untracked"></div></section>
       <section><h2>Health</h2><div id="health"></div></section>
+      <section><h2>Recent activity</h2><div id="trail"></div></section>
       <section><h2>Upkeep left undone <span class="n" id="up-n"></span></h2><div id="upkeep"></div></section>
       <section><h2>Your decisions <span class="n" id="dec-n"></span></h2><div id="decisions"></div></section>
       <section><h2>Traps</h2><div id="traps"></div></section>
@@ -140,7 +141,29 @@
     [["map", m.nodes !== undefined ? m.nodes + " files" : "not drawn"],
      ["drawn", m.age_min !== undefined ? (m.age_min < 60 ? m.age_min + " min ago" : Math.round(m.age_min / 60) + " h ago") : "—"],
      ["at", m.built_at || "—"]].forEach(([k, v]) => { const x = el("span", "", k + " "); x.append(el("b", "", v)); h.append(x); });
-    fill("health", [h], "");
+    // Each check's last run, from the trail. A crash is red: before the trail,
+    // a check the hooks ran could die and nobody would ever see it.
+    const tr = s.trail || {};
+    const checks = (tr.checks || []).map((c) => {
+      const bad = !!c.crashed;
+      const r = el("div", bad ? "err" : "sub",
+        (bad ? "✕ " : c.rc ? "! " : "✓ ") + c.verb + "  " + (bad ? "crashed: " + c.crashed :
+         c.rc ? "exit " + c.rc + (c.verb === "blueprint" ? " (some notes are out of date)" : "") : "ok") +
+        "  · " + String(c.t || "").slice(11, 16));
+      return r;
+    });
+    const crashes = tr.crashes || [];
+    if (crashes.length) checks.push(el("div", "err", crashes.length + " crash(es) in the last week — anthill trail health"));
+    fill("health", [h, ...checks], "");
+
+    fill("trail", (tr.recent || []).slice().reverse().map((e) => {
+      const when = String(e.t || "").slice(11, 16);
+      const who = e.tool + (e.session ? " " + e.session.slice(0, 8) : "");
+      const what = e.kind === "commit" ? "commit " + e.sha + "  " + (e.subject || "") :
+                   e.kind === "command" ? (e.crashed ? "CRASHED " : "") + "anthill " + (e.args || "") :
+                   e.kind + " " + (e.text || "");
+      return row(el("div", e.crashed ? "err" : "", when + "  " + what), el("div", "sub", who + (e.branch ? " · " + e.branch : "")));
+    }), "nothing recorded yet");
 
     $("up-n").textContent = (s.upkeep || []).length || "";
     const up = (s.upkeep || []);

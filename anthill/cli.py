@@ -35,6 +35,7 @@ ROUTER_COMMANDS = {
 # unsupported flag printed a third list again. An agent that has lost its
 # instructions cannot recover them from `--help`; it has to read the Python.
 DELEGATED = [
+    ("trail", "What happened here: every command and commit, and any crash"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
     ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
     ("roles", "Who is planner, builder and auditor"),
@@ -97,7 +98,43 @@ These change state: `work next|gate|done|escalate` (the board),
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run one command, and write what happened to the trail.
+
+    Every command, the ones the git hooks run included, leaves one line: how
+    long it took, its exit code, and whether it crashed. The hooks throw their
+    output away so a failure can never cost a commit; before this, that also
+    meant a crash was never seen by anyone.
+    """
+    import time
+    import traceback
+    from anthill import trail
     argv = list(sys.argv[1:] if argv is None else argv)
+    verb = argv[0] if argv else ""
+    if verb in ("", "help", "start-here", "trail", "-h", "--help"):
+        return _dispatch(argv)
+    t0 = time.monotonic()
+    rc: int | None = None
+    crash = ""
+    try:
+        rc = _dispatch(argv)
+        return rc
+    except SystemExit as exc:
+        code = exc.code
+        rc = code if isinstance(code, int) else (0 if code is None else 1)
+        raise
+    except KeyboardInterrupt:
+        rc = 130                           # Ctrl-C is a stop, not a crash
+        raise
+    except Exception as exc:               # noqa: BLE001 -- recorded, then re-raised unchanged
+        crash = "".join(traceback.format_exception_only(type(exc), exc)).strip()[-300:]
+        raise
+    finally:
+        trail.record("command", verb=verb, args=trail.command_args(argv),
+                     rc=rc, crashed=crash or None,
+                     secs=round(time.monotonic() - t0, 2))
+
+
+def _dispatch(argv: list[str]) -> int:
     if not argv or argv[0] in ("help", "start-here"):
         # `anthill help` is what a person types; it used to be an argparse
         # error, and an agent that got one concluded the command it was
@@ -161,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "integrate":
         from anthill import integrate
         return integrate.main(argv[1:])
+    if argv and argv[0] == "trail":
+        from anthill import trail
+        return trail.main(argv[1:])
     if argv and argv[0] == "blueprint":
         from anthill.gates import blueprint
         return blueprint.main(argv[1:])

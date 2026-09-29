@@ -398,10 +398,15 @@ POST_HOOK = """#!/usr/bin/env bash
 # Then says what the commit left undone -- glossary, knowledge pages, tests --
 # and records it, so the list survives into the next session. It is printed to
 # the terminal that committed, which is where the agent doing the work sees it.
+# Every one of these writes its result to the trail (.anthill/trail.jsonl), so
+# output thrown away here is still not a failure nobody sees; the full notes
+# check runs in the background for the same reason, ~1.5s the commit never waits on.
 ANTHILL="{cmd}"
 if command -v "$ANTHILL" >/dev/null 2>&1 || [ -x "$ANTHILL" ]; then
+  "$ANTHILL" trail commit >/dev/null 2>&1 || true
   "$ANTHILL" map build >/dev/null 2>&1 || true
   "$ANTHILL" upkeep --record 2>/dev/null | grep -v "nothing left undone" || true
+  ( "$ANTHILL" blueprint --all >/dev/null 2>&1 & ) || true
 fi
 exit 0
 """

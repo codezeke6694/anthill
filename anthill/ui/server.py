@@ -62,8 +62,11 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
     except (OSError, ValueError):
         map_info = {}
     name = ((ctx.config.get("project") or {}).get("name")) or ctx.root.name
+    from anthill import trail
+    events = trail.read(ctx)
     return {"project": name, "root": str(ctx.root), "now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "where": w, "upkeep": upkeep.load(ctx).get("open") or [], "map": map_info}
+            "where": w, "upkeep": upkeep.load(ctx).get("open") or [], "map": map_info,
+            "trail": {**trail.health(ctx, events), "recent": events[-15:]}}
 
 
 # ------------------------------------------------------------------ the server
