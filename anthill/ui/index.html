@@ -169,13 +169,22 @@
     $("mode").replaceChildren(KEY ? el("b", "", "buttons on") : document.createTextNode("view only — open the address your terminal printed to answer or sign"));
     const focused = document.activeElement && document.activeElement.id;
     const asks = [];
+    // A question stays on its page until an agent acts on the answer and moves
+    // it; until then show the answer, not an empty box asking again.
+    const answerTo = (r, q) => {
+      const key = clean(q).slice(0, 60);
+      return (r.owner_answers || []).map(clean).filter((a) => a.includes("“" + key)).pop();
+    };
+    let answered = 0;
     (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) => {
-      const kids = [el("div", "ask", clean(q)), el("div", "sub", r.title)];
-      if (KEY) kids.push(box(hid(r.id + q), "your answer — it goes on the work page, in your words", "Answer",
+      const a = answerTo(r, q);
+      const kids = [el("div", a ? "sub" : "ask", clean(q)), el("div", "sub", r.title)];
+      if (a) { answered++; kids.push(el("div", "", "✓ you answered: " + a.split("”:").slice(1).join("”:").trim() + " — waiting for an agent to act on it")); }
+      else if (KEY) kids.push(box(hid(r.id + q), "your answer — it goes on the work page, in your words", "Answer",
         (v) => press("/api/answer", { work: r.id, question: clean(q), answer: v })));
       asks.push(row(...kids));
     }));
-    $("ask-n").textContent = asks.length || "";
+    $("ask-n").textContent = asks.length ? (asks.length - answered) + (answered ? " · " + answered + " answered" : "") : "";
     fill("asks", asks, "nothing waits on you");
 
     const work = (w.work || []).map((r) => {
