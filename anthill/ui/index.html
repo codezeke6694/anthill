@@ -152,7 +152,16 @@
 
     $("dec-n").textContent = (w.decisions || []).length || "";
     fill("decisions", (w.decisions || []).map((d) => row(el("div", "", d.title), el("div", "sub", d.decided || ""))), "none recorded");
-    fill("traps", (w.traps || []).map((t) => row(el("div", "", clean(t.trap).replace(/`/g, "")), el("div", "sub", t.work))), "none recorded");
+    // Folded by the work they belong to: a long list of traps buried the page.
+    // The ones that apply everywhere stay open.
+    const byWork = {};
+    (w.traps || []).forEach((t) => (byWork[t.work] = byWork[t.work] || []).push(t.trap));
+    fill("traps", Object.keys(byWork).sort((a, b) => (a === "everywhere" ? -1 : b === "everywhere" ? 1 : a.localeCompare(b))).map((k) => {
+      const d = el("details"); if (k === "everywhere") d.open = true;
+      d.append(el("summary", "", k + " (" + byWork[k].length + ")"));
+      const ul = el("ul"); byWork[k].forEach((t) => ul.append(el("li", "", clean(t).replace(/`/g, "")))); d.append(ul);
+      return row(d);
+    }), "none recorded");
   }
 
   async function tick() {
