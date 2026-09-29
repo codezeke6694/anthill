@@ -161,6 +161,8 @@
       const who = e.tool + (e.session ? " " + e.session.slice(0, 8) : "");
       const what = e.kind === "commit" ? "commit " + e.sha + "  " + (e.subject || "") :
                    e.kind === "command" ? (e.crashed ? "CRASHED " : "") + "anthill " + (e.args || "") :
+                   e.kind === "session" ? "chat " + (e.source || "startup") :
+                   e.kind === "prompt" ? "you: " + (e.text || "") :
                    e.kind + " " + (e.text || "");
       return row(el("div", e.crashed ? "err" : "", when + "  " + what), el("div", "sub", who + (e.branch ? " · " + e.branch : "")));
     }), "nothing recorded yet");

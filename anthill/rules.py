@@ -105,6 +105,22 @@ def cold_start_rule(ctx: _ctx.Context) -> str:
         "actually decides the behaviour. The top suggestion is right about half "
         "the time (`anthill eval-map` measures it against this repository's own "
         "history), so look at the other candidates before committing to one.",
+        "",
+        "### Leave a trail, and pick one up",
+        "",
+        "```bash",
+        'anthill note "doing X; ruled out Y; next Z"   # as you go: a step done, a lead dropped, before you stop',
+        "anthill resume                                 # pick up where this branch left off",
+        "```",
+        "",
+        "A chat's memory gets compressed, a session ends, another tool takes the "
+        "work tomorrow. What the work is lives on its page; where *you* were in "
+        "it lives only in your context until you write it down. A note is one "
+        "line and the only thing no hook can record for you. `resume` shows this "
+        "branch's work and next step, your notes and any checkpoint saved before a "
+        "compression, what other chats left here, and the commits since. In Claude "
+        "it arrives by itself when a chat resumes or has just been compressed; in "
+        "any other tool, run it first.",
     ])
 
 

@@ -66,14 +66,20 @@ def _branch(root: Path) -> str:
         return ""
 
 
-def record(kind: str, ctx: _ctx.Context | None = None, **fields: Any) -> None:
-    """Append one event. Never raises; a project without Anthill writes nothing."""
+def record(kind: str, ctx: _ctx.Context | None = None, session: str = "", **fields: Any) -> None:
+    """Append one event. Never raises; a project without Anthill writes nothing.
+
+    `session` is for hooks, which are told the chat's id on stdin rather than
+    in the environment."""
     try:
         ctx = ctx or _ctx.resolve(None)
         if not ctx.installed:
             return
+        w = who()
+        if session:
+            w["session"] = session
         ev = {"t": datetime.now().astimezone().isoformat(timespec="seconds"),
-              "kind": kind, **who(), "branch": _branch(ctx.root), **fields}
+              "kind": kind, **w, "branch": _branch(ctx.root), **fields}
         with path(ctx).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(ev, default=str) + "\n")
     except Exception:                     # noqa: BLE001 -- the trail must never cost a command
@@ -150,8 +156,12 @@ def render(events: list[dict[str, Any]]) -> str:
         elif ev.get("kind") == "command":
             mark = "CRASHED " if ev.get("crashed") else ("" if ev.get("rc") in (0, None) else f"exit {ev.get('rc')} ")
             what = f"{mark}anthill {ev.get('args', '')}"
+        elif ev.get("kind") == "session":
+            what = f"chat {ev.get('source', 'startup')}"
+        elif ev.get("kind") == "prompt":
+            what = f"owner: {ev.get('text', '')}"
         else:
-            what = f"{ev.get('kind')} {ev.get('text', '')}"
+            what = f"{ev.get('kind')} {ev.get('text') or ''}".rstrip()
         lines.append(f"{t}  {who_:<22} {what}")
     return "\n".join(lines) + ("\n" if lines else "the trail is empty\n")
 

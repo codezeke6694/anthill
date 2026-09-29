@@ -36,6 +36,8 @@ ROUTER_COMMANDS = {
 # instructions cannot recover them from `--help`; it has to read the Python.
 DELEGATED = [
     ("trail", "What happened here: every command and commit, and any crash"),
+    ("note", 'Leave a line for whoever picks this up: "doing X; ruled out Y; next Z"'),
+    ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
     ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
     ("roles", "Who is planner, builder and auditor"),
@@ -110,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     from anthill import trail
     argv = list(sys.argv[1:] if argv is None else argv)
     verb = argv[0] if argv else ""
-    if verb in ("", "help", "start-here", "trail", "-h", "--help"):
+    # Hook calls and notes record their own, richer event; a second
+    # "command" line for each owner message would only be noise.
+    if verb in ("", "help", "start-here", "trail", "note", "prompt", "-h", "--help") or "--hook" in argv:
         return _dispatch(argv)
     t0 = time.monotonic()
     rc: int | None = None
@@ -198,6 +202,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] == "integrate":
         from anthill import integrate
         return integrate.main(argv[1:])
+    if argv and argv[0] in ("note", "resume", "checkpoint", "prompt"):
+        from anthill import resume
+        return resume.main(argv)
     if argv and argv[0] == "trail":
         from anthill import trail
         return trail.main(argv[1:])

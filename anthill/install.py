@@ -412,6 +412,31 @@ exit 0
 """
 
 
+# Claude's own hooks, for what git cannot see: a chat starting, the owner
+# speaking, and a chat's memory about to be compressed. Each calls anthill and
+# anthill writes the trail; a hook that fails can never stop the chat.
+CLAUDE_HOOKS = {
+    "SessionStart": "resume --hook",
+    "UserPromptSubmit": "prompt --hook",
+    "PreCompact": "checkpoint --hook",
+}
+
+
+def merge_claude_hooks(settings: dict[str, Any], cmd: str) -> list[str]:
+    """Add Anthill's hooks to Claude's settings, beside any the developer has."""
+    hooks = settings.setdefault("hooks", {})
+    added = []
+    for event, verb in CLAUDE_HOOKS.items():
+        groups = hooks.setdefault(event, [])
+        line = f'"{cmd}" {verb}'
+        if any(verb in h.get("command", "") and "anthill" in h.get("command", "")
+               for g in groups for h in (g.get("hooks") or [])):
+            continue
+        groups.append({"hooks": [{"type": "command", "command": line, "timeout": 20}]})
+        added.append(event)
+    return added
+
+
 def _write_hook(ctx: _ctx.Context, name: str, body: str, marker: str,
                 advice: str) -> dict[str, Any]:
     """Write one git hook, never over something that is not ours."""
@@ -814,6 +839,21 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     written.append(str(settings_path))
+
+    # The hooks go in the per-person file, not the shared one: they name where
+    # Anthill lives on this laptop, and settings.json is committed -- a
+    # teammate who cloned it would get a hook pointing at nothing.
+    local_path = ctx.root / ".claude" / "settings.local.json"
+    local: dict[str, Any] = {}
+    if local_path.exists():
+        try:
+            local = json.loads(local_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            shutil.copy2(local_path, local_path.with_suffix(".json.anthill-backup"))
+            local = {}
+    result["claude_hooks"] = merge_claude_hooks(local, invocation(ctx))
+    local_path.write_text(json.dumps(local, indent=2) + "\n", encoding="utf-8")
+    written.append(str(local_path))
 
     # A knowledge dir with no config is a knowledge base you cannot author into,
     # so `kb init` is part of installation rather than a step to remember.
