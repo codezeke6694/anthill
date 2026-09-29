@@ -66,7 +66,17 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
     events = trail.read(ctx)
     return {"project": name, "root": str(ctx.root), "now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "where": w, "upkeep": upkeep.load(ctx).get("open") or [], "map": map_info,
-            "trail": {**trail.health(ctx, events), "recent": events[-15:]}}
+            "trail": {**trail.health(ctx, events),
+                      "recent": sorted(events, key=lambda e: e.get("t", ""))[-15:]},
+            "score": _score(events)}
+
+
+def _score(events: list[dict[str, Any]]) -> dict[str, Any]:
+    from anthill import scorecard
+    try:
+        return scorecard.scorecard(events)
+    except Exception as exc:                  # noqa: BLE001 -- a bad line must not blank the page
+        return {"error": str(exc)}
 
 
 # ------------------------------------------------------------------ the server

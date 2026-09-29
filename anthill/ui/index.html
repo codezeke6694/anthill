@@ -53,6 +53,17 @@
   .stat { display: flex; flex-wrap: wrap; gap: 4px 22px; }
   .stat b { color: var(--ink); font-weight: 600; }
   .err { color: var(--bad); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; margin-bottom: 12px; }
+  .tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile .k { color: var(--dim); font-size: 11.5px; }
+  .tile .d { font-size: 11.5px; }
+  .up { color: var(--ok); } .down { color: var(--bad); }
+  table.weeks { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  .weeks-box { overflow-x: auto; }
+  table.weeks th { text-align: left; color: var(--faint); font-weight: 500; font-size: 11px; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.weeks td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .bar { display: inline-block; height: 8px; background: var(--you); opacity: .7; border-radius: 2px; vertical-align: middle; margin-left: 6px; }
+  .note { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -62,6 +73,7 @@
     <span class="meta" id="branch"></span>
     <span class="live" id="live">connecting…</span>
   </header>
+  <section><h2>The numbers <span class="n">last 7 days · from the trail</span></h2><div id="numbers"></div></section>
   <div class="grid">
     <div class="grid" style="grid-template-columns:1fr">
       <section><h2>Waiting on you <span class="n" id="ask-n"></span></h2><div id="asks"></div></section>
@@ -98,6 +110,7 @@
 
   function render(s) {
     const w = s.where || {};
+    numbers(s.score);
     $("project").textContent = s.project;
     document.title = "Anthill · " + s.project;
     $("branch").textContent = (w.branch ? "on " + w.branch : "") +
@@ -187,6 +200,48 @@
       const ul = el("ul"); byWork[k].forEach((t) => ul.append(el("li", "", clean(t).replace(/`/g, "")))); d.append(ul);
       return row(d);
     }), "none recorded");
+  }
+
+  // The numbers. Lower is better for both headline figures: fewer messages
+  // from the owner per saved change, and less time from asking to saved.
+  function numbers(sc) {
+    if (!sc || sc.error || !sc.weekly) { fill("numbers", [], sc && sc.error ? "could not read the trail: " + sc.error : "no trail yet — anthill score import reads your saved chats"); return; }
+    const wk = sc.weekly, last = wk[wk.length - 1] || {}, prev = wk[wk.length - 2] || {};
+    function tile(v, k, now, before, unit) {
+      const t = el("div", "tile");
+      t.append(el("div", "v", v === null || v === undefined ? "—" : v + (unit || "")), el("div", "k", k));
+      if (now != null && before != null && before !== 0) {
+        const better = now < before, same = now === before;
+        t.append(el("div", "d " + (same ? "" : better ? "up" : "down"),
+          (same ? "same as" : (better ? "▼ " : "▲ ") + Math.abs(Math.round((now - before) / before * 100)) + "% vs") + " the week before"));
+      }
+      return t;
+    }
+    const tiles = el("div", "tiles");
+    tiles.append(
+      tile(sc.asked_to_saved_median_min, "from your message to a saved change (median)", last.asked_to_saved_median_min, prev.asked_to_saved_median_min, " min"),
+      tile(sc.messages_per_commit, "your messages per saved change", last.messages_per_commit, prev.messages_per_commit),
+      tile(sc.chats, "chats"), tile(sc.commits, "saved changes"),
+      tile(sc.compressions, "chats picked up after memory was compressed"),
+      tile(sc.crashes, "Anthill crashes"));
+    const box = el("div", "weeks-box"), tb = el("table", "weeks");
+    const hr = el("tr"); ["week", "chats", "your messages", "saved changes", "messages per change", "message → saved", "Anthill used"].forEach((h) => hr.append(el("th", "", h)));
+    tb.append(hr);
+    const maxW = Math.max(1, ...wk.map((w) => w.asked_to_saved_median_min || 0));
+    wk.forEach((w) => {
+      const r = el("tr");
+      r.append(el("td", "", w.from.slice(5) + " → " + w.to.slice(5)), el("td", "", w.chats), el("td", "", w.owner_messages),
+               el("td", "", w.commits), el("td", "", w.messages_per_commit ?? "—"));
+      const c = el("td", "", (w.asked_to_saved_median_min ?? "—") + (w.asked_to_saved_median_min != null ? " min" : ""));
+      if (w.asked_to_saved_median_min) { const b = el("span", "bar"); b.style.width = Math.round(60 * w.asked_to_saved_median_min / maxW) + "px"; c.append(b); }
+      r.append(c, el("td", "", w.anthill_uses));
+      tb.append(r);
+    });
+    box.append(tb);
+    const used = Object.entries(sc.anthill_usage || {}).slice(0, 8).map(([k, v]) => k + " " + v).join(" · ");
+    const kids = [tiles, box, el("div", "note", "Anthill parts used this week: " + (used || "none"))];
+    if (sc.imported_share > 0.5) kids.push(el("div", "note", "Mostly read from your saved Claude chats and git history (the live trail began on 29 Sep). Chat starts, compressions and notes are recorded live from now on."));
+    fill("numbers", kids, "");
   }
 
   async function tick() {

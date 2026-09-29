@@ -38,6 +38,7 @@ DELEGATED = [
     ("trail", "What happened here: every command and commit, and any crash"),
     ("note", 'Leave a line for whoever picks this up: "doing X; ruled out Y; next Z"'),
     ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
+    ("score", "The scorecard: time to first change, messages per commit, what gets used"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
     ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
     ("roles", "Who is planner, builder and auditor"),
@@ -202,6 +203,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] == "integrate":
         from anthill import integrate
         return integrate.main(argv[1:])
+    if argv and argv[0] == "score":
+        from anthill import scorecard
+        return scorecard.main(argv[1:])
     if argv and argv[0] in ("note", "resume", "checkpoint", "prompt"):
         from anthill import resume
         return resume.main(argv)
