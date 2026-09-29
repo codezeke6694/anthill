@@ -111,6 +111,13 @@ class _Handler(BaseHTTPRequestHandler):
         """
         import hmac
         from anthill.ui import actions
+        # Read the body before any refusal: answering while the client is still
+        # sending resets the connection, and the refusal never arrives.
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        raw = self.rfile.read(n) if 0 < n <= 16384 else b""
         host = self.headers.get("Host", "")
         if host not in (f"127.0.0.1:{self.port}", f"localhost:{self.port}"):
             return self._json(403, {"error": "wrong host"})
@@ -122,11 +129,10 @@ class _Handler(BaseHTTPRequestHandler):
                                              "your terminal printed"})
         if "application/json" not in self.headers.get("Content-Type", ""):
             return self._json(415, {"error": "json only"})
-        n = int(self.headers.get("Content-Length") or 0)
         if n <= 0 or n > 16384:
-            return self._json(413, {"error": "too large"})
+            return self._json(413, {"error": "empty or too large"})
         try:
-            body = json.loads(self.rfile.read(n))
+            body = json.loads(raw)
         except ValueError:
             return self._json(400, {"error": "not json"})
         by = ((self.ctx.config.get("project") or {}).get("owner")) or "owner"
