@@ -64,6 +64,16 @@
   table.weeks td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
   .bar { display: inline-block; height: 8px; background: var(--you); opacity: .7; border-radius: 2px; vertical-align: middle; margin-left: 6px; }
   .note { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
+  .act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .act input { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 7px; background: var(--bg);
+               color: var(--ink); border: 1px solid var(--line); border-radius: 3px; }
+  button.b { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 3px; cursor: pointer;
+             background: transparent; color: var(--you); border: 1px solid var(--you); }
+  button.b:hover { background: color-mix(in srgb, var(--you) 15%, transparent); }
+  button.b.sure { color: var(--warn); border-color: var(--warn); }
+  button.b:focus-visible, .act input:focus-visible { outline: 1px solid var(--you); outline-offset: 1px; }
+  #toast { color: var(--ok); } #toast.bad { color: var(--bad); }
+  .mode { color: var(--faint); } .mode b { color: var(--you); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -71,6 +81,8 @@
   <header>
     <h1 id="project">Anthill</h1>
     <span class="meta" id="branch"></span>
+    <span class="mode" id="mode"></span>
+    <span id="toast" role="status"></span>
     <span class="live" id="live">connecting…</span>
   </header>
   <section><h2>The numbers <span class="n">last 7 days · from the trail</span></h2><div id="numbers"></div></section>
@@ -93,6 +105,44 @@
 </div>
 <script>
   const $ = (id) => document.getElementById(id);
+
+  // The key your terminal printed, in the address after #key=. Kept for this
+  // tab only, and taken out of the address bar so it is not copied by accident.
+  const KEY = (() => {
+    try {
+      const m = location.hash.match(/key=([A-Za-z0-9_-]+)/);
+      if (m) { sessionStorage.setItem("anthill-key", m[1]); history.replaceState(null, "", location.pathname); }
+      return sessionStorage.getItem("anthill-key") || "";
+    } catch (e) { return ""; }
+  })();
+  const drafts = {};            // what you are typing survives the 5-second refresh
+  let sure = "";                // a sign or reopen needs a second click
+  function toast(text, bad) { const t = $("toast"); t.textContent = text; t.className = bad ? "bad" : ""; setTimeout(() => { if (t.textContent === text) t.textContent = ""; }, 6000); }
+  async function press(path, body) {
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Anthill-Key": KEY }, body: JSON.stringify(body) });
+      const out = await r.json();
+      if (!r.ok) { toast("✕ " + (out.error || r.status), true); return false; }
+      toast("✓ done"); tick(); return true;
+    } catch (e) { toast("✕ the page is not reachable", true); return false; }
+  }
+  function box(id, placeholder, label, onsend) {
+    const wrap = el("div", "act");
+    const inp = el("input"); inp.id = id; inp.placeholder = placeholder; inp.value = drafts[id] || "";
+    inp.setAttribute("aria-label", placeholder);
+    inp.addEventListener("input", () => { drafts[id] = inp.value; });
+    const go = async () => { const v = inp.value.trim(); if (!v) return; if (await onsend(v)) { delete drafts[id]; } };
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    const b = el("button", "b", label); b.type = "button"; b.addEventListener("click", go);
+    wrap.append(inp, b); return wrap;
+  }
+  function twice(id, label, onsend) {
+    const b = el("button", "b" + (sure === id ? " sure" : ""), sure === id ? "click again to " + label.toLowerCase() : label);
+    b.type = "button";
+    b.addEventListener("click", async () => { if (sure !== id) { sure = id; tick(); return; } sure = ""; await onsend(); });
+    return b;
+  }
+  function hid(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return "a" + (h >>> 0).toString(36); }
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -116,9 +166,15 @@
     $("branch").textContent = (w.branch ? "on " + w.branch : "") +
       (w.unpushed_commits ? " · " + w.unpushed_commits + " commit(s) not on GitHub" : "");
 
+    $("mode").replaceChildren(KEY ? el("b", "", "buttons on") : document.createTextNode("view only — open the address your terminal printed to answer or sign"));
+    const focused = document.activeElement && document.activeElement.id;
     const asks = [];
-    (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) =>
-      asks.push(row(el("div", "ask", clean(q)), el("div", "sub", r.title)))));
+    (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) => {
+      const kids = [el("div", "ask", clean(q)), el("div", "sub", r.title)];
+      if (KEY) kids.push(box(hid(r.id + q), "your answer — it goes on the work page, in your words", "Answer",
+        (v) => press("/api/answer", { work: r.id, question: clean(q), answer: v })));
+      asks.push(row(...kids));
+    }));
     $("ask-n").textContent = asks.length || "";
     fill("asks", asks, "nothing waits on you");
 
@@ -126,6 +182,10 @@
       const t = el("div", "title", r.title); t.append(pill(r.state.replace(/-/g, " "), "s-" + r.state));
       const kids = [t, r.next && el("div", "next", r.next)];
       if (r.branch) kids.push(el("div", "sub", r.branch + (r.updated ? " · updated " + r.updated : "")));
+      (r.owner_answers || []).slice(-2).forEach((a) => kids.push(el("div", "sub", "you answered: " + clean(a))));
+      const rel = String(r.page || "").split("knowledge/").slice(1).join("knowledge/");
+      if (r.confirmed_by_owner) kids.push(el("div", "sub", "✓ signed by you"));
+      else if (KEY && rel) { const a = el("div", "act"); a.append(el("span", "sub", "not signed — "), twice("sign:" + rel, "Sign this page", () => press("/api/sign", { page: rel }))); kids.push(a); }
       const d = r.drift || {};
       if (d.behind) kids.push(el("div", "warn", "page may be behind: " + d.behind.length + " commit(s) since it was true"));
       (r.broken_citations || []).forEach((c) => kids.push(el("div", "warn", "cites code that is gone: " + c)));
@@ -138,7 +198,11 @@
     const brow = [];
     (b.ready || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("ready", "s-ready")); return t; })(), el("div", "sub", u.title))));
     (b.in_flight || []).forEach((u) => brow.push(row(el("div", "title", u.id + "  (in flight)"), el("div", "sub", u.title))));
-    (b.escalated || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("escalated", "s-escalated")); return t; })(), el("div", "sub", "since " + (u.since || "?") + (u.why ? " · " + u.why : "")))));
+    (b.escalated || []).forEach((u) => {
+      const kids = [(() => { const t = el("div", "title", u.id); t.append(pill("escalated", "s-escalated")); return t; })(), el("div", "sub", "since " + (u.since || "?") + (u.why ? " · " + u.why : ""))];
+      if (KEY) kids.push(box(hid("reopen" + u.id), "why it can go back on the board", "Reopen", (v) => press("/api/reopen", { unit: u.id, reason: v })));
+      brow.push(row(...kids));
+    });
     (b.blocked || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("blocked", "s-blocked")); return t; })(), el("div", "sub", u.needs && u.needs.length ? "waits on " + u.needs.join(", ") : ""))));
     (w.board_disagrees || []).forEach((d) => brow.push(row(el("div", "warn", clean(d).replace(/`/g, "")))));
     $("board-n").textContent = b.total ? b.done + " of " + b.total + " done" : "";
@@ -194,6 +258,7 @@
     // The ones that apply everywhere stay open.
     const byWork = {};
     (w.traps || []).forEach((t) => (byWork[t.work] = byWork[t.work] || []).push(t.trap));
+    if (focused && $(focused)) { const f = $(focused); f.focus(); const n = f.value.length; try { f.setSelectionRange(n, n); } catch (e) {} }
     fill("traps", Object.keys(byWork).sort((a, b) => (a === "everywhere" ? -1 : b === "everywhere" ? 1 : a.localeCompare(b))).map((k) => {
       const d = el("details"); if (k === "everywhere") d.open = true;
       d.append(el("summary", "", k + " (" + byWork[k].length + ")"));

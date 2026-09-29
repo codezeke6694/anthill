@@ -83,6 +83,8 @@ def _score(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 class _Handler(BaseHTTPRequestHandler):
     ctx: _ctx.Context
+    key: str = ""                                    # empty: view only, no button works
+    port: int = 0
     _cache: tuple[float, bytes] = (0.0, b"")
 
     def log_message(self, *_a: Any) -> None:       # quiet: this is not a web app
@@ -94,6 +96,55 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _json(self, code: int, obj: dict[str, Any]) -> None:
+        self._send(code, json.dumps(obj).encode(), "application/json")
+
+    def do_POST(self) -> None:                      # noqa: N802
+        """A button. Refused unless it carries the key from the owner's terminal.
+
+        Three more locks, each for a different way in. The Host must be this
+        machine at this port, so a web page that rebinds its own name to
+        127.0.0.1 is refused. The key travels in a custom header, which a page
+        from any other site cannot send here without a preflight this server
+        never answers. And the body must be small JSON.
+        """
+        import hmac
+        from anthill.ui import actions
+        host = self.headers.get("Host", "")
+        if host not in (f"127.0.0.1:{self.port}", f"localhost:{self.port}"):
+            return self._json(403, {"error": "wrong host"})
+        if not self.key:
+            return self._json(403, {"error": "buttons are off: this page was not started "
+                                             "from your terminal, so it has no key"})
+        if not hmac.compare_digest(self.headers.get("X-Anthill-Key", ""), self.key):
+            return self._json(403, {"error": "wrong or missing key -- open the address "
+                                             "your terminal printed"})
+        if "application/json" not in self.headers.get("Content-Type", ""):
+            return self._json(415, {"error": "json only"})
+        n = int(self.headers.get("Content-Length") or 0)
+        if n <= 0 or n > 16384:
+            return self._json(413, {"error": "too large"})
+        try:
+            body = json.loads(self.rfile.read(n))
+        except ValueError:
+            return self._json(400, {"error": "not json"})
+        by = ((self.ctx.config.get("project") or {}).get("owner")) or "owner"
+        try:
+            if self.path == "/api/answer":
+                out = actions.answer(self.ctx, body.get("work", ""), body.get("question", ""),
+                                     body.get("answer", ""))
+            elif self.path == "/api/sign":
+                out = actions.sign(self.ctx, body.get("page", ""), by)
+            elif self.path == "/api/reopen":
+                out = actions.reopen(self.ctx, body.get("unit", ""), body.get("reason", ""), by,
+                                     str(REPO_ROOT / "bin" / "anthill"))
+            else:
+                return self._json(404, {"error": "no such button"})
+        except actions.Refused as exc:
+            return self._json(400, {"error": str(exc)})
+        _Handler._cache = (0.0, b"")
+        return self._json(200, out)
 
     def do_GET(self) -> None:                       # noqa: N802 (http.server's name)
         if self.path in ("/", "/index.html"):
@@ -157,9 +208,19 @@ def free_port(wanted: int = 0) -> int:
                      if not wanted else f"anthill ui: port {wanted} is taken")
 
 
-def serve(ctx: _ctx.Context, port: int, parent: int = 0) -> int:
-    """Run in the foreground until stopped, or until `parent` exits."""
+def new_key() -> str:
+    import secrets
+    return secrets.token_urlsafe(18)
+
+
+def serve(ctx: _ctx.Context, port: int, parent: int = 0, key: str = "") -> int:
+    """Run in the foreground until stopped, or until `parent` exits.
+
+    `key` is held in this process's memory only -- never written to ui.json
+    or anywhere an agent could read it back."""
     _Handler.ctx = ctx
+    _Handler.key = key
+    _Handler.port = port
     httpd = ThreadingHTTPServer(("127.0.0.1", port), _Handler)
     rec = {"pid": os.getpid(), "port": port, "url": f"http://127.0.0.1:{port}/",
            "started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "parent": parent}
@@ -189,26 +250,47 @@ def serve(ctx: _ctx.Context, port: int, parent: int = 0) -> int:
     return 0
 
 
-def start(ctx: _ctx.Context, port: int = 0, parent: int = 0, detach: bool = False) -> dict[str, Any]:
+def _in_a_terminal() -> bool:
+    """Whether a person is at the other end. An agent's shell is not a terminal,
+    so a page an agent starts gets no key and no working buttons.
+
+    Either end counts: a start script captures stdout to show the address
+    (`ui_line="$(anthill ui start ...)"`) while its stdin is still the owner's
+    keyboard."""
+    try:
+        return sys.stdin.isatty() or sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def start(ctx: _ctx.Context, port: int = 0, parent: int = 0, detach: bool = False,
+          key: str | None = None) -> dict[str, Any]:
     rec = running(ctx)
     if rec:
         return {**rec, "already": True}
     port = free_port(port)
+    if key is None:
+        key = new_key() if _in_a_terminal() else ""
     if not detach:
-        print(f"anthill ui: http://127.0.0.1:{port}/  (Ctrl-C to stop)", file=sys.stderr)
-        serve(ctx, port, parent)
+        url = f"http://127.0.0.1:{port}/" + (f"#key={key}" if key else "")
+        print(f"anthill ui: {url}  (Ctrl-C to stop)", file=sys.stderr)
+        serve(ctx, port, parent, key)
         return {"stopped": True}
     log = ctx.state / "build" / "ui.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     tool = str(REPO_ROOT / "bin" / "anthill")
-    args = [tool, "ui", "serve", "--port", str(port)] + (["--with-parent", str(parent)] if parent else [])
+    args = [tool, "ui", "serve", "--port", str(port), "--key-on-stdin"] + (["--with-parent", str(parent)] if parent else [])
     with open(log, "ab") as fh:
-        subprocess.Popen(args, cwd=ctx.root, stdout=fh, stderr=fh, stdin=subprocess.DEVNULL,
-                         start_new_session=True)
+        # The key goes to the server on its stdin, once: not in its arguments or
+        # its environment, which any process of the same user can list.
+        p = subprocess.Popen(args, cwd=ctx.root, stdout=fh, stderr=fh, stdin=subprocess.PIPE,
+                             start_new_session=True)
+        p.stdin.write((key + "\n").encode())
+        p.stdin.close()
     for _ in range(40):
         rec = running(ctx)
         if rec:
-            return rec
+            return {**rec, "key": key}
         time.sleep(0.1)
     return {"error": f"did not come up; see {log}"}
 
@@ -237,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     sv = sub.add_parser("serve", help=argparse.SUPPRESS)
     sv.add_argument("--port", type=int, required=True)
     sv.add_argument("--with-parent", type=int, default=0)
+    sv.add_argument("--key-on-stdin", action="store_true")
     sub.add_parser("stop", help="Stop it and free its port")
     sub.add_parser("status", help="Is it up, and where")
     args = ap.parse_args(argv)
@@ -246,14 +329,26 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     cmd = args.cmd or "start"
     if cmd == "serve":
-        return serve(ctx, args.port, args.with_parent)
+        key = sys.stdin.readline().strip() if args.key_on_stdin else ""
+        return serve(ctx, args.port, args.with_parent, key)
     if cmd == "start":
         out = start(ctx, getattr(args, "port", 0), getattr(args, "with_parent", 0),
                     getattr(args, "detach", False))
+        # The address is always the last word on stdout: a start script shows
+        # `${line##* }`. Everything else goes to stderr.
         if out.get("already"):
+            print("anthill ui: already up -- its buttons need the address printed when it "
+                  "started; stop and start it from your terminal for a new one", file=sys.stderr)
             print(f"anthill ui: already up at {out['url']}")
         elif out.get("url"):
-            print(f"anthill ui: {out['url']}")
+            if out.get("key"):
+                print("anthill ui: the key in this address is what makes the buttons yours; "
+                      "don't paste it into a chat", file=sys.stderr)
+                print(f"anthill ui: {out['url']}#key={out['key']}")
+            else:
+                print("anthill ui: view only -- started outside a terminal, so there is no key",
+                      file=sys.stderr)
+                print(f"anthill ui: {out['url']}")
         elif out.get("error"):
             print(f"anthill ui: {out['error']}", file=sys.stderr)
             return 1

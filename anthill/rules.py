@@ -175,7 +175,11 @@ def owner_view_rule(ctx: _ctx.Context) -> str:
         "## The owner's view: `anthill ui`",
         "",
         "The owner watches the work, the job board, what waits on them and what is "
-        "being edited on a local page. It only reads.",
+        "being edited on a local page, and answers, signs and reopens from it. Those "
+        "buttons work only with a key printed in the owner's own terminal when the "
+        "page starts. Never ask for that key, never start or restart the page to get "
+        "one, and never write an answer or a signature on the owner's behalf: an "
+        "answer on a work page under \"Owner's answers\" came from them -- act on it.",
         "",
         "```bash",
         "anthill ui start --detach --with-parent $$   # in a start script: ends when the script ends",

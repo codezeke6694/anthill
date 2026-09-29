@@ -274,6 +274,7 @@ def where(ctx: Any) -> dict[str, Any]:
             "next": fm.get("next", ""),
             "updated": str(fm.get("updated", "")),
             "waiting_on_owner": _bullets(s.get("waiting on the owner", "")),
+            "owner_answers": _bullets(s.get("owner's answers", "")),
             "traps": _bullets(s.get("traps", "")),
             "page": str(p["path"].relative_to(root)),
             "drift": drift(root, p),
@@ -342,6 +343,8 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
                  + (f" · updated {r['updated']}" if r["updated"] else ""))
         if r["next"]:
             L.append(f"  - Next: {r['next']}")
+        for a in r.get("owner_answers") or []:
+            L.append(f"  - The owner answered: {a}")
         for q in r["waiting_on_owner"]:
             L.append(f"  - Waiting on the owner: {q}")
         d = r["drift"]

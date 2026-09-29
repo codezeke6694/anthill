@@ -3,6 +3,7 @@ never holds a port it no longer uses, and only reads."""
 import json
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -13,11 +14,12 @@ TOOL = Path(__file__).resolve().parents[1] / "bin" / "anthill"
 
 
 def ui(repo: Path, *args: str) -> str:
-    return subprocess.run([str(TOOL), "ui", *args], cwd=repo, capture_output=True, text=True).stdout
+    return subprocess.run([str(TOOL), "ui", *args], cwd=repo, capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL).stdout
 
 
 def port_of(out: str) -> int:
-    return int(out.rsplit(":", 1)[1].split("/")[0])
+    return int(out.strip().split()[-1].split("#")[0].rsplit(":", 1)[1].split("/")[0])
 
 
 def test_start_twice_starts_once_and_stop_frees_the_port(project):
@@ -58,12 +60,56 @@ def test_a_stale_record_cleans_itself_up(project):
     assert server.running(project) is None and not rec.exists()
 
 
-def test_the_page_only_reads(project):
-    handler = server._Handler
-    assert not hasattr(handler, "do_POST") and not hasattr(handler, "do_PUT")
+def test_a_page_started_by_an_agent_has_no_working_buttons(project):
+    # Started through a pipe, as an agent's shell runs it: no terminal, no key.
+    r = subprocess.run([str(TOOL), "ui", "start", "--detach"], cwd=project.root,
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    out = r.stdout
+    try:
+        assert "view only" in r.stderr and "#key=" not in out
+        req = urllib.request.Request(f"http://127.0.0.1:{port_of(out)}/api/answer", method="POST",
+                                     data=b'{"work":"x","answer":"y"}',
+                                     headers={"Content-Type": "application/json", "X-Anthill-Key": ""})
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            raise AssertionError("a keyless page accepted a button")
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+    finally:
+        ui(project.root, "stop")
 
 
 def test_agents_are_told_how_to_run_it_with_the_app(project):
     for doc in ("CLAUDE.md", "AGENTS.md"):
         assert rules.owner_view_rule(project) in (project.root / doc).read_text()
     assert "--with-parent $$" in rules.owner_view_rule(project)
+
+
+def test_a_page_started_from_a_terminal_prints_its_key_once(project):
+    import os
+    import pty
+    import select
+    pid, fd = pty.fork()
+    if pid == 0:                                    # the child: a real terminal
+        os.chdir(project.root)
+        os.execv(str(TOOL), [str(TOOL), "ui", "start", "--detach"])
+    out = b""
+    while True:
+        r, _, _ = select.select([fd], [], [], 10)
+        if not r:
+            break
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        out += chunk
+    os.waitpid(pid, 0)
+    try:
+        text = out.decode()
+        assert "#key=" in text, text
+        key = text.split("#key=", 1)[1].split()[0]
+        assert key not in (project.state / "build" / "ui.json").read_text()
+    finally:
+        ui(project.root, "stop")

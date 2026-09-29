@@ -145,6 +145,8 @@ def resume(ctx: _ctx.Context, session: str = "") -> str:
         out.append(f"**{p.get('title', p.get('id'))}** ({p.get('state', '?')})")
         if p.get("next"):
             out.append(f"- Next: {_clip(p['next'], 500)}")
+        for a in (p.get("owner_answers") or [])[-3:]:
+            out.append(f"- The owner answered: {_clip(a, 300)}")
         for q in (p.get("waiting_on_owner") or [])[:2]:
             out.append(f"- Waiting on the owner: {_clip(q, 200)}")
     if pages:
