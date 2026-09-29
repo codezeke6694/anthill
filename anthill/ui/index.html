@@ -16,58 +16,28 @@
   colour alone -- every mark also has a word or a symbol.
 -->
 <style>
+  /* The terminal look the owner asked to keep: one dark palette on purpose,
+     monospace throughout. Every colour also carries a word or a symbol. */
   :root {
-    color-scheme: light;
-    --ground: #F3F5F1;
-    --card: #FFFFFF;
-    --card-2: #EDF0EA;
-    --ink: #1B2120;
-    --ink-2: #4A5552;
-    --ink-3: #75807C;
-    --line: #D9DED6;
-    --accent: #0E6B5C;
-    --accent-soft: #DDEFEA;
-    --you: #9A5B00;
-    --you-soft: #FBEFD9;
-    --ok: #217A48;   --ok-soft: #E1F2E7;
-    --warn: #9A5B00; --warn-soft: #FBEFD9;
-    --bad: #B23A30;  --bad-soft: #F8E1DE;
-    --bar: #0E6B5C;
-    --focus: #1F5FD1;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --ground: #111614; --card: #181E1C; --card-2: #1F2724;
-      --ink: #E8EEEA; --ink-2: #A9B5B0; --ink-3: #7B8782; --line: #2C3632;
-      --accent: #6FCBB5; --accent-soft: #173029;
-      --you: #F0B458; --you-soft: #33280F;
-      --ok: #79CF9A; --ok-soft: #17301F; --warn: #F0B458; --warn-soft: #33280F;
-      --bad: #F08A7E; --bad-soft: #3A1E1B; --bar: #6FCBB5; --focus: #8AB4FF;
-    }
-  }
-  :root[data-theme="dark"] {
     color-scheme: dark;
-    --ground: #111614; --card: #181E1C; --card-2: #1F2724;
-    --ink: #E8EEEA; --ink-2: #A9B5B0; --ink-3: #7B8782; --line: #2C3632;
-    --accent: #6FCBB5; --accent-soft: #173029;
-    --you: #F0B458; --you-soft: #33280F;
-    --ok: #79CF9A; --ok-soft: #17301F; --warn: #F0B458; --warn-soft: #33280F;
-    --bad: #F08A7E; --bad-soft: #3A1E1B; --bar: #6FCBB5; --focus: #8AB4FF;
+    --ground: #0d0f0c; --card: #13160f; --card-2: #1a1e15; --ink: #e6e4da; --ink-2: #b3b0a3; --ink-3: #85827a;
+    --line: #2a2e22; --accent: #7fc8a9; --accent-soft: #16261f; --you: #e0a15a; --you-soft: #2a1f10;
+    --ok: #7fc8a9; --ok-soft: #16261f; --warn: #e0a15a; --warn-soft: #2a1f10; --bad: #e07a5f; --bad-soft: #2c1712;
+    --bar: #7fc8a9; --focus: #8fb8ff; --link: #8fb8ff;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
   body { margin: 0; background: var(--ground); color: var(--ink);
-         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-  .mono, code, .path { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .88em; }
+         font: 14.5px/1.6 "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .mono, code, .path { font-family: inherit; color: var(--ink-2); }
   .wrap { max-width: 1120px; margin: 0 auto; padding-block: 20px 56px; padding-inline: 16px; display: grid; gap: 18px; }
   @media (min-width: 720px) { .wrap { padding-inline: 28px; } }
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 
   /* top bar */
   header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-  .brand h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  .brand h1 { margin: 0; font-size: 16px; letter-spacing: .02em; }
   .brand .ant { color: var(--accent); font-weight: 700; }
   .meta { color: var(--ink-2); font-size: 14px; }
   .spacer { flex: 1; }
@@ -80,10 +50,10 @@
 
   /* the four cards that answer "what needs me, and is all well?" */
   .glance { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-  .g { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+  .g { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px;
        display: grid; gap: 4px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
   .g:hover { border-color: var(--ink-3); }
-  .g .big { font-size: 34px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .g .big { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .g .lbl { font-size: 15px; font-weight: 600; }
   .g .hint { font-size: 13px; color: var(--ink-2); }
   .g.you { border-color: var(--you); background: var(--you-soft); }
@@ -94,21 +64,26 @@
 
   /* tabs */
   nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
-  nav.tabs button { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 8px; border: 1px solid transparent;
+  nav.tabs button { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 3px; border: 1px solid transparent;
                     background: transparent; color: var(--ink-2); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
   nav.tabs button:hover { background: var(--card); }
-  nav.tabs button[aria-selected="true"] { background: var(--card); border-color: var(--line); color: var(--ink); font-weight: 600; }
+  nav.tabs button[aria-selected="true"] { background: var(--card); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+  nav.tabs .key { color: var(--ink-3); }
+  nav.tabs button[aria-selected="true"] .key { color: var(--accent); }
+  .keys { color: var(--ink-3); font-size: 12.5px; margin: -6px 0 0; }
+  .keys b { color: var(--ink-2); font-weight: 600; }
+  .intro::before { content: "# "; color: var(--accent); }
   .count { font-size: 12px; font-weight: 600; min-width: 22px; padding: 1px 7px; border-radius: 999px;
            background: var(--card-2); color: var(--ink-2); text-align: center; font-variant-numeric: tabular-nums; }
   .count:empty { display: none; }
-  .count.you { background: var(--you); color: var(--card); }
+  .count.you { background: var(--you); color: var(--ground); }
 
   /* panels and cards inside them */
   .panel { display: grid; gap: 12px; }
   .panel[hidden] { display: none; }
   .intro { color: var(--ink-2); margin: 0; max-width: 70ch; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; min-width: 0; }
-  .card h3 { margin: 0; font-size: 17px; line-height: 1.35; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; display: grid; gap: 8px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 15px; line-height: 1.35; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
   .card .from { font-size: 13px; color: var(--ink-3); }
   .card p { margin: 0; color: var(--ink-2); max-width: 75ch; }
   .card.answered { background: var(--card-2); }
@@ -128,30 +103,30 @@
   .next b { color: var(--ink-3); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
   .warn { color: var(--warn); }
   .warn::before { content: "⚠ "; }
-  .said { background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 8px 12px; }
+  .said { background: var(--accent-soft); color: var(--ink); border-radius: 3px; padding: 8px 12px; }
   .said b { color: var(--accent); }
 
   /* answering */
   .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .act input { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 15px; padding: 9px 12px; border-radius: 8px;
+  .act input { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 15px; padding: 9px 12px; border-radius: 3px;
                background: var(--ground); color: var(--ink); border: 1px solid var(--line); }
   .act input::placeholder { color: var(--ink-3); }
-  button.b { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer;
-             background: var(--accent); color: var(--card); border: 1px solid var(--accent); }
+  button.b { font: inherit; font-size: 13.5px; font-weight: 600; padding: 7px 14px; border-radius: 3px; cursor: pointer;
+             background: var(--accent); color: var(--ground); border: 1px solid var(--accent); }
   button.b:hover { filter: brightness(1.08); }
   button.q { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
              background: var(--card); color: var(--ink-2); border: 1px solid var(--line); }
   button.q:hover { border-color: var(--accent); color: var(--accent); }
   button.ghost { background: transparent; color: var(--accent); }
-  button.b.sure { background: var(--you); border-color: var(--you); color: var(--card); }
+  button.b.sure { background: var(--you); border-color: var(--you); color: var(--ground); }
   #toast { font-size: 14px; } #toast.ok { color: var(--ok); } #toast.bad { color: var(--bad); }
 
   /* numbers */
   .tiles { display: grid; gap: 12px; grid-template-columns: 1fr; }
   @media (min-width: 520px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
   @media (min-width: 860px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
-  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
-  .tile .v { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+  .tile .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .tile .k { font-size: 14px; color: var(--ink-2); }
   .tile .d { font-size: 13px; font-weight: 600; }
   .better { color: var(--ok); } .worse { color: var(--bad); } .same { color: var(--ink-3); }
@@ -194,6 +169,7 @@
   <section class="glance" id="glance" aria-label="At a glance"></section>
 
   <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
+  <p class="keys">keys: <b>1–5</b> switch sections · <b>/</b> jump to the first answer box · <b>Enter</b> sends an answer · click any card above to open its section</p>
 
   <section class="panel" role="tabpanel" id="p-you" aria-labelledby="t-you">
     <p class="intro">Questions agents are waiting on. Your answer goes onto that piece of work in your words, and the next chat that picks it up acts on it.</p>
@@ -211,6 +187,7 @@
     <div id="numbers" class="panel"></div>
   </section>
   <section class="panel" role="tabpanel" id="p-activity" aria-labelledby="t-activity" hidden>
+    <p class="intro">What just happened, newest first: your messages, what agents ran, what got saved. On the right, whether Anthill's own checks are working.</p>
     <div class="grid2">
       <div class="card"><h3>Recent activity</h3><div id="trail" class="feed"></div></div>
       <div class="panel">
@@ -220,6 +197,7 @@
     </div>
   </section>
   <section class="panel" role="tabpanel" id="p-rules" aria-labelledby="t-rules" hidden>
+    <p class="intro">What you've decided, which every agent must follow, and the traps agents have hit before, so the next one doesn't.</p>
     <div class="grid2">
       <div class="card"><h3>Your decisions <span class="count" id="dec-n"></span></h3><div id="decisions"></div></div>
       <div class="card"><h3>Traps to avoid</h3><div id="traps"></div></div>
@@ -288,13 +266,21 @@
   TABS.forEach(([k, label], i) => {
     const b = el("button"); b.id = "t-" + k; b.type = "button";
     b.setAttribute("role", "tab"); b.setAttribute("aria-controls", "p-" + k);
-    b.append(el("span", "", label), el("span", "count", ""));
+    b.append(el("span", "key", "[" + (i + 1) + "]"), el("span", "", label), el("span", "count", ""));
     b.addEventListener("click", () => show(k));
     b.addEventListener("keydown", (e) => {
       const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
       if (d) { e.preventDefault(); show(TABS[(i + d + TABS.length) % TABS.length][0], true); }
     });
     $("tabs").append(b);
+  });
+  // Number keys switch sections, like a terminal tool. Ignored while typing.
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || "");
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= TABS.length) { e.preventDefault(); show(TABS[n - 1][0], true); }
+    else if (e.key === "/") { const f = document.querySelector("#p-" + tab + " input"); if (f) { e.preventDefault(); f.focus(); } }
   });
   function badge(k, n, you) { const c = $("t-" + k).querySelector(".count"); c.textContent = n ? n : ""; c.className = "count" + (you && n ? " you" : ""); }
   if (!TABS.some(([k]) => k === tab)) tab = "you";
@@ -342,7 +328,7 @@
 
     // at a glance
     const crashes = (tr.crashes || []).length;
-    const lastCommit = (tr.recent || []).filter((e) => e.kind === "commit").pop();
+    const lastCommit = tr.last_commit;
     const lastMin = lastCommit ? (Date.now() - new Date(lastCommit.t).getTime()) / 60000 : null;
     const g = (cls, big, lbl, hint, go) => { const b = el("button", "g " + cls); b.type = "button"; b.append(el("span", "big", big), el("span", "lbl", lbl), el("span", "hint", hint)); b.addEventListener("click", () => show(go, true)); return b; };
     const behind = (w.work || []).filter((r) => (r.drift || {}).behind).length;
@@ -350,7 +336,7 @@
       g(open.length ? "you" : "good", String(open.length), open.length === 1 ? "question for you" : "questions for you",
         open.length ? (done.length ? done.length + " answered, waiting for an agent" : "agents are waiting on these") : "nothing is waiting on you", "you"),
       g("", String((w.work || []).length), "pieces of work", behind ? behind + " page(s) behind their branch" : "all pages up to date", "work"),
-      g("", sc.asked_to_saved_median_min != null ? sc.asked_to_saved_median_min + " min" : "—", "from asking to a saved change", "typical, this week", "numbers"),
+      g("", sc.asked_to_saved_median_min != null ? sc.asked_to_saved_median_min + " min" : "—", "from asking to a saved change", "typical this week · lower is better", "numbers"),
       g(crashes ? "bad" : "good", crashes ? "✕ " + crashes : "✓", crashes ? "Anthill crashed" : "All checks healthy",
         lastMin != null ? "last change saved " + ago(lastMin) : "no change saved yet", "activity"),
     ], "");

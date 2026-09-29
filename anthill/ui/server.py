@@ -67,7 +67,9 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
     return {"project": name, "root": str(ctx.root), "now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "where": w, "upkeep": upkeep.load(ctx).get("open") or [], "map": map_info,
             "trail": {**trail.health(ctx, events),
-                      "recent": sorted(events, key=lambda e: e.get("t", ""))[-15:]},
+                      "recent": sorted(events, key=lambda e: e.get("t", ""))[-15:],
+                      "last_commit": max((e for e in events if e.get("kind") == "commit"),
+                                         key=lambda e: e.get("t", ""), default=None)},
             "score": _score(events)}
 
 
