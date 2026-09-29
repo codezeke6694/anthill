@@ -265,6 +265,17 @@ def _verify_path_claim(claim: dict[str, Any]) -> dict[str, Any]:
             "detail": f"owned glob matches nothing: {glob}", "relocation": []}
 
 
+def _verify_file_citation(claim: dict[str, Any]) -> dict[str, Any]:
+    rel = claim["symbol_id"].strip()
+    if (Path(REPO_ROOT) / rel).is_file():
+        return {"drift": "whole-file", "severity": 1,
+                "detail": f"cites the whole file {rel}; only that it exists can be "
+                          f"checked -- cite {rel}::<name> to make it checkable",
+                "relocation": []}
+    return {"drift": s.DRIFT_MISSING, "severity": s._SEVERITY[s.DRIFT_MISSING],
+            "detail": f"cited file is gone: {rel}", "relocation": []}
+
+
 def verify(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Check every claim against the live tree, attributing drift per claim."""
     results: list[dict[str, Any]] = []
@@ -276,6 +287,13 @@ def verify(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             verdict = {"drift": "uncited", "severity": 1,
                        "detail": "rule cites no code; nothing can falsify it",
                        "relocation": []}
+            live = {}
+        elif "::" not in claim["symbol_id"]:
+            # A citation of a whole file (`(sg: run.sh)`) has no shape to
+            # fingerprint, only an existence to check. It used to reach
+            # fingerprint_at_commit, which raised and took the whole check down
+            # with it -- one careless citation silenced every other claim.
+            verdict = _verify_file_citation(claim)
             live = {}
         else:
             try:

@@ -121,3 +121,21 @@ def test_a_file_of_only_types_is_not_listed_as_untested(project):
     subjects = {i["subject"] for i in upkeep(project.root)["open"]}
     assert "file:web/src/lib/nav.ts" not in subjects
     assert "file:web/src/lib/run.ts" in subjects
+
+
+def test_a_rule_citing_a_whole_file_does_not_stop_the_check(project):
+    # A keeper wrote `(sg: run.sh)` on a live page, and the blueprint check
+    # crashed on it -- so no other claim was checked either.
+    write(project.root, "run.sh", "#!/bin/sh\n")
+    commit_all(project.root, "start script")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=project.root,
+                          capture_output=True, text=True).stdout.strip()
+    write(project.root, ".anthill/knowledge/modules/core/core.md",
+          f"---\nid: core\ntype: module\ntitle: Core\nverified_against: proj@{head}\n---\n\n"
+          "## Rules\n\n- **BR-X-start:** The app starts from one script (sg: run.sh).\n"
+          "- **BR-X-add:** Adding is plain (sg: pkg/core.py::add).\n")
+    anthill(project.root, "map", "build")
+    r = subprocess.run([str(TOOL), "blueprint", "--all", "--json"], cwd=project.root,
+                       capture_output=True, text=True)
+    assert "Traceback" not in r.stderr, r.stderr
+    assert r.returncode == 0, r.stdout + r.stderr
