@@ -1,0 +1,396 @@
+<title>Anthill, AutoDev and Factory</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #F3F5F2;
+    --panel: #FFFFFF;
+    --panel-2: #EBEFEA;
+    --ink: #1B211E;
+    --ink-2: #55605A;
+    --ink-3: #87918B;
+    --rule: #D8DDD6;
+    --accent: #2D5E4F;
+    --accent-soft: #E1ECE7;
+    --yes: #2E7A4E;   --yes-bg: #E2F1E7;
+    --part: #9A6512;  --part-bg: #F7ECD7;
+    --no: #A8423A;    --no-bg: #F6E3E0;
+    --next: #3C5BA3;  --next-bg: #E3E9F6;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #111513; --panel: #181D1A; --panel-2: #1F2522;
+      --ink: #E9EEEA; --ink-2: #A6B0AA; --ink-3: #75807A; --rule: #2C3430;
+      --accent: #86C2AC; --accent-soft: #1D2E28;
+      --yes: #79C895; --yes-bg: #1A2E22;
+      --part: #E0B061; --part-bg: #33281A;
+      --no: #E8897F; --no-bg: #3A2220;
+      --next: #9DB4EE; --next-bg: #1E2640;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #111513; --panel: #181D1A; --panel-2: #1F2522;
+    --ink: #E9EEEA; --ink-2: #A6B0AA; --ink-3: #75807A; --rule: #2C3430;
+    --accent: #86C2AC; --accent-soft: #1D2E28;
+    --yes: #79C895; --yes-bg: #1A2E22;
+    --part: #E0B061; --part-bg: #33281A;
+    --no: #E8897F; --no-bg: #3A2220;
+    --next: #9DB4EE; --next-bg: #1E2640;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    background: var(--ground); color: var(--ink);
+    font-family: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  .wrap { max-width: 76rem; margin: 0 auto; padding-block: 1.6rem 3rem; padding-inline: 16px; display: grid; gap: 1.25rem; }
+  @media (min-width: 48rem) { .wrap { padding-inline: 1.75rem; } }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  .eyebrow { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 0; }
+  h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.5rem); line-height: 1.1; letter-spacing: -.02em; margin: .35rem 0 .5rem; text-wrap: balance; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 64ch; margin: 0; font-size: 1.02rem; }
+  .lede strong { color: var(--ink); }
+
+  .systems { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .sys { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.1rem; display: grid; gap: .35rem; align-content: start; }
+  .sys.anthill { border-color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+  .sys h2 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+  .sys .best { margin: 0; font-weight: 600; }
+  .sys p { margin: 0; color: var(--ink-2); font-size: .94rem; }
+  .sys .src { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .68rem; color: var(--ink-3); }
+
+  .controls { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--ground); padding-block: .6rem; display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; border-bottom: 1px solid var(--rule); }
+  .filters { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .filters button { font: inherit; font-size: .88rem; padding: .4rem .75rem; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; }
+  .filters button:hover { border-color: var(--ink-3); }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+  .filters button:focus-visible, #q:focus-visible, .jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .search { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+  .search label { font-size: .8rem; color: var(--ink-3); }
+  #q { font: inherit; font-size: .9rem; padding: .4rem .6rem; border: 1px solid var(--rule); border-radius: 5px; background: var(--panel); color: var(--ink); width: 13rem; max-width: 100%; }
+  #count { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .75rem; color: var(--ink-3); flex-basis: 100%; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: .85rem; color: var(--ink-2); align-items: center; }
+  .jump { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .86rem; }
+  .jump a { color: var(--ink-2); text-decoration: none; }
+  .jump a:hover { color: var(--accent); text-decoration: underline; }
+
+  .mk { display: inline-flex; align-items: center; justify-content: center; gap: .3rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .66rem; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; padding: .12rem .45rem; border-radius: 3px; white-space: nowrap; }
+  .mk.y { color: var(--yes); background: var(--yes-bg); }
+  .mk.p { color: var(--part); background: var(--part-bg); }
+  .mk.n { color: var(--no); background: var(--no-bg); }
+  .mk.x { color: var(--next); background: var(--next-bg); }
+
+  .table-box { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 50rem; }
+  thead th { position: sticky; top: 0; background: var(--panel); text-align: left; font-size: .78rem; font-weight: 600; padding: .7rem .8rem; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+  thead th.anthill { color: var(--accent); }
+  th:first-child, td:first-child { width: 24%; }
+  td { padding: .6rem .8rem; border-bottom: 1px solid var(--rule); vertical-align: top; font-size: .9rem; color: var(--ink-2); }
+  td:first-child { color: var(--ink); font-weight: 500; }
+  td.anthill { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+  td .cell { display: grid; gap: .25rem; justify-items: start; }
+  tr.group td { background: var(--panel-2); color: var(--ink); font-weight: 700; font-size: .95rem; padding-top: .8rem; border-bottom: 1px solid var(--rule); }
+  tr.group td span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .7rem; font-weight: 500; color: var(--ink-3); margin-right: .5rem; }
+  .empty { padding: 1.2rem; color: var(--ink-2); }
+
+  .only { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .only section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.1rem; }
+  .only h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .only ul { margin: 0; padding-left: 1.1rem; color: var(--ink-2); font-size: .92rem; display: grid; gap: .2rem; }
+  .only section.none { border-style: dashed; border-color: var(--no); }
+  h2.sec { font-size: 1.2rem; margin: .5rem 0 0; }
+  footer { color: var(--ink-3); font-size: .85rem; max-width: 70ch; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Three ways to build software with AI agents · 29 Sep 2026</p>
+    <h1>Anthill, AutoDev and Factory, feature by feature</h1>
+    <p class="lede"><strong>AutoDev</strong> is strongest at checking and cost. <strong>Factory</strong> is strongest at running on its own. <strong>Anthill</strong> is strongest at remembering, and at keeping many chats in step. None of them yet checks whether a custom feature's answers are actually right.</p>
+  </header>
+
+  <div class="systems">
+    <article class="sys">
+      <h2>AutoDev</h2>
+      <p class="best">Finishes one ticket as cheaply as it can.</p>
+      <p>Sorts the ticket, plans, codes in a separate copy, checks, reviews. Counts every token. Runs on Claude or Codex.</p>
+      <p class="src">Source: its own architecture document, Rev. 24</p>
+    </article>
+    <article class="sys">
+      <h2>Factory v2</h2>
+      <p class="best">Builds an agreed feature list overnight, on its own.</p>
+      <p>Interview up front, then plan, build, and a fresh QA session that needs proof. Never asks mid-build.</p>
+      <p class="src">Source: its own factory map, v2</p>
+    </article>
+    <article class="sys anthill">
+      <h2>Anthill</h2>
+      <p class="best">Speeds up the owner working with agents on custom logic.</p>
+      <p>Every chat starts knowing the work, the owner's decisions and the traps. Nothing closes without a passing check.</p>
+      <p class="src">Source: its code, 98 tests passing</p>
+    </article>
+  </div>
+
+  <div class="legend" aria-label="Key">
+    <span class="mk y">Has</span> it has this
+    <span class="mk p">Partly</span> partly, or with a catch
+    <span class="mk n">No</span> not at all
+    <span class="mk x">Next</span> agreed, not built yet
+  </div>
+
+  <nav class="jump" id="jump" aria-label="Jump to a group"></nav>
+
+  <div class="controls">
+    <div class="filters" role="group" aria-label="Show">
+      <button type="button" data-f="all" aria-pressed="true">Everything</button>
+      <button type="button" data-f="differ" aria-pressed="false">Only where they differ</button>
+      <button type="button" data-f="gap" aria-pressed="false">Where Anthill falls behind</button>
+      <button type="button" data-f="lead" aria-pressed="false">Where Anthill leads</button>
+    </div>
+    <div class="search">
+      <label for="q">Search</label>
+      <input id="q" type="search" placeholder="e.g. cost, question, map" autocomplete="off">
+    </div>
+    <output id="count" for="q"></output>
+  </div>
+
+  <div class="table-box">
+    <table>
+      <thead><tr><th scope="col">Feature</th><th scope="col">AutoDev</th><th scope="col">Factory v2</th><th scope="col" class="anthill">Anthill</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>Nothing matches. Clear the search or pick another filter.</div>
+  </div>
+
+  <h2 class="sec">What only one of them has</h2>
+  <div class="only">
+    <section>
+      <h3>Only Anthill</h3>
+      <ul>
+        <li>A map of the code that spots stale notes</li>
+        <li>One shared view of all work, across chats</li>
+        <li>What is being edited right now</li>
+        <li>A live page that starts with the app</li>
+        <li>Files agents may not edit</li>
+        <li>Owner signatures on notes</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Only AutoDev</h3>
+      <ul>
+        <li>Sorting requests by size</li>
+        <li>Pulling work from a ticket tracker</li>
+        <li>Three kinds of question</li>
+        <li>Ask a person after two failed searches</li>
+        <li>Risky steps pause for the owner</li>
+        <li>Rejected options recorded</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Only Factory</h3>
+      <ul>
+        <li>Fresh QA that starts from “broken”</li>
+        <li>Proof required for every promise</li>
+        <li>Clicking through the real app</li>
+        <li>Restarts itself after sleep</li>
+        <li>Waits out usage limits</li>
+        <li>Cost forecasts</li>
+      </ul>
+    </section>
+    <section class="none">
+      <h3>None of them</h3>
+      <ul>
+        <li>A locked accuracy score for custom work. It would have caught a Kerala story pinned in Finland. Agreed as Anthill's next step after the buttons.</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer>AutoDev and Factory are described from their own documents, not their code, so their entries are their own claims. Anthill is described from its code as of 29 September 2026.</footer>
+</div>
+
+<script>
+(function () {
+  // [feature, [mark, text] for AutoDev, Factory, Anthill]; mark: y has, p partly, n no, x next, "" descriptive
+  var G = [
+    ["What it is", [
+      ["Main job", ["", "Finish one ticket cheaply"], ["", "Build a feature list unattended"], ["", "Keep every chat informed and honest"]],
+      ["Unit of work", ["", "A ticket (a job)"], ["", "A feature from a fixed list"], ["", "A work page, a board unit, or any chat task"]],
+      ["Who drives", ["", "A script engine, watched or not"], ["", "A shell runner, overnight"], ["", "The owner, talking with agents"]],
+      ["Built with", ["", "Shell, TypeScript, Python"], ["", "Shell and prompts"], ["", "Python command line and git hooks"]],
+      ["Installed as", ["", "A plugin, once for every project"], ["", "A setup script per project"], ["", "anthill install, per project"]]
+    ]],
+    ["Getting the work in", [
+      ["Sorts requests by size", ["y", "Question, trivial, standard, deep"], ["n", "Everything is a feature"], ["n", "The agent judges"]],
+      ["Pulls from a ticket tracker", ["y", "Jira, through a declared command"], ["n", ""], ["n", ""]],
+      ["Interview before building", ["n", ""], ["y", "Features, rules, costs, decisions"], ["p", "A charter: stack, product, architecture"]],
+      ["A plan for each piece of work", ["y", "A checked plan naming the files"], ["y", "Contract of 80 lines or fewer, 6–12 provable promises"], ["p", "A unit brief with its files and test; most work skips it"]],
+      ["Tests written before code", ["n", ""], ["y", "Same builder, tests first"], ["y", "Separate units; the coder can't edit the tests"]],
+      ["Needs the feature list up front", ["n", ""], ["y", "Required"], ["n", "Work appears as it is found"]]
+    ]],
+    ["Understanding the code", [
+      ["A map of the code", ["n", "Dropped on purpose, to save cost"], ["y", "A searchable code graph"], ["y", "Every file: its job, links, tests, history"]],
+      ["Screens on the map", ["n", ""], ["p", "Not stated"], ["y", "Since 26 Sep"]],
+      ["Finds where a task lives", ["p", "One broad search by cheap helpers"], ["p", "Asks the graph"], ["y", "Names the file, the line, and the tests"]],
+      ["Says what a change will break", ["n", ""], ["p", "Dependencies in the graph"], ["y", "Who uses it, which tests cover it, or that none do"]],
+      ["The whole product on one page", ["n", ""], ["n", ""], ["y", "orient"]],
+      ["The owner's words matched to the code's", ["n", ""], ["n", ""], ["y", "A glossary, not signed yet"]],
+      ["Measured how well it finds code", ["n", ""], ["n", ""], ["y", "57% first try, 71% in the top three"]]
+    ]],
+    ["Memory", [
+      ["Survives a chat ending", ["y", "A job record on disk"], ["y", "Six owner files and a handoff note"], ["y", "Work pages, decisions, traps"]],
+      ["Carries over between pieces of work", ["p", "Per job; it says it is “as slow on the fiftieth ticket”"], ["p", "The decisions file only"], ["y", "Every chat reads the same pages"]],
+      ["Keeps the owner's decisions in their words", ["p", "Inside each job record"], ["y", "A decisions file"], ["y", "Decision pages only the owner changes"]],
+      ["Records the options that were rejected", ["y", ""], ["n", ""], ["n", ""]],
+      ["Keeps traps and lessons", ["p", "In its own design document"], ["n", ""], ["y", "A traps list, and lessons by area"]],
+      ["Checks notes still match the code", ["p", "Lists commits since the job"], ["n", ""], ["y", "Code fingerprints flag stale notes"]],
+      ["Updates notes by itself", ["n", ""], ["n", ""], ["y", "A background helper after each commit"]],
+      ["Owner signs a note as true", ["n", ""], ["n", ""], ["y", "Available; nothing signed yet"]],
+      ["Handles a bug that comes back weeks later", ["y", "Recall by ticket or by file"], ["n", ""], ["p", "Through the file's history and pages"]]
+    ]],
+    ["Talking to the owner", [
+      ["Asks questions mid-build", ["y", "When someone is at the terminal"], ["n", "Never; it picks the simplest pattern"], ["y", "In the chat, one at a time, with a recommendation"]],
+      ["Sorts questions by how much they block", ["y", "The goal, the plan, or one detail"], ["n", ""], ["n", ""]],
+      ["Asks a person after two failed searches", ["y", ""], ["n", ""], ["n", ""]],
+      ["Risky steps wait for the owner", ["y", "Database changes, queues, permissions"], ["n", ""], ["p", "Pushes and main only"]],
+      ["Questions seen outside the chat", ["n", "Its top unsolved problem"], ["p", "Notifications on stops and budget"], ["y", "Listed in where and on the owner's page"]],
+      ["Answer from a page or button", ["n", ""], ["n", ""], ["x", "The buttons, next"]],
+      ["Sends notifications", ["n", ""], ["y", ""], ["n", ""]]
+    ]],
+    ["Building", [
+      ["A separate copy of the code per job", ["y", ""], ["p", "One feature branch"], ["p", "Optional; off in solo mode"]],
+      ["Kept to the files it planned", ["y", "Checked against the changed files"], ["p", "Allowed files for helper agents"], ["y", "Writing outside its files is refused"]],
+      ["Saves work as it goes", ["y", "Learned the hard way"], ["y", "Commits and leaves a “next” note at ~120 steps"], ["p", "Commits, but nothing forces it"]],
+      ["Cheaper models for easy parts", ["y", "Sonnet, Haiku or Opus by step"], ["y", "Sonnet copies, Haiku reads"], ["n", ""]],
+      ["A second AI provider", ["y", "Codex, unfinished"], ["n", ""], ["p", "Any tool that reads the rules files"]],
+      ["Many agents at once", ["p", "Separate jobs, no shared view"], ["n", "One lane"], ["y", "Parallel chats, and who is editing what right now"]]
+    ]],
+    ["Checking the work", [
+      ["The agent can't declare itself done", ["y", "A checked plan and a gate"], ["y", "Marker files; QA decides"], ["y", "Only a passing check closes a unit"]],
+      ["Tests must pass", ["y", "Compares failure counts"], ["y", "The full check once per round"], ["y", ""]],
+      ["An independent reviewer", ["p", "A separate review step, same model family"], ["y", "A fresh QA session that never saw the build"], ["n", "The same identity reviews its own work"]],
+      ["Reviewer starts from “broken”", ["n", ""], ["y", "Every promise starts as FAIL"], ["n", ""]],
+      ["Proof attached to every promise", ["p", "Wanted, not enforced"], ["y", "A command or a click path"], ["n", ""]],
+      ["Clicks through the real app", ["n", ""], ["y", "Playwright"], ["n", ""]],
+      ["An empty branch can't pass", ["y", ""], ["p", "Not stated"], ["p", "Not checked explicitly"]],
+      ["Checks the notes still match the code", ["n", ""], ["n", ""], ["y", "Part of the check"]],
+      ["Checks the answers are right, with a score", ["n", ""], ["p", "Only if the plan says so"], ["x", "A locked score for custom work, agreed"]],
+      ["Limits fix rounds", ["p", "Bounded"], ["y", "Two, then a named gap"], ["p", "Unlimited; stuck work goes to the owner"]],
+      ["Keeps findings that didn't block", ["y", "A list of known shortfalls"], ["y", "Gaps"], ["p", "Review notes"]]
+    ]],
+    ["Safety", [
+      ["Never pushes by itself", ["y", ""], ["p", "Merges automatically"], ["y", "The hook refuses unless the owner runs it"]],
+      ["No commits on main", ["y", "Automation never touches it"], ["n", "Merges into it"], ["y", "Refused"]],
+      ["Blocks secrets", ["y", "A secret scan"], ["y", "A secret-guard hook"], ["y", "And junk files"]],
+      ["Blocks force pushes", ["p", "Not stated"], ["n", ""], ["y", ""]],
+      ["No new packages without approval", ["y", ""], ["n", ""], ["n", ""]],
+      ["Files agents may not edit", ["n", ""], ["n", ""], ["y", "Rules, settings, charter"]],
+      ["Logs who changed a setting", ["n", ""], ["n", ""], ["y", ""]],
+      ["“The owner said so” must be real", ["n", ""], ["n", ""], ["y", "Written into the rules"]]
+    ]],
+    ["Running on its own", [
+      ["Keeps working while the owner is away", ["y", "A background worker and scheduler"], ["y", "Built for it"], ["n", ""]],
+      ["Restarts after sleep or a reboot", ["n", "Open problem"], ["y", "Through launchd"], ["n", ""]],
+      ["Waits out usage limits", ["n", ""], ["y", ""], ["n", ""]],
+      ["Survives a closed terminal", ["y", "Job state on disk"], ["y", ""], ["y", "Pages on disk"]],
+      ["Handles merge conflicts", ["n", ""], ["p", "Records a gap and moves on"], ["n", ""]]
+    ]],
+    ["Cost and measurement", [
+      ["Records tokens per job", ["y", "Read from the transcripts"], ["y", "Per session"], ["n", ""]],
+      ["Budgets and warnings", ["y", "Steps, size, time, repeated calls"], ["y", "Small, medium, large; warns at 1.5×"], ["n", ""]],
+      ["Forecasts total cost", ["n", ""], ["y", "Warns at +30%"], ["n", ""]],
+      ["Measures before and after a change", ["p", "Benchmarks, but no baseline yet"], ["n", ""], ["y", "The file-finding test"]],
+      ["Records time to first useful change", ["n", ""], ["n", ""], ["x", "Proposed"]],
+      ["Keeps noisy output out of the chat", ["p", ""], ["y", "A quiet wrapper for test runs"], ["n", ""]]
+    ]],
+    ["What the owner can see", [
+      ["A readable status", ["p", "A status command and a job file"], ["p", "A state file and logs"], ["y", "where"]],
+      ["A live page", ["n", ""], ["n", ""], ["y", "In the browser, starts with the app"]],
+      ["What is being edited right now", ["n", ""], ["n", ""], ["y", ""]],
+      ["Work nobody wrote down", ["n", ""], ["n", ""], ["y", "Named out loud"]],
+      ["Plan and notes compared", ["n", ""], ["n", ""], ["y", "Disagreements flagged"]]
+    ]],
+    ["How proven it is", [
+      ["Real work run through it", ["y", "Several jobs, measured"], ["p", "Not stated"], ["y", "Daily on LogiAstro"]],
+      ["Has its own tests", ["y", "Unit tests and a one-second full-flow test"], ["p", "Not stated"], ["y", "98 passing"]],
+      ["Writes up its failures", ["y", "A dozen, each traced"], ["p", "A few tradeoffs noted"], ["y", "Field reports and an open list"]],
+      ["Backed up", ["y", "A person reviews, then pushes"], ["p", "Not stated"], ["n", "Only on one laptop"]],
+      ["Shown to speed up work", ["n", "No baseline"], ["n", ""], ["n", "First report: barely used"]]
+    ]]
+  ];
+
+  var LABEL = { y: "Has", p: "Partly", n: "No", x: "Next" };
+  var rank = { y: 3, x: 1, p: 2, n: 0 };
+  var tbody = document.getElementById("rows");
+  var jump = document.getElementById("jump");
+  var rows = [];
+
+  function slug(s) { return s.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, ""); }
+  function cell(c, cls) {
+    var td = document.createElement("td");
+    if (cls) td.className = cls;
+    var d = document.createElement("div"); d.className = "cell";
+    if (c[0]) { var m = document.createElement("span"); m.className = "mk " + c[0]; m.textContent = LABEL[c[0]]; d.appendChild(m); }
+    if (c[1]) { var t = document.createElement("span"); t.textContent = c[1]; d.appendChild(t); }
+    td.appendChild(d); return td;
+  }
+
+  G.forEach(function (g, gi) {
+    var id = "g-" + slug(g[0]);
+    var a = document.createElement("a"); a.href = "#" + id; a.textContent = g[0]; jump.appendChild(a);
+    var gr = document.createElement("tr"); gr.className = "group"; gr.id = id;
+    var gt = document.createElement("td"); gt.colSpan = 4;
+    var n = document.createElement("span"); n.textContent = String(gi + 1).padStart(2, "0");
+    gt.appendChild(n); gt.appendChild(document.createTextNode(g[0])); gr.appendChild(gt); tbody.appendChild(gr);
+    var members = [];
+    g[1].forEach(function (r) {
+      var tr = document.createElement("tr");
+      var f = document.createElement("td"); f.textContent = r[0]; tr.appendChild(f);
+      tr.appendChild(cell(r[1])); tr.appendChild(cell(r[2])); tr.appendChild(cell(r[3], "anthill"));
+      tbody.appendChild(tr);
+      var marks = [r[1][0], r[2][0], r[3][0]];
+      var rec = { tr: tr, group: gr, text: (g[0] + " " + r.join(" ")).toLowerCase(), marks: marks };
+      rows.push(rec); members.push(rec);
+    });
+    gr._members = members;
+  });
+
+  function matches(rec, f) {
+    var m = rec.marks, a = m[2];
+    if (f === "all") return true;
+    if (!m[0] && !m[1] && !a) return false;
+    if (f === "differ") return !(m[0] === m[1] && m[1] === a);
+    if (f === "gap") return rank[a] < Math.max(rank[m[0]], rank[m[1]]);
+    if (f === "lead") return rank[a] > Math.max(rank[m[0]], rank[m[1]]);
+    return true;
+  }
+
+  var filter = "all";
+  var q = document.getElementById("q");
+  var out = document.getElementById("count");
+  var empty = document.getElementById("empty");
+  var groups = Array.prototype.slice.call(tbody.querySelectorAll("tr.group"));
+
+  function run() {
+    var s = q.value.trim().toLowerCase(), shown = 0;
+    rows.forEach(function (r) {
+      var ok = matches(r, filter) && (!s || r.text.indexOf(s) !== -1);
+      r.tr.hidden = !ok; if (ok) shown++;
+    });
+    groups.forEach(function (g) { g.hidden = !g._members.some(function (r) { return !r.tr.hidden; }); });
+    empty.hidden = shown !== 0;
+    out.textContent = shown + " of " + rows.length + " features shown";
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (b) {
+    b.addEventListener("click", function () {
+      filter = b.getAttribute("data-f");
+      Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      run();
+    });
+  });
+  q.addEventListener("input", run);
+  run();
+})();
+</script>
