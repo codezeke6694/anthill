@@ -176,10 +176,10 @@
     <dl class="figures">
       <div class="fig"><dt>Chambers</dt><dd>24<small>138 files, screens included</small></dd></div>
       <div class="fig"><dt>First guess</dt><dd>57%<small>right file · 71% in the top three</small></dd></div>
-      <div class="fig"><dt>Notes checked</dt><dd>454<small>3 out of date</small></dd></div>
+      <div class="fig"><dt>Notes checked</dt><dd>474<small>3 out of date</small></dd></div>
       <div class="fig"><dt>Left undone</dt><dd>16<small>clear once the new tests merge</small></dd></div>
       <div class="fig"><dt>Work pages</dt><dd>5<small>plus 7 owner decisions</small></dd></div>
-      <div class="fig"><dt>Its own tests</dt><dd>98<small>all passing</small></dd></div>
+      <div class="fig"><dt>Its own tests</dt><dd>117<small>all passing</small></dd></div>
     </dl>
   </header>
 
@@ -620,7 +620,7 @@
   ▸ api      http://localhost:8000
   ▸ explorer http://localhost:5010
   ▸ anthill  http://127.0.0.1:7070/</pre>
-          <p>It refreshes every five seconds and shows what waits on the owner, each piece of work and its next step, the job board and where it disagrees with the pages, what is being edited, the upkeep list, the map's health, decisions, and traps folded under their work. Ctrl-C stops it with the app, so no port stays in use. Starting it twice never makes a second copy; if 7070 is taken it moves to the next free port.</p>
+          <p>It refreshes every five seconds. It opens with <a href="#numbers">the numbers</a>, then shows what waits on the owner, each piece of work and its next step, the job board and where it disagrees with the pages, what is being edited, the upkeep list, the map's health, decisions, and traps folded under their work. Ctrl-C stops it with the app, so no port stays in use. Starting it twice never makes a second copy; if 7070 is taken it moves to the next free port.</p>
           <p>One page reading one feed of facts, so any agent can add a panel. The rules tell agents in any project to put it in that project's start script. Next: buttons to answer a question, close or reopen a job, and sign a page, each needing a code shown only in the owner's terminal, so no agent can press them in the owner's name.</p>
           <p class="see"><code>anthill ui start</code> · <code>stop</code> · <code>status</code></p>
         </article>
@@ -855,6 +855,72 @@ What Anthill knows already:
         </article>
       </section>
 
+      <!-- ═════════════ TRAIL ═════════════ -->
+      <section class="panel volume" id="trail-vol" data-title="The trail">
+        <header>
+          <span class="vol">TRAIL</span><h2>The trail</h2>
+          <p>One running log of what happened in the project, and what is read from it: picking work up again, the health of Anthill's own checks, and the numbers. Built on 29 September, after the owner said they could not tell whether Anthill or they were making the work faster.</p>
+        </header>
+
+        <article class="entry" id="trail">
+          <h3>The trail <span class="tag">auto</span></h3>
+          <p class="gist">Every Anthill command and every commit leaves one line: when, which tool, which chat, which branch, and whether it worked.</p>
+<pre><b>$ anthill trail</b>
+  09-29 16:24  terminal               anthill install --force --name LogiAstro
+  09-29 16:26  claude-code:32f0d359   anthill score import
+  09-29 16:28  claude-code:32f0d359   commit e1d7f90  Put the numbers on the owner's page…</pre>
+          <p>Nothing asks the agent. The tool and the chat come from what each tool sets for itself, and git hooks inherit it, so it works for Codex or anything else, not only Claude. Its first real answer: when the rules files changed at 16:24, the trail showed the owner had run the install from their own terminal.</p>
+          <p class="see">Kept in <code>.anthill/trail.jsonl</code>, one line per event, never rewritten.</p>
+        </article>
+
+        <article class="entry" id="no-silent-crash">
+          <h3>No silent crash</h3>
+          <p class="gist">A check that fails now says so, in red, on the owner's page.</p>
+          <p>The hooks throw their output away, so a failure can never cost a commit. That also meant nobody saw one: on 29 September the notes check had been crashing on a single badly written citation, so none of 474 notes was being checked. Now every command's result goes on the trail, crash included, and the page's Health panel shows each check's last run.</p>
+<pre><b>$ anthill trail health</b>     <i>exits 1 if anything crashed this week</i></pre>
+        </article>
+
+        <article class="entry" id="note">
+          <h3>note</h3>
+          <p class="gist">One line an agent leaves as it goes: what it is doing, what it ruled out, what is next.</p>
+<pre><b>$ anthill note</b> "testing Pachpedwa; ruled out Nepal borders; next replay without the 20 km rule"</pre>
+          <p>What the work is lives on its page. Where the agent was in it lives only in its memory until it writes it down, and that is the one thing no hook can record for it.</p>
+        </article>
+
+        <article class="entry" id="resume">
+          <h3>resume <span class="tag reads">reads only</span></h3>
+          <p class="gist">The pick-up page: this branch's work and next step, the chat's own notes, what was saved before its memory was compressed, what other chats left here, and the commits since.</p>
+          <p>A chat that runs out of room has its memory compressed, and the detail goes. Just before that, Anthill saves the owner's last message, the agent's last words and the files not yet committed. When the chat continues, the pick-up page arrives by itself. A new chat on a branch with notes gets it too, so a fresh chat, or Codex tomorrow, starts where the last one stopped.</p>
+          <p class="see">In Claude it comes through three hooks: when a chat starts, when the owner sends a message, and just before a compression. They live in <code>.claude/settings.local.json</code>, the per-person file, because they name where Anthill is on this laptop. Any other tool runs <code>anthill resume</code> first.</p>
+        </article>
+
+        <article class="entry" id="numbers">
+          <h3>The numbers</h3>
+          <p class="gist">The top of the owner's page: is the work getting faster, week by week.</p>
+          <ul>
+            <li><strong>From your message to a saved change</strong>: the middle value, counted per request, because one chat can hold a dozen tasks over days.</li>
+            <li><strong>Your messages per saved change</strong>: fewer means less steering and less explaining.</li>
+            <li>Chats, saved changes, chats picked up after a compression, Anthill crashes, and which parts of Anthill were used.</li>
+          </ul>
+          <p>The trail began on 29 September, so <code>anthill score import</code> read the month before it from Claude's saved chats, with commits taken from git itself: 255, the same as git, 216 of them matched to the chat that made them.</p>
+        </article>
+
+        <article class="entry" id="first-reading">
+          <h3>The first reading</h3>
+          <p class="gist">LogiAstro, four weeks to 29 September. Not flattering, and not yet an answer.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Week</th><th>Anthill used</th><th>Messages per change</th><th>Message to saved</th></tr></thead>
+            <tbody>
+              <tr><td>1–8 Sep</td><td>125</td><td>2.3</td><td>7.4 min</td></tr>
+              <tr><td>8–15 Sep</td><td>1</td><td>2.2</td><td>8.2 min</td></tr>
+              <tr><td>15–22 Sep</td><td>274</td><td>4.5</td><td>10.2 min</td></tr>
+              <tr><td>22–29 Sep</td><td>208</td><td>3.2</td><td>9.6 min</td></tr>
+            </tbody>
+          </table></div>
+          <p>The weeks with the most Anthill use were the slower ones. But the work changed from building screens to custom logic that needs the owner's judgement, and Anthill itself was being built inside those same chats. The last week improved on the one before. On the same day, three fresh chats started with none of the owner's messages spent on background. From now on the page tracks it every week.</p>
+        </article>
+      </section>
+
       <!-- ═════════════ VII ═════════════ -->
       <section class="panel volume" id="rules" data-title="Rules and guards">
         <header>
@@ -1018,6 +1084,9 @@ What Anthill knows already:
               <tr><td>anthill status</td><td>Where the installation stands</td></tr>
               <tr><td>anthill survey</td><td>Redraws the map and reports what Anthill knows</td></tr>
               <tr><td>anthill ui start · stop · status</td><td>The owner's page in the browser; it shows, never changes</td></tr>
+              <tr><td>anthill trail · trail health</td><td>What happened here, and whether any check crashed</td></tr>
+              <tr><td>anthill resume</td><td>Pick up where this branch left off</td></tr>
+              <tr><td>anthill score</td><td>The numbers, as data</td></tr>
             </tbody>
           </table></div>
         </article>
@@ -1034,6 +1103,8 @@ What Anthill knows already:
               <tr><td>sprint new · add-unit · compile</td><td>The plan</td><td>The planner</td></tr>
               <tr><td>audit record</td><td>A review verdict</td><td>The auditor</td></tr>
               <tr><td>lesson record</td><td>A lesson</td><td>Anyone</td></tr>
+              <tr><td>note "…"</td><td>A line on the trail</td><td>Any agent</td></tr>
+              <tr><td>score import</td><td>The trail, from saved chats and git, once</td><td>Anyone</td></tr>
               <tr><td>skill index · install</td><td>The skills catalogue</td><td>Anyone</td></tr>
               <tr><td>config set</td><td>A setting</td><td>The owner</td></tr>
               <tr><td>onboard</td><td>The charter</td><td>The owner</td></tr>
@@ -1102,6 +1173,7 @@ What Anthill knows already:
             <li><time datetime="2026-09-28">28 Sep</time><span><strong>A new project, day one.</strong> Installed into a new project to find what only a fresh install shows: five fixes, and the install now surveys the code before it finishes.</span></li>
             <li><time datetime="2026-09-29">29 Sep</time><span><strong>The owner's page.</strong> What <code>where</code> knows, in the browser, started and stopped with the app. View only for now.</span></li>
             <li><time datetime="2026-09-29">29 Sep</time><span><strong>What it is for.</strong> Compared with two other systems. The owner's verdict: Anthill speeds up the owner working with agents on custom logic; it is not an unattended factory. That sets the order of what comes next.</span></li>
+            <li><time datetime="2026-09-29">29 Sep</time><span><strong>The trail.</strong> Every command and commit logged with its tool and chat; a crashing check made visible (the notes check had been dead); notes, a save before each compression, and a pick-up page; the numbers on the owner's page, with a month of history read from saved chats and git.</span></li>
           </ol>
         </article>
       </section>
@@ -1181,9 +1253,10 @@ What Anthill knows already:
             <tbody>
               <tr><td>Buttons on the owner's page</td><td>next</td><td>Answer, close or reopen, sign; each behind a code only the owner's terminal shows</td></tr>
               <tr><td>A score for custom work</td><td>agreed</td><td>Custom units close only above the owner's accuracy target, on answers the builder can't edit</td></tr>
-              <tr><td>Is it faster?</td><td class="off">unmeasured</td><td>Time from a new chat to its first useful change, before and after Anthill</td></tr>
+              <tr><td>Is it faster?</td><td>measured weekly</td><td>First reading inconclusive; then a test with Anthill hidden and shown, owner not involved</td></tr>
+              <tr><td>Page accuracy</td><td>next</td><td>The keeper checks each fact against the code before writing it, and records every correction</td></tr>
               <tr><td>Glossary and pages</td><td class="off">unsigned</td><td>The owner corrects them and signs</td></tr>
-              <tr><td>Anthill backup</td><td class="off">missing</td><td>A private GitHub repository for its 44 commits</td></tr>
+              <tr><td>Anthill backup</td><td class="off">missing</td><td>A private GitHub repository for its 50 commits</td></tr>
               <tr><td>Anthill's main line</td><td>on a branch</td><td>Merge <code>work/cold-start</code> into Anthill's main line</td></tr>
               <tr><td>Page freshness</td><td>after commits</td><td>Pages update when a commit fires the keeper; an hour of uncommitted work shows only as "being edited"</td></tr>
               <tr><td>16 untested files</td><td>tests written</td><td>Merge <code>work/cover-untested</code> once the geotag work is committed</td></tr>
