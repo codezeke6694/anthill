@@ -179,7 +179,7 @@
       <div class="fig"><dt>Notes checked</dt><dd>454<small>3 out of date</small></dd></div>
       <div class="fig"><dt>Left undone</dt><dd>16<small>clear once the new tests merge</small></dd></div>
       <div class="fig"><dt>Work pages</dt><dd>5<small>plus 7 owner decisions</small></dd></div>
-      <div class="fig"><dt>Its own tests</dt><dd>93<small>all passing</small></dd></div>
+      <div class="fig"><dt>Its own tests</dt><dd>98<small>all passing</small></dd></div>
     </dl>
   </header>
 
@@ -302,6 +302,14 @@
           <h3>Anthill</h3>
           <p class="gist">A system that lets an AI agent work on a codebase it has never seen, without guessing, and without being trusted to say its own work is done.</p>
           <p>It lives outside LogiAstro, in <code>~/anthill</code>, and is installed into the repository. It does three jobs: it keeps a <a href="#map">map</a> of the code, a <a href="#memory">memory</a> of why the code is the way it is, and a set of <a href="#rules">rules</a> and a <a href="#board">board</a> for doing work.</p>
+        </article>
+
+        <article class="entry" id="what-for">
+          <h3>What Anthill is for</h3>
+          <p class="gist">It speeds up an owner building custom logic with AI agents, one feature at a time. It is not a factory that builds while nobody watches.</p>
+          <p>Custom logic comes out of the conversation between the owner and the agent. The owner catches what is wrong; the agent turns that judgement into code. On 26 September the owner saw a “Flood &amp; storm” warning at Chakan backed by a drought story. That catch led to the placement work: stories pinned in the wrong country, today's rule placing 58% of fresh stories right, a new one 90%, and the owner's target of 95%.</p>
+          <p>Anthill's job is to make every chat after that catch start already knowing it: the work, its test set, the owner's rule (“no hand-typed lists, fix it with a general rule”), and the traps. So the owner never explains the same thing twice. Stated by the owner on 29 September.</p>
+          <p class="see">See <a href="#beside-others">Beside other systems</a>.</p>
         </article>
 
         <article class="entry" id="picture">
@@ -603,6 +611,18 @@
           <p class="gist">The job board holds only work that was planned onto it. <code>where</code> shows it next to the work pages and names every disagreement.</p>
 <pre>  ⚠ The board says relevance.impl is ready, but its work page says
     paused: needs the owner's nationwide answer first. Follow the page.</pre>
+        </article>
+
+        <article class="entry" id="owner-page">
+          <h3>The owner's page <span class="tag reads">view only</span></h3>
+          <p class="gist">Everything <code>where</code> knows, on a local page in the browser, starting and stopping with the app.</p>
+<pre><b>$ ./run.sh</b>
+  ▸ api      http://localhost:8000
+  ▸ explorer http://localhost:5010
+  ▸ anthill  http://127.0.0.1:7070/</pre>
+          <p>It refreshes every five seconds and shows what waits on the owner, each piece of work and its next step, the job board and where it disagrees with the pages, what is being edited, the upkeep list, the map's health, decisions, and traps folded under their work. Ctrl-C stops it with the app, so no port stays in use. Starting it twice never makes a second copy; if 7070 is taken it moves to the next free port.</p>
+          <p>One page reading one feed of facts, so any agent can add a panel. The rules tell agents in any project to put it in that project's start script. Next: buttons to answer a question, close or reopen a job, and sign a page, each needing a code shown only in the owner's terminal, so no agent can press them in the owner's name.</p>
+          <p class="see"><code>anthill ui start</code> · <code>stop</code> · <code>status</code></p>
         </article>
 
         <article class="entry" id="survey">
@@ -997,6 +1017,7 @@ What Anthill knows already:
               <tr><td>anthill tidy</td><td>Stray files that belong to nobody</td></tr>
               <tr><td>anthill status</td><td>Where the installation stands</td></tr>
               <tr><td>anthill survey</td><td>Redraws the map and reports what Anthill knows</td></tr>
+              <tr><td>anthill ui start · stop · status</td><td>The owner's page in the browser; it shows, never changes</td></tr>
             </tbody>
           </table></div>
         </article>
@@ -1079,14 +1100,77 @@ What Anthill knows already:
             <li><time datetime="2026-09-28">28 Sep</time><span><strong>Nothing learned is lost.</strong> Every task, committed or not, hands what it learned to the keeper. The keeper's first real run. Tests written for 16 of the 17 untested files.</span></li>
             <li><time datetime="2026-09-28">28 Sep</time><span><strong>What to work on.</strong> Private notes moved into work pages and owner decisions every chat reads. <code>anthill where</code>, page drift, the job board beside the pages, and what is being edited right now. A fresh agent told "carry on" got it right.</span></li>
             <li><time datetime="2026-09-28">28 Sep</time><span><strong>A new project, day one.</strong> Installed into a new project to find what only a fresh install shows: five fixes, and the install now surveys the code before it finishes.</span></li>
+            <li><time datetime="2026-09-29">29 Sep</time><span><strong>The owner's page.</strong> What <code>where</code> knows, in the browser, started and stopped with the app. View only for now.</span></li>
+            <li><time datetime="2026-09-29">29 Sep</time><span><strong>What it is for.</strong> Compared with two other systems. The owner's verdict: Anthill speeds up the owner working with agents on custom logic; it is not an unattended factory. That sets the order of what comes next.</span></li>
           </ol>
+        </article>
+      </section>
+
+      <!-- ═════════════ BESIDE ═════════════ -->
+      <section class="panel volume" id="beside-others" data-title="Beside other systems">
+        <header>
+          <span class="vol">VOL XIV</span><h2>Beside other systems</h2>
+          <p>Two other ways of building software with AI agents, read on 29 September, and what each would do with the same kind of product.</p>
+        </header>
+
+        <article class="entry" id="other-autodev">
+          <h3>AutoDev</h3>
+          <p class="gist">Takes one ticket and gets it done as cheaply as possible.</p>
+          <p>A script sorts the ticket. One AI writes a plan naming the files it will change, another codes it in a separate copy, a script checks only those files changed, and a reviewer checks quality. Every token is counted, and it runs on Claude or Codex. It is the most measured of the three: 170 sessions studied, a dozen real failures written up. By its own account, jobs still get stuck in a step and cost 300k–1.2M tokens, and its work is invisible: it once asked a question nobody saw, and shipped without the answer.</p>
+        </article>
+
+        <article class="entry" id="other-factory">
+          <h3>Orchestration Factory v2</h3>
+          <p class="gist">Builds an agreed feature list on its own, one feature at a time, overnight.</p>
+          <p>Every question is answered in an interview up front. Then a runner plans each feature, a builder writes tests first and then code, and a fresh QA session that never saw the building starts from “broken” and needs proof for every promise. Two fix rounds at most; what is left becomes a named gap. It restarts itself after sleep, waits out usage limits, and never asks anyone anything mid-build. It retired a sprint, lane and audit setup to get there.</p>
+        </article>
+
+        <article class="entry" id="two-kinds-correct">
+          <h3>Two kinds of “correct”</h3>
+          <p class="gist">Standard work asks “does it work?”. Custom work asks “is the answer right?”.</p>
+          <p>A save button either saves or doesn't; a checker clicking through can prove it. A story's pin can be on the map and in the wrong country; only real examples with known answers prove that, and a person usually sets those answers once.</p>
+          <ul>
+            <li><strong>Standard</strong>, like a booking app or an admin panel: the Factory way fits best. Anthill is mostly overhead.</li>
+            <li><strong>Custom</strong>, like LogiAstro's placement and risk: the Factory way fits worst. It won't ask, caps the rounds, and its QA proves things work, not that they're right. Anthill fits best, because it keeps what was learned from chat to chat.</li>
+            <li><strong>Hybrid</strong>, most real products, LogiAstro included: login and screens are standard; placement, risk and relevance are custom. None of the three tells the two apart yet.</li>
+          </ul>
+        </article>
+
+        <article class="entry" id="kerala-test">
+          <h3>Would a factory have caught Kerala in Finland?</h3>
+          <p class="gist">No. It would have built it and marked it as passing.</p>
+<pre>  what its QA checks    story has a place · pin on map · screen loads   <b>PASS</b>
+  what matters          is that the right place?                         <u>Kerala → Finland</u></pre>
+          <p>Its own rules make it worse. “Never ask; pick the simplest pattern”: the simplest way to find a place by name is the biggest town with that name anywhere, which is exactly the bug. “Decide every feature up front”: the placement rule didn't exist at the start; it came from measuring. None of the three would have caught it alone. The owner did, working with the agents feature by feature.</p>
+        </article>
+
+        <article class="entry" id="what-to-borrow">
+          <h3>What Anthill takes from them</h3>
+          <p class="gist">In the order agreed on 29 September.</p>
+          <ol>
+            <li><strong>Buttons on the owner's page</strong>, so answering an agent is faster. AutoDev's unanswered question is the problem they solve.</li>
+            <li><strong>A score for custom features.</strong> Work on placement, risk or relevance closes only if it holds the owner's accuracy target on examples it hasn't seen. The builder can't edit the answers. This locks in what the owner caught, so a later change can't quietly bring Kerala → Finland back.</li>
+            <li><strong>Fresh-eyes checking</strong> for the standard parts, from Factory: a separate session that starts from “broken” and needs proof.</li>
+            <li><strong>Three kinds of question</strong>, from AutoDev: “I can't do this at all”, “your answer changes the plan”, “your answer changes one detail, so I'll carry on”.</li>
+            <li><strong>A runner that keeps going while the owner is away</strong>: low on the list. It suits standard work, which isn't this work.</li>
+          </ol>
+        </article>
+
+        <article class="entry" id="what-others-lack">
+          <h3>What Anthill has that they don't</h3>
+          <ul>
+            <li>A map of the code that notices when a written note has gone stale. AutoDev dropped the idea to save cost; Anthill keeps it so a new chat can find its way.</li>
+            <li>Many chats at once. Both others run one job or one feature at a time; Anthill tracks parallel chats, who owns which files, and what is being edited right now.</li>
+            <li>The owner's decisions and traps stay settled across every chat, not inside one job.</li>
+          </ul>
+          <p>The honest gap: “Anthill speeds me up” is what the owner feels, and is not yet measured. The proof would be how long a new chat takes to its first useful change, with Anthill and without.</p>
         </article>
       </section>
 
       <!-- ═════════════ XIII ═════════════ -->
       <section class="panel volume" id="open" data-title="What is still open">
         <header>
-          <span class="vol">VOL XIV</span><h2>What is still open</h2>
+          <span class="vol">VOL XV</span><h2>What is still open</h2>
           <p>The known gaps, stated plainly.</p>
         </header>
 
@@ -1095,8 +1179,11 @@ What Anthill knows already:
           <div class="table-wrap"><table>
             <thead><tr><th>Item</th><th>State</th><th>What closes it</th></tr></thead>
             <tbody>
+              <tr><td>Buttons on the owner's page</td><td>next</td><td>Answer, close or reopen, sign; each behind a code only the owner's terminal shows</td></tr>
+              <tr><td>A score for custom work</td><td>agreed</td><td>Custom units close only above the owner's accuracy target, on answers the builder can't edit</td></tr>
+              <tr><td>Is it faster?</td><td class="off">unmeasured</td><td>Time from a new chat to its first useful change, before and after Anthill</td></tr>
               <tr><td>Glossary and pages</td><td class="off">unsigned</td><td>The owner corrects them and signs</td></tr>
-              <tr><td>Anthill backup</td><td class="off">missing</td><td>A private GitHub repository for its 41 commits</td></tr>
+              <tr><td>Anthill backup</td><td class="off">missing</td><td>A private GitHub repository for its 44 commits</td></tr>
               <tr><td>Anthill's main line</td><td>on a branch</td><td>Merge <code>work/cold-start</code> into Anthill's main line</td></tr>
               <tr><td>Page freshness</td><td>after commits</td><td>Pages update when a commit fires the keeper; an hour of uncommitted work shows only as "being edited"</td></tr>
               <tr><td>16 untested files</td><td>tests written</td><td>Merge <code>work/cover-untested</code> once the geotag work is committed</td></tr>
@@ -1116,7 +1203,7 @@ What Anthill knows already:
 
   <footer class="panel">
     <span>An agent can't say it's finished. A test says it's finished.</span>
-    <span>LogiAstro · 28 September 2026</span>
+    <span>LogiAstro · 29 September 2026</span>
   </footer>
 </div>
 
