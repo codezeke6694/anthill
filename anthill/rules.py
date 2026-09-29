@@ -148,6 +148,33 @@ def upkeep_rule(ctx: _ctx.Context) -> str:
     ])
 
 
+def owner_view_rule(ctx: _ctx.Context) -> str:
+    """How the owner sees all of this without asking an agent.
+
+    The owner asked for it to come up with the app and go away with it, with
+    no port to hunt down afterwards. So the rule is: it lives in the project's
+    start script, tied to that script's life.
+    """
+    return "\n".join([
+        "## The owner's view: `anthill ui`",
+        "",
+        "The owner watches the work, the job board, what waits on them and what is "
+        "being edited on a local page. It only reads.",
+        "",
+        "```bash",
+        "anthill ui start --detach --with-parent $$   # in a start script: ends when the script ends",
+        "anthill ui status                            # is it up, and on which port",
+        "anthill ui stop                              # stop it and free the port",
+        "```",
+        "",
+        "Starting it twice starts nothing new; a taken port moves it up one. If this "
+        "project has a start script (`run.sh`, a `dev` target, an npm `dev` script), "
+        "the line above belongs in it, next to where the app starts, so the page comes "
+        "up and goes down with the app. Add it when you are already changing that "
+        "script, and say so.",
+    ])
+
+
 def git_rules(ctx: _ctx.Context) -> str:
     """The two git rules, as they actually stand in this installation.
 

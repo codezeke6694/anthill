@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anthill</title>
+<!--
+  The owner's view. One file, one data source: GET /api/state, every 5 s.
+  To show something new: add a key in server.py state(), then a panel below
+  that renders it. Everything is set with textContent -- page text comes from
+  work pages anyone can edit, so none of it is ever treated as markup.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0f0c; --panel: #13160f; --line: #262a1f; --ink: #e6e4da; --dim: #9a978a;
+    --faint: #6b695f; --ok: #7fc8a9; --warn: #e0a15a; --bad: #e07a5f; --you: #8fb8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13.5px/1.55 "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px max(16px, 2vw) 40px; display: grid; gap: 14px; }
+  header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
+           border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; }
+  header .meta { color: var(--dim); }
+  header .live { margin-left: auto; color: var(--faint); }
+  header .live b { color: var(--ok); font-weight: 500; }
+  .grid { display: grid; gap: 14px; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 1.35fr 1fr; align-items: start; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; min-width: 0; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+       margin: 0 0 8px; display: flex; gap: 8px; }
+  h2 .n { color: var(--faint); }
+  .row { padding: 7px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; padding-top: 0; }
+  .title { font-weight: 600; }
+  .sub { color: var(--dim); }
+  .next::before { content: "next  "; color: var(--faint); }
+  .ask::before { content: "?  "; color: var(--you); font-weight: 600; }
+  .warn::before { content: "⚠  "; }
+  .warn { color: var(--warn); }
+  .pill { display: inline-block; font-size: 10.5px; letter-spacing: .06em; padding: 0 6px; border-radius: 3px;
+          border: 1px solid currentColor; margin-left: 8px; vertical-align: 1px; }
+  .s-in-progress { color: var(--ok); } .s-waiting-on-owner { color: var(--you); } .s-paused { color: var(--faint); }
+  .s-ready { color: var(--ok); } .s-escalated { color: var(--bad); } .s-blocked { color: var(--faint); }
+  .empty { color: var(--faint); }
+  code, .path { color: var(--dim); }
+  details summary { cursor: pointer; color: var(--dim); }
+  details summary:focus-visible { outline: 1px solid var(--you); }
+  ul { margin: 4px 0 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .stat { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+  .stat b { color: var(--ink); font-weight: 600; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="project">Anthill</h1>
+    <span class="meta" id="branch"></span>
+    <span class="live" id="live">connecting…</span>
+  </header>
+  <div class="grid">
+    <div class="grid" style="grid-template-columns:1fr">
+      <section><h2>Waiting on you <span class="n" id="ask-n"></span></h2><div id="asks"></div></section>
+      <section><h2>Work in progress <span class="n" id="work-n"></span></h2><div id="work"></div></section>
+      <section><h2>Job board <span class="n" id="board-n"></span></h2><div id="board"></div></section>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr">
+      <section><h2>Being edited right now</h2><div id="editing"></div></section>
+      <section><h2>Work no page describes</h2><div id="untracked"></div></section>
+      <section><h2>Health</h2><div id="health"></div></section>
+      <section><h2>Upkeep left undone <span class="n" id="up-n"></span></h2><div id="upkeep"></div></section>
+      <section><h2>Your decisions <span class="n" id="dec-n"></span></h2><div id="decisions"></div></section>
+      <section><h2>Traps</h2><div id="traps"></div></section>
+    </div>
+  </div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function clean(s) { return String(s || "").replace(/\*\*/g, ""); }
+  function fill(id, nodes, empty) {
+    const box = $(id); box.replaceChildren();
+    if (!nodes.length) { box.append(el("div", "empty", empty)); return; }
+    nodes.forEach((n) => box.append(n));
+  }
+  function row(...kids) { const r = el("div", "row"); kids.forEach((k) => k && r.append(k)); return r; }
+  function pill(text, cls) { return el("span", "pill " + cls, text); }
+
+  function render(s) {
+    const w = s.where || {};
+    $("project").textContent = s.project;
+    document.title = "Anthill · " + s.project;
+    $("branch").textContent = (w.branch ? "on " + w.branch : "") +
+      (w.unpushed_commits ? " · " + w.unpushed_commits + " commit(s) not on GitHub" : "");
+
+    const asks = [];
+    (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) =>
+      asks.push(row(el("div", "ask", clean(q)), el("div", "sub", r.title)))));
+    $("ask-n").textContent = asks.length || "";
+    fill("asks", asks, "nothing waits on you");
+
+    const work = (w.work || []).map((r) => {
+      const t = el("div", "title", r.title); t.append(pill(r.state.replace(/-/g, " "), "s-" + r.state));
+      const kids = [t, r.next && el("div", "next", r.next)];
+      if (r.branch) kids.push(el("div", "sub", r.branch + (r.updated ? " · updated " + r.updated : "")));
+      const d = r.drift || {};
+      if (d.behind) kids.push(el("div", "warn", "page may be behind: " + d.behind.length + " commit(s) since it was true"));
+      (r.broken_citations || []).forEach((c) => kids.push(el("div", "warn", "cites code that is gone: " + c)));
+      return row(...kids);
+    });
+    $("work-n").textContent = work.length || "";
+    fill("work", work, "no work page yet");
+
+    const b = w.board || {};
+    const brow = [];
+    (b.ready || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("ready", "s-ready")); return t; })(), el("div", "sub", u.title))));
+    (b.in_flight || []).forEach((u) => brow.push(row(el("div", "title", u.id + "  (in flight)"), el("div", "sub", u.title))));
+    (b.escalated || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("escalated", "s-escalated")); return t; })(), el("div", "sub", "since " + (u.since || "?") + (u.why ? " · " + u.why : "")))));
+    (b.blocked || []).forEach((u) => brow.push(row((() => { const t = el("div", "title", u.id); t.append(pill("blocked", "s-blocked")); return t; })(), el("div", "sub", u.needs && u.needs.length ? "waits on " + u.needs.join(", ") : ""))));
+    (w.board_disagrees || []).forEach((d) => brow.push(row(el("div", "warn", clean(d).replace(/`/g, "")))));
+    $("board-n").textContent = b.total ? b.done + " of " + b.total + " done" : "";
+    fill("board", brow, b.total ? "every unit is done" : "no board in this project");
+
+    fill("editing", (w.uncommitted || []).map((u) => row(el("div", "path", u.file), u.work && u.work.length ? el("div", "sub", u.work.join(", ")) : null)),
+         "nothing uncommitted");
+    fill("untracked", (w.untracked || []).map((u) => row(el("div", "title", u.branch), el("div", "sub", u.commits + " commit(s) · " + u.latest))),
+         "every branch with recent work has a page");
+
+    const m = s.map || {};
+    const h = el("div", "stat");
+    [["map", m.nodes !== undefined ? m.nodes + " files" : "not drawn"],
+     ["drawn", m.age_min !== undefined ? (m.age_min < 60 ? m.age_min + " min ago" : Math.round(m.age_min / 60) + " h ago") : "—"],
+     ["at", m.built_at || "—"]].forEach(([k, v]) => { const x = el("span", "", k + " "); x.append(el("b", "", v)); h.append(x); });
+    fill("health", [h], "");
+
+    $("up-n").textContent = (s.upkeep || []).length || "";
+    const up = (s.upkeep || []);
+    if (up.length) {
+      const d = el("details"); d.append(el("summary", "", up.length + " item(s) — the keeper clears these after commits"));
+      const ul = el("ul"); up.forEach((i) => ul.append(el("li", "", i.kind + ": " + i.detail))); d.append(ul);
+      fill("upkeep", [d], "");
+    } else fill("upkeep", [], "nothing left undone");
+
+    $("dec-n").textContent = (w.decisions || []).length || "";
+    fill("decisions", (w.decisions || []).map((d) => row(el("div", "", d.title), el("div", "sub", d.decided || ""))), "none recorded");
+    fill("traps", (w.traps || []).map((t) => row(el("div", "", clean(t.trap).replace(/`/g, "")), el("div", "sub", t.work))), "none recorded");
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch("/api/state", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      render(await r.json());
+      const t = new Date();
+      $("live").replaceChildren(el("b", "", "● live"), document.createTextNode("  " + t.toLocaleTimeString()));
+    } catch (e) {
+      $("live").replaceChildren(el("span", "err", "● not reachable — is anthill ui still running?"));
+    }
+  }
+  tick();
+  setInterval(tick, 5000);
+</script>
+</body>
+</html>

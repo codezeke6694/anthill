@@ -48,6 +48,7 @@ DELEGATED = [
     ("tidy", "Stray artefacts that belong to nobody"),
     ("upkeep", "What a change left undone: glossary, knowledge pages, tests"),
     ("survey", "Draw the map and report what Anthill knows (install runs it)"),
+    ("ui", "The owner's view on a local page: start | stop | status"),
 ]
 
 # The ported navigation and knowledge surface. Grouped rather than listed one by
@@ -87,6 +88,7 @@ Starting cold? These only read -- none of them changes anything:
   anthill card <node> --goal "<task>"    the same card for another candidate
   anthill impact <node> --symbol <name>  what a change to one symbol reaches
   anthill work status --repo .           what is on the board, and whose
+  anthill ui start --detach              all of the above on a local page
 
 These change state: `work next|gate|done|escalate` (the board),
 `map build` (redraws the map -- safe, the post-commit hook runs it anyway),
@@ -129,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "config":
         from anthill import configure
         return configure.main(argv[1:])
+    if argv and argv[0] == "ui":
+        from anthill.ui import server
+        return server.main(argv[1:])
     if argv and argv[0] == "survey":
         from anthill import install as inst
         ctx = _ctx.resolve(None)

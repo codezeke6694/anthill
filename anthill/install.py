@@ -163,6 +163,8 @@ one thing that buys genuine independence.
 
 {upkeep_rule}
 
+{owner_view}
+
 {git_rules}
 
 ## Before you touch anything
@@ -323,6 +325,7 @@ def render_values(ctx: _ctx.Context, name: str = "", description: str = "",
         "GIT_RULES": rules.git_rules(ctx),
         "COLD_START": rules.cold_start_rule(ctx),
         "UPKEEP_RULE": rules.upkeep_rule(ctx),
+        "OWNER_VIEW": rules.owner_view_rule(ctx),
         "AUDIT_NOTE": rules.audit_note(ctx),
         "MAX_FILES": "3",
     }
@@ -558,6 +561,7 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
                             git_rules=rules.git_rules(ctx),
                             cold_start=rules.cold_start_rule(ctx),
                             upkeep_rule=rules.upkeep_rule(ctx),
+                            owner_view=rules.owner_view_rule(ctx),
                             blueprint_rule=rules.map_build_rule(ctx),
                             escalation_rule=rules.escalation_rule(ctx),
                             audit_note=rules.audit_note(ctx))
@@ -693,6 +697,8 @@ def render_survey(sv: dict[str, Any]) -> str:
         L.append("  work     recent work with no page yet: " + ", ".join(sv["work"]))
     L.append("Next: `anthill onboard` for the charter, then hand the lists above to the "
              "anthill-keeper in the first chat.")
+    L.append("Watch it on a page: `anthill ui start --detach` (add it to your start script "
+             "with `--with-parent $$` so it stops with the app).")
     return "\n".join(L)
 
 
