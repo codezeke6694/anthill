@@ -1,0 +1,1171 @@
+<title>Anthill Field Manual</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --desk:    #E7E3D9;
+    --panel:   #FCFBF8;
+    --panel-2: #F4F1E9;
+    --ink:     #171714;
+    --ink-2:   #55524A;
+    --ink-3:   #857F73;
+    --rule:    #DCD7CA;
+    --accent:  #1B5E7D;
+    --warn:    #9A4B2E;
+    --mark:    #F3E7B8;
+    --ok-fill: #E3EEF3;
+    --no-fill: #F5E6DF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --desk: #0A0B07; --panel: #17180F; --panel-2: #1F2016;
+      --ink: #F0EEE6; --ink-2: #ACA89C; --ink-3: #7C786E;
+      --rule: #302F26; --accent: #79BBD8; --warn: #D89170; --mark: #4A4222;
+      --ok-fill: #16303B; --no-fill: #3A2419;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --desk: #0A0B07; --panel: #17180F; --panel-2: #1F2016;
+    --ink: #F0EEE6; --ink-2: #ACA89C; --ink-3: #7C786E;
+    --rule: #302F26; --accent: #79BBD8; --warn: #D89170; --mark: #4A4222;
+    --ok-fill: #16303B; --no-fill: #3A2419;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    background: var(--desk);
+    color: var(--ink);
+    font-family: Newsreader, Georgia, "Times New Roman", serif;
+    font-size: 1.03rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sheet {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding-block: clamp(1rem, 2.2vw, 2rem);
+    padding-inline: max(16px, 2vw);
+    display: flex; flex-direction: column; gap: 1.1rem;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  code { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: .82em; color: var(--ink-2); }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* masthead */
+  .masthead { padding: clamp(1.5rem, 3vw, 2.5rem); display: grid; gap: 1.4rem; }
+  .kicker { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 .5rem; }
+  h1 { font-weight: 600; font-size: clamp(2.6rem, 1.5rem + 4.4vw, 4.8rem); line-height: .95; letter-spacing: -.035em; margin: 0; }
+  .tagline { font-size: clamp(1.05rem, .8rem + .8vw, 1.28rem); line-height: 1.45; color: var(--ink-2); margin: .75rem 0 0; max-width: 52ch; text-wrap: balance; }
+  .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1rem 0; border-top: 1px solid var(--rule); margin: 0; }
+  .fig { padding: .9rem 1rem 0 0; }
+  .fig dt { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .64rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .fig dd { margin: .3rem 0 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; }
+  .fig dd small { display: block; margin-top: .35rem; font-family: Newsreader, Georgia, serif; font-size: .88rem; font-weight: 400; color: var(--ink-3); letter-spacing: 0; line-height: 1.3; }
+
+  /* layout: contents + volumes */
+  .body { display: grid; gap: 1.1rem; }
+  @media (min-width: 64rem) { .body { grid-template-columns: 15.5rem minmax(0, 1fr); align-items: start; } }
+  nav.contents { padding: 1.1rem 1.1rem 1.2rem; }
+  @media (min-width: 64rem) { nav.contents { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1rem); max-height: calc(100vh - 2rem); overflow-y: auto; } }
+  .search { display: flex; flex-direction: column; gap: .35rem; margin: 0 0 1rem; }
+  .search label { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .search input { width: 100%; font: inherit; font-size: .98rem; padding: .5rem .65rem; background: var(--panel-2); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; }
+  .search output { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .7rem; color: var(--ink-3); min-height: 1em; }
+  nav.contents ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .15rem; }
+  nav.contents li a { display: flex; gap: .55rem; align-items: baseline; padding: .28rem 0; color: var(--ink); text-decoration: none; font-size: .98rem; line-height: 1.3; }
+  nav.contents li a:hover { color: var(--accent); }
+  nav.contents .vol { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .66rem; color: var(--ink-3); min-width: 1.3rem; }
+  nav.contents .count { margin-left: auto; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .66rem; color: var(--ink-3); }
+
+  .volumes { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+  section.volume { padding: clamp(1.2rem, 2vw, 1.8rem); scroll-margin-top: 1rem; }
+  .volume > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1rem; padding-bottom: .8rem; margin-bottom: .4rem; border-bottom: 2px solid var(--ink); }
+  .volume > header .vol { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem; letter-spacing: .1em; color: var(--ink-3); }
+  .volume h2 { font-weight: 600; font-size: clamp(1.45rem, 1rem + 1.1vw, 1.9rem); line-height: 1.1; letter-spacing: -.022em; margin: 0; text-wrap: balance; }
+  .volume > header p { flex-basis: 100%; margin: .15rem 0 0; color: var(--ink-2); max-width: 66ch; }
+
+  article.entry { padding: 1rem 0 1.05rem; border-top: 1px solid var(--rule); scroll-margin-top: 1rem; }
+  article.entry:first-of-type { border-top: 0; }
+  .entry h3 { font-weight: 600; font-size: 1.16rem; letter-spacing: -.01em; margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .7rem; }
+  .entry h3 .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .6rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--rule); border-radius: 2px; padding: .05rem .35rem; }
+  .entry h3 .tag.guard { color: var(--warn); border-color: currentColor; }
+  .entry h3 .tag.reads { color: var(--accent); border-color: currentColor; }
+  .entry .gist { margin: .25rem 0 .5rem; font-style: italic; color: var(--ink); max-width: 66ch; }
+  .entry p { margin: 0 0 .55rem; max-width: 66ch; color: var(--ink-2); }
+  .entry > :last-child { margin-bottom: 0; }
+  .entry ul { margin: 0 0 .55rem; padding-left: 1.15rem; color: var(--ink-2); max-width: 66ch; }
+  .entry li { margin: 0 0 .25rem; }
+  .see { font-size: .92rem; color: var(--ink-3); }
+  .see a { color: var(--ink-2); }
+
+  pre { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: .75rem; line-height: 1.68; background: var(--panel-2); color: var(--ink-2); padding: .75rem .95rem; margin: .35rem 0 .6rem; overflow-x: auto; border-radius: 3px; }
+  pre b { color: var(--accent); font-weight: 600; }
+  pre i { color: var(--ink-3); font-style: normal; }
+  pre u { color: var(--warn); text-decoration: none; font-weight: 600; }
+
+  .table-wrap { overflow-x: auto; margin: .35rem 0 .6rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  th, td { text-align: left; padding: .45rem .8rem .45rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+  td:first-child { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem; color: var(--ink); white-space: nowrap; }
+  td { color: var(--ink-2); }
+  .on { color: var(--accent); font-weight: 600; }
+  .off { color: var(--warn); font-weight: 600; }
+
+  ol.timeline { list-style: none; margin: .4rem 0 0; padding: 0; }
+  ol.timeline li { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr); gap: .8rem; padding: .5rem 0; border-top: 1px solid var(--rule); color: var(--ink-2); }
+  ol.timeline li:first-child { border-top: 0; }
+  ol.timeline time { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .76rem; color: var(--ink-3); padding-top: .15rem; font-variant-numeric: tabular-nums; }
+  ol.timeline strong { color: var(--ink); font-weight: 600; }
+
+  mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  .empty { padding: 1.2rem clamp(1.2rem, 2vw, 1.8rem); color: var(--ink-2); }
+
+  /* flow charts */
+  .flow figure { margin: .6rem 0 0; }
+  .flow .scroll { overflow-x: auto; background: var(--panel-2); border-radius: 4px; padding: .9rem .9rem .6rem; }
+  .flow svg { display: block; width: 100%; min-width: 720px; height: auto; color: var(--ink); }
+  .flow figcaption { margin-top: .6rem; color: var(--ink-2); max-width: 66ch; }
+  .flow .b  { fill: var(--panel); stroke: var(--rule); stroke-width: 1.2; }
+  .flow .ok { fill: var(--ok-fill); stroke: var(--accent); stroke-width: 1.3; }
+  .flow .no { fill: var(--no-fill); stroke: var(--warn); stroke-width: 1.3; }
+  .flow .d  { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1.2; }
+  .flow .t  { font-family: Newsreader, Georgia, serif; font-size: 13px; font-weight: 600; fill: var(--ink); }
+  .flow .s  { font-family: Newsreader, Georgia, serif; font-size: 11.5px; fill: var(--ink-2); }
+  .flow .e  { fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+  .flow .e.ok { stroke: var(--accent); fill: none; }
+  .flow .e.no { stroke: var(--warn); fill: none; }
+  .flow .l  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; fill: var(--ink-3); }
+  .flow .l.ok { fill: var(--accent); }
+  .flow .l.no { fill: var(--warn); }
+  .flow-key { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: .2rem 0 .2rem; font-size: .92rem; color: var(--ink-2); }
+  .flow-key span { display: inline-flex; align-items: center; gap: .4rem; }
+  .flow-key i { display: inline-block; width: 1.4rem; height: .8rem; border-radius: 2px; border: 1.3px solid var(--rule); background: var(--panel); }
+  .flow-key i.ok { background: var(--ok-fill); border-color: var(--accent); }
+  .flow-key i.no { background: var(--no-fill); border-color: var(--warn); }
+  .flow-key i.d { transform: rotate(45deg) scale(.7); width: .9rem; height: .9rem; }
+  .flow .st { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1.2; stroke-dasharray: 0; }
+  .flow .e.w { stroke: var(--ink-2); fill: none; stroke-width: 1.4; }
+  .flow .e.r { stroke: var(--ink-3); fill: none; stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .flow .io { margin: .55rem 0 0; font-size: .93rem; color: var(--ink-2); max-width: 72ch; }
+  .flow .io span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--rule); border-radius: 2px; padding: .05rem .35rem; margin-right: .35rem; }
+  .arrow-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  footer { padding: 1rem clamp(1.3rem, 2.2vw, 2rem); color: var(--ink-3); font-size: .95rem; display: flex; flex-wrap: wrap; gap: .4rem 2rem; justify-content: space-between; }
+</style>
+
+<svg class="arrow-defs" aria-hidden="true" focusable="false"><defs>
+  <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--ink-3)"/></marker>
+  <marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--accent)"/></marker>
+  <marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--warn)"/></marker>
+</defs></svg>
+<div class="sheet">
+
+  <header class="panel masthead">
+    <div>
+      <p class="kicker">Encyclopedia · LogiAstro · 29 September 2026</p>
+      <h1>Anthill</h1>
+      <p class="tagline">Everything the system is and does, one entry at a time. A codebase is an anthill: chambers with one job each, pathways between them, a memory of why, and rules nobody may break.</p>
+    </div>
+    <dl class="figures">
+      <div class="fig"><dt>Chambers</dt><dd>24<small>138 files, screens included</small></dd></div>
+      <div class="fig"><dt>First guess</dt><dd>57%<small>right file · 71% in the top three</small></dd></div>
+      <div class="fig"><dt>Notes checked</dt><dd>454<small>3 out of date</small></dd></div>
+      <div class="fig"><dt>Left undone</dt><dd>16<small>clear once the new tests merge</small></dd></div>
+      <div class="fig"><dt>Work pages</dt><dd>5<small>plus 7 owner decisions</small></dd></div>
+      <div class="fig"><dt>Its own tests</dt><dd>93<small>all passing</small></dd></div>
+    </dl>
+  </header>
+
+  <div class="body">
+
+    <nav class="panel contents" aria-label="Contents">
+      <div class="search">
+        <label for="q">Search the encyclopedia</label>
+        <input id="q" type="search" placeholder="glossary, push, gate…" autocomplete="off">
+        <output id="qcount" for="q"></output>
+      </div>
+      <ol id="toc"></ol>
+    </nav>
+
+    <main class="volumes" id="volumes">
+
+      <!-- ═════════════ START HERE ═════════════ -->
+      <section class="panel volume" id="flows" data-title="How it flows">
+        <header>
+          <span class="vol">START</span><h2>How it flows</h2>
+          <p>Eight situations, each drawn step by step: what happens first, what decides the next step, and where it branches. Under each, what it reads and writes, and where that is kept. The last chart shows every store at once.</p>
+        </header>
+        <div class="flow-key" aria-label="Key">
+          <span><i></i>a step</span>
+          <span><i class="d"></i>a decision</span>
+          <span><i class="ok"></i>where it should end up</span>
+          <span><i class="no"></i>refused, or sent back</span>
+        </div>
+        <article class="entry flow" id="flow-new-agent">
+          <h3>A new agent picks up a task</h3>
+          <p class="gist">Somebody opens a new chat and asks: “make the Home map markers bigger.”</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 180" role="img" aria-label="A new agent runs where to learn what to work on, orient for the whole picture, then start for a card; if the card points at the right place it reads and changes the code, otherwise it tries the next candidate."><rect class="b" x="10" y="16" width="130" height="48" rx="6"/><text class="t" x="75.0" y="36" text-anchor="middle">New chat</text><text class="s" x="75.0" y="52" text-anchor="middle">knows nothing</text><rect class="b" x="175" y="16" width="140" height="48" rx="6"/><text class="t" x="245.0" y="36" text-anchor="middle">anthill where</text><text class="s" x="245.0" y="52" text-anchor="middle">what to work on</text><rect class="b" x="350" y="16" width="150" height="48" rx="6"/><text class="t" x="425.0" y="36" text-anchor="middle">anthill orient</text><text class="s" x="425.0" y="52" text-anchor="middle">the whole hill, one page</text><rect class="b" x="535" y="16" width="165" height="48" rx="6"/><text class="t" x="617.5" y="36" text-anchor="middle">anthill start &quot;task&quot;</text><text class="s" x="617.5" y="52" text-anchor="middle">a card for the best file</text><path class="e" d="M140,40 L173,40" marker-end="url(#flow-arrow)"/><path class="e" d="M315,40 L348,40" marker-end="url(#flow-arrow)"/><path class="e" d="M500,40 L533,40" marker-end="url(#flow-arrow)"/><path class="e" d="M630,64 L630,98" marker-end="url(#flow-arrow)"/><polygon class="d" points="630,100 702,130 630,160 558,130"/><text class="t" x="630" y="134.5" text-anchor="middle">Right place?</text><path class="e ok" d="M702,130 L728,130" marker-end="url(#flow-ok)"/><text class="l ok" x="715" y="122" text-anchor="middle">yes</text><rect class="ok" x="730" y="106" width="140" height="48" rx="6"/><text class="t" x="800.0" y="126" text-anchor="middle">Read it, change it</text><text class="s" x="800.0" y="142" text-anchor="middle">the card&#x27;s tests prove it</text><path class="e no" d="M558,130 L512,130" marker-end="url(#flow-no)"/><text class="l no" x="535" y="122" text-anchor="middle">no</text><rect class="b" x="330" y="106" width="180" height="48" rx="6"/><text class="t" x="420.0" y="126" text-anchor="middle">Look at the next one</text><text class="s" x="420.0" y="142" text-anchor="middle">or follow a pathway</text><path class="e" d="M420,106 L420,88 L585,88 L585,66" marker-end="url(#flow-arrow)"/><text class="l" x="500" y="82" text-anchor="middle">try again</text></svg></div>
+            <figcaption>The agent never searches blind. Its rules send it to where first, for what is being worked on; then the whole picture; then it asks Anthill where the task lives. The card is a starting point: if it isn&#x27;t the deciding line, the agent follows the pathways the card lists.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>Reads</b> the work pages (<code>.anthill/knowledge/work/</code>), the map (<code>.anthill/build/maps/codebase.json</code>), the written rules and glossary (<code>.anthill/knowledge/</code>) and the live code. <b>Writes</b> nothing: every step here only reads.</p>
+        </article>
+        <article class="entry flow" id="flow-change">
+          <h3>A change, from edit to tidy-up</h3>
+          <p class="gist">The agent makes the markers bigger and commits.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 250" role="img" aria-label="A change is committed; the guard refuses a commit on main or with a secret or junk file; a saved commit triggers the after-commit hook, which redraws the map and lists what was left undone; if anything is, the keeper tidies it in the background and anything still open is kept for the next session."><rect class="b" x="10" y="16" width="120" height="48" rx="6"/><text class="t" x="70.0" y="44.5" text-anchor="middle">Change the code</text><rect class="b" x="165" y="16" width="120" height="48" rx="6"/><text class="t" x="225.0" y="44.5" text-anchor="middle">git commit</text><path class="e" d="M130,40 L163,40" marker-end="url(#flow-arrow)"/><path class="e" d="M285,40 L323,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="390,10 455,40 390,70 325,40"/><text class="t" x="390" y="38" text-anchor="middle">Safe to</text><text class="t" x="390" y="53" text-anchor="middle">commit?</text><path class="e no" d="M390,70 L390,98" marker-end="url(#flow-no)"/><text class="l no" x="400" y="88" text-anchor="start">no</text><rect class="no" x="310" y="100" width="160" height="48" rx="6"/><text class="t" x="390.0" y="120" text-anchor="middle">Refused</text><text class="s" x="390.0" y="136" text-anchor="middle">on main · secret · junk</text><path class="e no" d="M310,124 L225,124 L225,66" marker-end="url(#flow-no)"/><text class="l no" x="268" y="118" text-anchor="middle">fix, retry</text><path class="e ok" d="M455,40 L488,40" marker-end="url(#flow-ok)"/><text class="l ok" x="471" y="32" text-anchor="middle">yes</text><rect class="b" x="490" y="16" width="150" height="48" rx="6"/><text class="t" x="565.0" y="36" text-anchor="middle">Commit saved</text><text class="s" x="565.0" y="52" text-anchor="middle">on this laptop only</text><path class="e" d="M640,40 L673,40" marker-end="url(#flow-arrow)"/><rect class="b" x="675" y="16" width="195" height="48" rx="6"/><text class="t" x="772.5" y="36" text-anchor="middle">After-commit hook</text><text class="s" x="772.5" y="52" text-anchor="middle">redraws the map · runs upkeep</text><path class="e" d="M772,64 L772,98" marker-end="url(#flow-arrow)"/><polygon class="d" points="772,100 837,130 772,160 707,130"/><text class="t" x="772" y="128" text-anchor="middle">Anything</text><text class="t" x="772" y="143" text-anchor="middle">left undone?</text><path class="e ok" d="M772,160 L772,188" marker-end="url(#flow-ok)"/><text class="l ok" x="782" y="178" text-anchor="start">no</text><rect class="ok" x="707" y="190" width="130" height="48" rx="6"/><text class="t" x="772.0" y="218.5" text-anchor="middle">Nothing to tidy</text><path class="e" d="M707,130 L672,130" marker-end="url(#flow-arrow)"/><text class="l" x="690" y="122" text-anchor="middle">yes</text><rect class="b" x="470" y="106" width="200" height="48" rx="6"/><text class="t" x="570.0" y="126" text-anchor="middle">Keeper starts, in background</text><text class="s" x="570.0" y="142" text-anchor="middle">the agent carries on with you</text><path class="e" d="M570,154 L570,188" marker-end="url(#flow-arrow)"/><rect class="b" x="470" y="190" width="200" height="48" rx="6"/><text class="t" x="570.0" y="210" text-anchor="middle">Glossary and notes fixed</text><text class="s" x="570.0" y="226" text-anchor="middle">test gaps suggested, unsigned</text><path class="e" d="M470,214 L432,214" marker-end="url(#flow-arrow)"/><rect class="b" x="230" y="190" width="200" height="48" rx="6"/><text class="t" x="330.0" y="210" text-anchor="middle">Still open? It&#x27;s kept</text><text class="s" x="330.0" y="226" text-anchor="middle">the next session sees it first</text></svg></div>
+            <figcaption>Two checks happen without anyone asking. Before the commit, a guard refuses anything unsafe. After it, the map redraws itself and a helper does the paperwork in the background, so you get your change straight away.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>The guard reads</b> the settings (<code>.anthill/anthill.config.json</code>). <b>The hook writes</b> the map (<code>.anthill/build/maps/codebase.json</code>) and the open list (<code>.anthill/build/upkeep.json</code>). <b>The keeper writes</b> the glossary, notes and work pages (<code>.anthill/knowledge/</code>). The code itself lands in git, on this laptop.</p>
+        </article>
+        <article class="entry flow" id="flow-push">
+          <h3>Pushing to GitHub</h3>
+          <p class="gist">The agent has three commits ready on a branch.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 160" role="img" aria-label="When work is ready, the agent pushes only if the owner asked for that push; the push goes through with the owner&#x27;s prefix, and is refused if it would rewrite history others already have."><rect class="b" x="10" y="16" width="140" height="48" rx="6"/><text class="t" x="80.0" y="36" text-anchor="middle">Work is ready</text><text class="s" x="80.0" y="52" text-anchor="middle">commits on a branch</text><path class="e" d="M150,40 L178,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="250,10 320,40 250,70 180,40"/><text class="t" x="250" y="38" text-anchor="middle">Did the owner</text><text class="t" x="250" y="53" text-anchor="middle">ask for this push?</text><path class="e no" d="M250,70 L250,98" marker-end="url(#flow-no)"/><text class="l no" x="260" y="88" text-anchor="start">no</text><rect class="no" x="170" y="100" width="160" height="48" rx="6"/><text class="t" x="250.0" y="120" text-anchor="middle">Says what&#x27;s ready</text><text class="s" x="250.0" y="136" text-anchor="middle">and waits for you</text><path class="e ok" d="M320,40 L353,40" marker-end="url(#flow-ok)"/><text class="l ok" x="336" y="32" text-anchor="middle">yes</text><rect class="b" x="355" y="16" width="170" height="48" rx="6"/><text class="t" x="440.0" y="36" text-anchor="middle">Push</text><text class="s" x="440.0" y="52" text-anchor="middle">ANTHILL_OWNER=1 git push</text><path class="e" d="M525,40 L553,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="620,10 685,40 620,70 555,40"/><text class="t" x="620" y="38" text-anchor="middle">Rewrites</text><text class="t" x="620" y="53" text-anchor="middle">history?</text><path class="e no" d="M620,70 L620,98" marker-end="url(#flow-no)"/><text class="l no" x="630" y="88" text-anchor="start">yes</text><rect class="no" x="540" y="100" width="160" height="48" rx="6"/><text class="t" x="620.0" y="120" text-anchor="middle">Refused</text><text class="s" x="620.0" y="136" text-anchor="middle">force push blocked</text><path class="e ok" d="M685,40 L718,40" marker-end="url(#flow-ok)"/><text class="l ok" x="701" y="32" text-anchor="middle">no</text><rect class="ok" x="720" y="16" width="150" height="48" rx="6"/><text class="t" x="795.0" y="36" text-anchor="middle">On GitHub</text><text class="s" x="795.0" y="52" text-anchor="middle">backed up and shared</text></svg></div>
+            <figcaption>Pushing is always your act. An agent that wasn&#x27;t asked says what&#x27;s ready and stops. A push without your prefix is refused by the hook, and so is one that would overwrite what others already have.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>The guard reads</b> the settings (<code>.anthill/anthill.config.json</code>) and the commits being sent. <b>Writes</b> nothing in Anthill; the commits go to GitHub.</p>
+        </article>
+        <article class="entry flow" id="flow-reads">
+          <h3>A task that only reads</h3>
+          <p class="gist">An agent spends an hour measuring the news and learns that you call “gemini-sweep” the web sweep.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 160" role="img" aria-label="A task that only researches commits nothing, so no hook fires; before finishing, the agent asks whether anything is on the list or whether it learned something; if so the keeper writes it down unconfirmed, and it becomes trusted when the owner signs it."><rect class="b" x="10" y="16" width="150" height="48" rx="6"/><text class="t" x="85.0" y="36" text-anchor="middle">Research or measure</text><text class="s" x="85.0" y="52" text-anchor="middle">nothing to commit</text><path class="e" d="M160,40 L193,40" marker-end="url(#flow-arrow)"/><rect class="b" x="195" y="16" width="150" height="48" rx="6"/><text class="t" x="270.0" y="36" text-anchor="middle">No commit, no hook</text><text class="s" x="270.0" y="52" text-anchor="middle">nothing reminds it</text><path class="e" d="M345,40 L378,40" marker-end="url(#flow-arrow)"/><rect class="b" x="380" y="16" width="175" height="48" rx="6"/><text class="t" x="467.5" y="36" text-anchor="middle">Before finishing</text><text class="s" x="467.5" y="52" text-anchor="middle">list open? learned something?</text><path class="e" d="M555,40 L588,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="660,10 730,40 660,70 590,40"/><text class="t" x="660" y="38" text-anchor="middle">Anything</text><text class="t" x="660" y="53" text-anchor="middle">worth keeping?</text><path class="e" d="M730,40 L758,40" marker-end="url(#flow-arrow)"/><text class="l" x="744" y="32" text-anchor="middle">no</text><rect class="b" x="760" y="16" width="110" height="48" rx="6"/><text class="t" x="815.0" y="44.5" text-anchor="middle">Done</text><path class="e" d="M660,70 L660,98" marker-end="url(#flow-arrow)"/><text class="l" x="670" y="88" text-anchor="start">yes</text><rect class="b" x="560" y="100" width="200" height="48" rx="6"/><text class="t" x="660.0" y="120" text-anchor="middle">Keeper writes it down</text><text class="s" x="660.0" y="136" text-anchor="middle">glossary or notes, unconfirmed</text><path class="e" d="M560,124 L502,124" marker-end="url(#flow-arrow)"/><rect class="ok" x="300" y="100" width="200" height="48" rx="6"/><text class="t" x="400.0" y="120" text-anchor="middle">You read it and sign it</text><text class="s" x="400.0" y="136" text-anchor="middle">now every agent trusts it</text></svg></div>
+            <figcaption>No code changed, so no commit and no hook. The rules ask the agent two questions before it stops, so what it learned is written down instead of vanishing with the chat.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>The keeper writes</b> the glossary (<code>.anthill/knowledge/GLOSSARY.md</code>) or a notes page (<code>.anthill/knowledge/modules/</code>), marked unconfirmed. <b>You sign</b> it by filling <code>intent_attested_by</code> at the top of the page.</p>
+        </article>
+        <article class="entry flow" id="flow-board">
+          <h3>A piece of work through the board</h3>
+          <p class="gist">A planned piece of work: “draw the chain as four stops”.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 240" role="img" aria-label="A unit is claimed and built inside its own files; the gate checks files, tests, map and review; a pass closes it with work done, a failure is fixed and re-gated, and a unit that cannot be finished is escalated to the owner."><rect class="b" x="10" y="16" width="130" height="48" rx="6"/><text class="t" x="75.0" y="36" text-anchor="middle">work next</text><text class="s" x="75.0" y="52" text-anchor="middle">claims one unit</text><path class="e" d="M140,40 L173,40" marker-end="url(#flow-arrow)"/><rect class="b" x="175" y="16" width="150" height="48" rx="6"/><text class="t" x="250.0" y="36" text-anchor="middle">Build inside its files</text><text class="s" x="250.0" y="52" text-anchor="middle">and nowhere else</text><path class="e" d="M325,40 L343,40" marker-end="url(#flow-arrow)"/><rect class="b" x="345" y="16" width="140" height="48" rx="6"/><text class="t" x="415.0" y="36" text-anchor="middle">work gate</text><text class="s" x="415.0" y="52" text-anchor="middle">files · tests · map · review</text><path class="e" d="M485,40 L498,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="570,10 640,40 570,70 500,40"/><text class="t" x="570" y="38" text-anchor="middle">All four</text><text class="t" x="570" y="53" text-anchor="middle">pass?</text><path class="e ok" d="M640,40 L673,40" marker-end="url(#flow-ok)"/><text class="l ok" x="656" y="32" text-anchor="middle">yes</text><rect class="ok" x="675" y="16" width="195" height="48" rx="6"/><text class="t" x="772.5" y="36" text-anchor="middle">work done</text><text class="s" x="772.5" y="52" text-anchor="middle">only a passing gate closes it</text><path class="e no" d="M570,70 L570,98" marker-end="url(#flow-no)"/><text class="l no" x="580" y="88" text-anchor="start">no</text><rect class="no" x="470" y="100" width="200" height="48" rx="6"/><text class="t" x="570.0" y="120" text-anchor="middle">Fix and re-gate</text><text class="s" x="570.0" y="136" text-anchor="middle">the exit code says what</text><path class="e no" d="M470,124 L250,124 L250,66" marker-end="url(#flow-no)"/><text class="l no" x="360" y="118" text-anchor="middle">fix</text><path class="e" d="M570,148 L570,178" marker-end="url(#flow-arrow)"/><text class="l" x="580" y="168" text-anchor="start">can&#x27;t finish</text><rect class="b" x="470" y="180" width="200" height="48" rx="6"/><text class="t" x="570.0" y="200" text-anchor="middle">Escalate to the owner</text><text class="s" x="570.0" y="216" text-anchor="middle">reopened once the cause is fixed</text></svg></div>
+            <figcaption>The agent never decides it is finished. The gate does: the unit stayed inside its files, its tests pass, the map is true, and it was reviewed. Anything else goes back for a fix, or to you.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>The board lives in</b> <code>.anthill/build/work/&lt;project&gt;/</code>: the plan (<code>contract.json</code>), each unit's state (<code>state/</code>) and its brief (<code>briefs/</code>). <b>The gate reads</b> the map and the notes; a review is recorded in <code>.anthill/audits/</code>; an escalation is written to <code>escalations/</code>.</p>
+        </article>
+        <article class="entry flow" id="flow-stale-note">
+          <h3>When code changes under a written note</h3>
+          <p class="gist">Someone renames the function a rule is about: “the 650 km cut-off must never be lowered”.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 175" role="img" aria-label="When code a written rule cites changes shape, its fingerprint differs and upkeep lists the rule; the keeper reads the code and either fixes the citation if the rule is still true or rewrites the rule if not, and the note stays unconfirmed until the owner reads it."><rect class="b" x="10" y="16" width="150" height="48" rx="6"/><text class="t" x="85.0" y="36" text-anchor="middle">A function changes</text><text class="s" x="85.0" y="52" text-anchor="middle">renamed, new inputs</text><path class="e" d="M160,40 L193,40" marker-end="url(#flow-arrow)"/><rect class="b" x="195" y="16" width="140" height="48" rx="6"/><text class="t" x="265.0" y="44.5" text-anchor="middle">Commit</text><path class="e" d="M335,40 L368,40" marker-end="url(#flow-arrow)"/><rect class="b" x="370" y="16" width="170" height="48" rx="6"/><text class="t" x="455.0" y="36" text-anchor="middle">Fingerprint differs</text><text class="s" x="455.0" y="52" text-anchor="middle">the note may be wrong now</text><path class="e" d="M540,40 L573,40" marker-end="url(#flow-arrow)"/><rect class="b" x="575" y="16" width="150" height="48" rx="6"/><text class="t" x="650.0" y="36" text-anchor="middle">Upkeep lists it</text><text class="s" x="650.0" y="52" text-anchor="middle">keeper is sent</text><path class="e" d="M650,64 L650,98" marker-end="url(#flow-arrow)"/><polygon class="d" points="650,100 725,130 650,160 575,130"/><text class="t" x="650" y="128" text-anchor="middle">Rule still</text><text class="t" x="650" y="143" text-anchor="middle">true?</text><path class="e ok" d="M725,130 L748,130" marker-end="url(#flow-ok)"/><text class="l ok" x="736" y="122" text-anchor="middle">yes</text><rect class="ok" x="750" y="106" width="120" height="48" rx="6"/><text class="t" x="810.0" y="134.5" text-anchor="middle">Fix the citation</text><path class="e" d="M575,130 L532,130" marker-end="url(#flow-arrow)"/><text class="l" x="553" y="122" text-anchor="middle">no</text><rect class="b" x="330" y="106" width="200" height="48" rx="6"/><text class="t" x="430.0" y="126" text-anchor="middle">Rewrite the rule</text><text class="s" x="430.0" y="142" text-anchor="middle">and note what changed</text></svg></div>
+            <figcaption>Anthill notices because the shape of the code changed, not because anyone remembered. The keeper checks the rule against the new code and fixes whichever is out of date. It stays unconfirmed until you&#x27;ve read it.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>Reads</b> the fingerprints recorded in the map and the citations on the notes pages (<code>.anthill/knowledge/modules/</code>). <b>The keeper writes</b> the corrected page.</p>
+        </article>
+        <article class="entry flow" id="flow-carry-on">
+          <h3>“Carry on”</h3>
+          <p class="gist">You open a new chat and type two words.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 175" role="img" aria-label="Told only carry on, the agent runs where, which also flags pages that fell behind; it leaves alone files another session is editing; if the next step waits on the owner it asks with a recommendation and does it once answered, otherwise it does the next step."><rect class="b" x="10" y="16" width="120" height="48" rx="6"/><text class="t" x="70.0" y="36" text-anchor="middle">“carry on”</text><text class="s" x="70.0" y="52" text-anchor="middle">nothing else said</text><path class="e" d="M130,40 L163,40" marker-end="url(#flow-arrow)"/><rect class="b" x="165" y="16" width="160" height="48" rx="6"/><text class="t" x="245.0" y="36" text-anchor="middle">anthill where</text><text class="s" x="245.0" y="52" text-anchor="middle">all work · stale pages flagged</text><path class="e" d="M325,40 L353,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="425,10 495,40 425,70 355,40"/><text class="t" x="425" y="38" text-anchor="middle">Being edited</text><text class="t" x="425" y="53" text-anchor="middle">right now?</text><path class="e no" d="M425,70 L425,98" marker-end="url(#flow-no)"/><text class="l no" x="435" y="88" text-anchor="start">yes</text><rect class="no" x="335" y="100" width="180" height="48" rx="6"/><text class="t" x="425.0" y="120" text-anchor="middle">Leave those files alone</text><text class="s" x="425.0" y="136" text-anchor="middle">another chat is on them</text><path class="e" d="M495,40 L533,40" marker-end="url(#flow-arrow)"/><text class="l" x="514" y="32" text-anchor="middle">no</text><polygon class="d" points="610,10 685,40 610,70 535,40"/><text class="t" x="610" y="38" text-anchor="middle">Next step needs</text><text class="t" x="610" y="53" text-anchor="middle">the owner?</text><path class="e" d="M610,70 L610,98" marker-end="url(#flow-arrow)"/><text class="l" x="620" y="88" text-anchor="start">yes</text><rect class="b" x="515" y="100" width="190" height="48" rx="6"/><text class="t" x="610.0" y="120" text-anchor="middle">Ask, with a recommendation</text><text class="s" x="610.0" y="136" text-anchor="middle">and wait for the answer</text><path class="e ok" d="M685,40 L718,40" marker-end="url(#flow-ok)"/><text class="l ok" x="701" y="32" text-anchor="middle">no</text><rect class="ok" x="720" y="16" width="150" height="48" rx="6"/><text class="t" x="795.0" y="36" text-anchor="middle">Do the next step</text><text class="s" x="795.0" y="52" text-anchor="middle">the page says what, where</text><path class="e ok" d="M705,124 L795,124 L795,66" marker-end="url(#flow-ok)"/><text class="l ok" x="750" y="118" text-anchor="middle">answered</text></svg></div>
+            <figcaption>Every chat reads the same page, so none of them starts from its own guess. The page says what is next, what waits on you, and what another chat is editing this minute. Tested with a fresh agent told nothing else: it chose the right work and stopped at the decision that was yours.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>Reads</b> the work pages, your decisions and the traps (<code>.anthill/knowledge/work/</code>, <code>decisions/</code>, <code>TRAPS.md</code>), the board, and git's record of commits and uncommitted changes. <b>Writes</b> nothing.</p>
+        </article>
+        <article class="entry flow" id="flow-install">
+          <h3>Installing Anthill in a new project</h3>
+          <p class="gist">A new project with some history, and nobody has written anything down.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 175" role="img" aria-label="anthill install switches on the guards, the keeper and the rules; if there is code it surveys it at once: the map, a starting score from past commits, the largest code no page explains, and recent work with no page; the first chat then answers the charter questions and hands the lists to the keeper."><rect class="b" x="10" y="16" width="130" height="48" rx="6"/><text class="t" x="75.0" y="36" text-anchor="middle">anthill install</text><text class="s" x="75.0" y="52" text-anchor="middle">one command</text><path class="e" d="M140,40 L173,40" marker-end="url(#flow-arrow)"/><rect class="b" x="175" y="16" width="170" height="48" rx="6"/><text class="t" x="260.0" y="36" text-anchor="middle">Guards, keeper, rules</text><text class="s" x="260.0" y="52" text-anchor="middle">switched on</text><path class="e" d="M345,40 L378,40" marker-end="url(#flow-arrow)"/><polygon class="d" points="450,10 520,40 450,70 380,40"/><text class="t" x="450" y="38" text-anchor="middle">Any code</text><text class="t" x="450" y="53" text-anchor="middle">yet?</text><path class="e" d="M450,70 L450,98" marker-end="url(#flow-arrow)"/><text class="l" x="460" y="88" text-anchor="start">no</text><rect class="b" x="360" y="100" width="180" height="48" rx="6"/><text class="t" x="450.0" y="120" text-anchor="middle">Plan the areas first</text><text class="s" x="450.0" y="136" text-anchor="middle">nothing to survey yet</text><path class="e ok" d="M520,40 L553,40" marker-end="url(#flow-ok)"/><text class="l ok" x="536" y="32" text-anchor="middle">yes</text><rect class="b" x="555" y="16" width="150" height="48" rx="6"/><text class="t" x="630.0" y="36" text-anchor="middle">Survey, at once</text><text class="s" x="630.0" y="52" text-anchor="middle">map · score · backlog · work</text><path class="e" d="M705,40 L738,40" marker-end="url(#flow-arrow)"/><rect class="b" x="740" y="16" width="130" height="48" rx="6"/><text class="t" x="805.0" y="36" text-anchor="middle">First chat</text><text class="s" x="805.0" y="52" text-anchor="middle">charter questions</text><path class="e" d="M805,64 L805,98" marker-end="url(#flow-arrow)"/><rect class="ok" x="690" y="100" width="180" height="48" rx="6"/><text class="t" x="780.0" y="120" text-anchor="middle">Keeper writes the pages</text><text class="s" x="780.0" y="136" text-anchor="middle">from the survey&#x27;s lists</text></svg></div>
+            <figcaption>Anthill knows the project before the install finishes: every part of the code and how it connects, how often it can find the right file for a past task, what most needs a written note, and which branches have work on them. The notes themselves need an agent, so the first chat hands those lists to the keeper.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>Writes</b> the rules every agent reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>), the keeper (<code>.claude/agents/anthill-keeper.md</code>), which files agents may not edit (<code>.claude/settings.json</code>), the settings (<code>.anthill/anthill.config.json</code>), the charter (<code>CONSTITUTION.md</code>) and the three git hooks (<code>.git/hooks/</code>). <b>The survey writes</b> the map.</p>
+        </article>
+        <article class="entry flow" id="flow-kept">
+          <h3>Where everything is kept</h3>
+          <p class="gist">Every box on the charts above reads or writes one of these.</p>
+          <figure>
+            <div class="scroll"><svg viewBox="0 0 880 392" role="img" aria-label="Who reads and writes what: install writes the rules files, the settings and the map; a commit&#x27;s guard reads the settings and its hook writes the map and the open list; the keeper reads the open list and the code and writes the knowledge; where reads the knowledge, the board and git; orient and start read the map, the knowledge and the live code."><rect class="b" x="10" y="16" width="150" height="48" rx="6"/><text class="t" x="85.0" y="44.5" text-anchor="middle">You run install</text><rect class="b" x="10" y="100" width="150" height="48" rx="6"/><text class="t" x="85.0" y="128.5" text-anchor="middle">An agent commits</text><rect class="b" x="10" y="184" width="150" height="48" rx="6"/><text class="t" x="85.0" y="212.5" text-anchor="middle">After a commit</text><rect class="b" x="10" y="250" width="150" height="48" rx="6"/><text class="t" x="85.0" y="278.5" text-anchor="middle">A new chat</text><rect class="b" x="10" y="316" width="150" height="48" rx="6"/><text class="t" x="85.0" y="344.5" text-anchor="middle">Any task</text><rect class="b" x="330" y="16" width="190" height="48" rx="6"/><text class="t" x="425.0" y="36" text-anchor="middle">install</text><text class="s" x="425.0" y="52" text-anchor="middle">rules · settings · survey</text><rect class="b" x="330" y="100" width="190" height="48" rx="6"/><text class="t" x="425.0" y="120" text-anchor="middle">guard, then hook</text><text class="s" x="425.0" y="136" text-anchor="middle">check · map · upkeep</text><rect class="b" x="330" y="184" width="190" height="48" rx="6"/><text class="t" x="425.0" y="204" text-anchor="middle">the keeper</text><text class="s" x="425.0" y="220" text-anchor="middle">in the background</text><rect class="b" x="330" y="250" width="190" height="48" rx="6"/><text class="t" x="425.0" y="270" text-anchor="middle">anthill where</text><text class="s" x="425.0" y="286" text-anchor="middle">what to work on</text><rect class="b" x="330" y="316" width="190" height="48" rx="6"/><text class="t" x="425.0" y="336" text-anchor="middle">orient · start</text><text class="s" x="425.0" y="352" text-anchor="middle">the picture · the card</text><path class="e" d="M160,40 L328,40" marker-end="url(#flow-arrow)"/><path class="e" d="M160,124 L328,124" marker-end="url(#flow-arrow)"/><path class="e" d="M160,208 L328,208" marker-end="url(#flow-arrow)"/><path class="e" d="M160,274 L328,274" marker-end="url(#flow-arrow)"/><path class="e" d="M160,340 L328,340" marker-end="url(#flow-arrow)"/><rect class="st" x="660" y="12" width="210" height="44" rx="6"/><text class="t" x="765.0" y="32" text-anchor="middle">Rules files</text><text class="s" x="765.0" y="48" text-anchor="middle">CLAUDE.md · AGENTS.md · keeper</text><rect class="st" x="660" y="64" width="210" height="44" rx="6"/><text class="t" x="765.0" y="84" text-anchor="middle">Settings</text><text class="s" x="765.0" y="100" text-anchor="middle">anthill.config.json</text><rect class="st" x="660" y="116" width="210" height="44" rx="6"/><text class="t" x="765.0" y="136" text-anchor="middle">The map</text><text class="s" x="765.0" y="152" text-anchor="middle">build/maps/codebase.json</text><rect class="st" x="660" y="168" width="210" height="44" rx="6"/><text class="t" x="765.0" y="188" text-anchor="middle">The open list</text><text class="s" x="765.0" y="204" text-anchor="middle">build/upkeep.json</text><rect class="st" x="660" y="220" width="210" height="44" rx="6"/><text class="t" x="765.0" y="240" text-anchor="middle">The job board</text><text class="s" x="765.0" y="256" text-anchor="middle">build/work/&lt;project&gt;/</text><rect class="st" x="660" y="272" width="210" height="44" rx="6"/><text class="t" x="765.0" y="292" text-anchor="middle">Knowledge</text><text class="s" x="765.0" y="308" text-anchor="middle">work · decisions · glossary · notes</text><rect class="st" x="660" y="324" width="210" height="44" rx="6"/><text class="t" x="765.0" y="344" text-anchor="middle">Code and git history</text><text class="s" x="765.0" y="360" text-anchor="middle">the project itself</text><path class="e w" d="M520,40 L658,27" marker-end="url(#flow-arrow)"/><path class="e w" d="M520,40 L658,79" marker-end="url(#flow-arrow)"/><path class="e w" d="M520,40 L658,124" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,124 L658,93" marker-end="url(#flow-arrow)"/><path class="e w" d="M520,124 L658,138" marker-end="url(#flow-arrow)"/><path class="e w" d="M520,124 L658,183" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,124 L658,332" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,208 L658,197" marker-end="url(#flow-arrow)"/><path class="e w" d="M520,208 L658,280" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,208 L658,339" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,274 L658,242" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,274 L658,294" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,274 L658,346" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,340 L658,152" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,340 L658,308" marker-end="url(#flow-arrow)"/><path class="e r" d="M520,340 L658,353" marker-end="url(#flow-arrow)"/></svg></div>
+            <figcaption>Solid arrows write, dashed arrows read. Only three things ever write to Anthill&#x27;s records: the install, the hooks that run on a commit, and the keeper. Every command an agent runs to find its way only reads, which is why a cold agent can run them without asking.</figcaption>
+          </figure>
+          <p class="io"><span>Kept in</span> <b>All of it</b> lives in the project folder: the rules files at the top, <code>.claude/</code> for the keeper and the edit rules, and <code>.anthill/</code> for everything else. <code>.anthill/build/</code> is redrawn by Anthill and never edited by hand; <code>.anthill/knowledge/</code> is written by the keeper and signed by you.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ I ═════════════ -->
+      <section class="panel volume" id="idea" data-title="The idea">
+        <header>
+          <span class="vol">VOL I</span><h2>The idea</h2>
+          <p>What Anthill is for, in the picture it is named after.</p>
+        </header>
+
+        <article class="entry" id="anthill">
+          <h3>Anthill</h3>
+          <p class="gist">A system that lets an AI agent work on a codebase it has never seen, without guessing, and without being trusted to say its own work is done.</p>
+          <p>It lives outside LogiAstro, in <code>~/anthill</code>, and is installed into the repository. It does three jobs: it keeps a <a href="#map">map</a> of the code, a <a href="#memory">memory</a> of why the code is the way it is, and a set of <a href="#rules">rules</a> and a <a href="#board">board</a> for doing work.</p>
+        </article>
+
+        <article class="entry" id="picture">
+          <h3>The anthill picture</h3>
+          <p class="gist">The mental image the whole system is built around.</p>
+          <ul>
+            <li><strong>Chambers</strong> are areas of the code with one job each. See <a href="#chamber">Chamber</a>.</li>
+            <li><strong>Pathways</strong> connect the chambers: what each one uses, and who uses it. See <a href="#pathway">Pathway</a>.</li>
+            <li><strong>Tools</strong> are the <a href="#skills">skills</a> an agent loads to know how to behave.</li>
+            <li><strong>The foreman</strong> is the orchestrator: the <a href="#board">board</a>, the <a href="#gate">gate</a> and the <a href="#rules">rules</a> that decide what gets built where and when it counts as finished.</li>
+          </ul>
+        </article>
+
+        <article class="entry" id="three-jobs">
+          <h3>The three jobs</h3>
+          <p class="gist">What the owner set as the expectation for Anthill on 26 September.</p>
+          <ul>
+            <li><strong>A knowledge graph</strong>, so an agent starting cold knows what it is walking into.</li>
+            <li><strong>A guiding map</strong>, so it can see which code lives where and what connects to it.</li>
+            <li><strong>An orchestrator</strong>, so it knows how to build in the anthill, take on new work, and live by the rules and skills.</li>
+          </ul>
+        </article>
+
+        <article class="entry" id="cold-start">
+          <h3>Starting cold</h3>
+          <p class="gist">An agent arriving with no memory of the project. Anthill is judged by how well it helps this agent.</p>
+          <p>Every agent is cold at the start of a new chat. Tested on 26 September with fresh agents told nothing about Anthill: after the fixes, they found it by themselves through <code>CLAUDE.md</code> and <code>anthill --help</code>, used it, and got every task right. On 28 September a fresh agent told only "carry on" chose the right work through <a href="#where">where</a>.</p>
+          <p class="see">See <a href="#orient">orient</a>, <a href="#start">start</a>, <a href="#find-your-way">find-your-way</a>.</p>
+        </article>
+
+        <article class="entry" id="authority">
+          <h3>Authority chain</h3>
+          <p class="gist">Who outranks whom. Anything lower may never rewrite anything higher.</p>
+<pre>Owner's instruction, in this conversation
+  → CONSTITUTION.md        <i>the charter, human-owned</i>
+    → .anthill/roles/      <i>what each role may do</i>
+      → .anthill/contracts/  <i>the units in flight</i>
+        → the code</pre>
+          <p>The owner's word is the highest authority. "The owner said so" means the owner said it, about this action, in this conversation. An approval given once does not carry forward to the next action.</p>
+        </article>
+
+        <article class="entry" id="two-planes">
+          <h3>Two planes of authority</h3>
+          <p class="gist">On the work, the owner decides. On the map and the memory, the system decides.</p>
+          <p>The system proposes, plans and builds what the owner approves; it never chooses what gets built. But it maintains its own map and notes without asking. Notes an agent writes record what the agent did, not what the owner wanted. Only the owner's <a href="#attested">signature</a> turns them into agreed intent.</p>
+        </article>
+
+        <article class="entry" id="constitution">
+          <h3>Constitution</h3>
+          <p class="gist">The project's charter: name, what is being built, the stack, the architecture, key decisions.</p>
+          <p>File: <code>CONSTITUTION.md</code>. Only the owner may edit it; agents are denied write access. <code>anthill onboard</code> is the one sanctioned way to fill a blank section, and it never overwrites an answer already given.</p>
+        </article>
+
+        <article class="entry" id="solo-mode">
+          <h3>Solo mode</h3>
+          <p class="gist">One agent working in place, alongside the owner. The mode LogiAstro runs in.</p>
+          <p>Chosen by the owner on 22 September, after the field report found the tool had been built for a pool of background agents that nobody was running. In solo mode nothing escalates by counting failures, and <code>work done</code> commits in place instead of merging a separate copy. The other mode, <code>pool</code>, is still there for many agents at once.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ II ═════════════ -->
+      <section class="panel volume" id="map-vol" data-title="The map">
+        <header>
+          <span class="vol">VOL II</span><h2>The map</h2>
+          <p>Where every piece of code lives, what it does, and what it connects to.</p>
+        </header>
+
+        <article class="entry" id="map">
+          <h3>Map <span class="tag">auto</span></h3>
+          <p class="gist">A record of every source file in the codebase: its job, its pathways, its tests, and the history of changes to it.</p>
+          <p>Built by reading the code, never by asking a model, so it is the same every time it is built. Redrawn automatically after every commit. It covers the Python backend and, since 26 September, the frontend screens.</p>
+<pre><b>$ anthill map build</b>
+  wrote .anthill/build/maps/codebase.json -- 138 nodes</pre>
+          <p class="see">Lives at <code>.anthill/build/maps/codebase.json</code>. You never need to open it; ask it with <a href="#start">start</a>.</p>
+        </article>
+
+        <article class="entry" id="chamber">
+          <h3>Chamber</h3>
+          <p class="gist">One area of the code with one job. LogiAstro has 24.</p>
+          <p>A Python package like <code>logiastro.sensing</code> ("turning the world into signals with a location and a time"), or a group of screens like <code>web.pages</code>. A chamber's job comes from its own opening description. The map calls a single file a <a href="#node">node</a>.</p>
+        </article>
+
+        <article class="entry" id="node">
+          <h3>Node</h3>
+          <p class="gist">One file on the map, with everything known about it.</p>
+          <ul>
+            <li><strong>responsibility</strong>: its one-line job, from its own description</li>
+            <li><strong>routes</strong>: what it uses; <strong>consumers</strong>: who uses it</li>
+            <li><strong>tests</strong>: the test files that import it</li>
+            <li><strong>history</strong>: the titles of the last 40 commits that touched it</li>
+            <li><strong>symbols</strong>: every function and setting in it, with its description</li>
+          </ul>
+        </article>
+
+        <article class="entry" id="pathway">
+          <h3>Pathway</h3>
+          <p class="gist">A connection between two chambers: one uses the other.</p>
+          <p>Read from the code's imports. Change a chamber and every chamber on the far end of its pathways may break. <code>relevance</code> uses <code>sensing</code>, <code>mapping</code> and <code>accounts</code>; <code>mapping</code> is used by five others.</p>
+        </article>
+
+        <article class="entry" id="history-signal">
+          <h3>History</h3>
+          <p class="gist">The titles of past commits, kept on the file they changed.</p>
+          <p>The only text in the map written in the words people use when they ask for work: "stop shouting", "keep a beat's verdicts". Adding it more than doubled how often Anthill found the right file first.</p>
+        </article>
+
+        <article class="entry" id="frontend-map">
+          <h3>Frontend on the map</h3>
+          <p class="gist">The screens and their parts, read without a code compiler.</p>
+          <p>Until 26 September the map read only Python, so every screen was invisible: 36 of 119 past tasks had nowhere to be sent. Anthill now reads each frontend file's opening comment, what it exports, and what it imports.</p>
+        </article>
+
+        <article class="entry" id="fingerprint">
+          <h3>Fingerprint</h3>
+          <p class="gist">A way of telling whether a piece of code changed shape, while ignoring changes inside it.</p>
+          <p>Editing a formula inside a function leaves the fingerprint alone. Renaming it, changing its inputs, or changing what it calls breaks the fingerprint. That is how Anthill knows a <a href="#knowledge-page">note</a> about the function may no longer be true. Since 26 September it also reads settings, not only functions, which cleared seven false alarms.</p>
+        </article>
+
+        <article class="entry" id="drift">
+          <h3>Drift</h3>
+          <p class="gist">How a cited piece of code changed since a note was written about it.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Kind</th><th>What happened</th></tr></thead>
+            <tbody>
+              <tr><td>missing</td><td>The code is gone.</td></tr>
+              <tr><td>moved</td><td>Same name, different file.</td></tr>
+              <tr><td>reshaped</td><td>Its inputs or outputs changed. The contract moved.</td></tr>
+              <tr><td>rewired</td><td>It calls different things now.</td></tr>
+              <tr><td>recontextualized</td><td>Different code calls it now.</td></tr>
+              <tr><td>verified</td><td>Nothing structural changed.</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+
+        <article class="entry" id="blueprint">
+          <h3>Blueprint check <span class="tag reads">reads only</span></h3>
+          <p class="gist">Checks every recorded statement about the code against the code as it is now.</p>
+<pre><b>$ anthill blueprint</b>
+  stale  [451/454 claims checked]
+  STALE reshaped  logiastro/mapping/corridor.py::CorridorDeriver</pre>
+          <p>Part of every <a href="#gate">gate</a>. Three of LogiAstro's 454 claims are out of date today.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ III ═════════════ -->
+      <section class="panel volume" id="finding" data-title="Finding your way">
+        <header>
+          <span class="vol">VOL III</span><h2>Finding your way</h2>
+          <p>The commands an agent uses to go from a task to the right line of code.</p>
+        </header>
+
+        <article class="entry" id="orient">
+          <h3>orient <span class="tag reads">reads only</span></h3>
+          <p class="gist">The whole codebase on one page. The first thing a cold agent runs.</p>
+          <p>What the product is, all 24 chambers with their jobs, uses and tests, what changed recently, where the notes are, the owner's words, how to run the tests, and the rules.</p>
+<pre><b>$ anthill orient</b>
+  # You are in LogiAstro
+  **logiastro.sensing** — turning the world into signals…  (33 files)
+    - uses: logiastro, logiastro.mapping, logiastro.accounts
+    - tests: tests/sensing, tests/relevance …</pre>
+        </article>
+
+        <article class="entry" id="start">
+          <h3>start <span class="tag reads">reads only</span></h3>
+          <p class="gist">Give it a task in your own words; it names the file, the line, and what a change there reaches.</p>
+<pre><b>$ anthill start "change how a risk's tier is decided"</b>
+  file       web/src/components/risk/rank.ts
+  look at    TIER_NAME, TIER_GLOSS, tierOf
+  imported   9 files, Home and Risk floor included
+  tested by  tests/risk-web/rank.test.ts</pre>
+          <p>It returns a <a href="#card">card</a> for the best match and lists the next candidates. The top one is right a little over half the time, so check the others before committing.</p>
+        </article>
+
+        <article class="entry" id="card">
+          <h3>Card</h3>
+          <p class="gist">The answer <code>start</code> gives: one file, and everything an agent needs before touching it.</p>
+          <ul>
+            <li><strong>you_are_here</strong>: the file and its job</li>
+            <li><strong>look_here_first</strong>: the lines that best match the task</li>
+            <li><strong>if_you_change_this</strong>: who uses it and which tests prove it. See <a href="#reach">What a change reaches</a>.</li>
+            <li><strong>rules_here</strong>: the written rules about this file</li>
+            <li><strong>recent_changes</strong>: what people changed here lately</li>
+            <li><strong>how_to_use_this</strong>: start here, then follow the pathways</li>
+          </ul>
+          <p class="see">Look at another candidate: <code>anthill card &lt;node&gt; --goal "&lt;task&gt;"</code></p>
+        </article>
+
+        <article class="entry" id="look-here">
+          <h3>Look here first</h3>
+          <p class="gist">The exact lines in a file that match the task, settings included.</p>
+          <p>Added because agents reached the right file and then spent their steps searching inside it for the deciding line: <code>GATE_KM</code>, <code>_cached</code>, <code>INSTRUMENTS</code>. On eight tasks with known answers it named the deciding line six times.</p>
+        </article>
+
+        <article class="entry" id="reach">
+          <h3>What a change reaches</h3>
+          <p class="gist">For the lines on a card: every other file that uses them, every test that names them, and a warning when nothing tests the file.</p>
+<pre><b>$ anthill start "add a test for signing in"</b>
+  <u>no test covers this file</u> -- a change here is unproven until one does</pre>
+          <p>For a setting holding names, such as the list of weather sources, it also lists every other file that spells those names out. That is how the bug with marine readings was found. Agents said this was the part of Anthill that saved them the most time.</p>
+          <p class="see">Also: <code>anthill impact &lt;node&gt; --symbol &lt;name&gt;</code></p>
+        </article>
+
+        <article class="entry" id="glossary">
+          <h3>Glossary</h3>
+          <p class="gist">The owner's words, and the code's words for the same thing.</p>
+<pre>- **Home**, **home screen** → Chains, portfolio
+- **Reports**, **feed** → Feed, signals
+- **login**, **sign in** → token, session, auth</pre>
+          <p>The owner says "how far from a supply chain can news be before it goes to the model"; the code says "how close to a corridor a signal must be to be judged". No search closes that gap on its own. <code>start</code> adds the code's words to any task that uses the owner's, as a hint that never outvotes the task's own words.</p>
+          <p>File: <code>.anthill/knowledge/GLOSSARY.md</code>. 27 lines, drafted by an agent, <strong>not yet confirmed by the owner</strong>. Only the owner changes the words on the left of the arrow.</p>
+        </article>
+
+        <article class="entry" id="eval-map">
+          <h3>eval-map <span class="tag reads">reads only</span></h3>
+          <p class="gist">The exam that measures whether the map works.</p>
+          <p>Every past commit is a question: its title is the task, the files it changed are the answer. Each question is asked with its own commit hidden, so Anthill cannot read the answer key.</p>
+<pre><b>$ anthill eval-map</b>
+  134 past tasks
+  first guess right    <b>57%</b>   <i>was 22% on 26 Sep</i>
+  right in top three   <b>71%</b>   <i>was 30%</i>
+  within one step      <b>81%</b></pre>
+          <p>Every change to how Anthill finds things is kept or dropped on this number. Four ideas were dropped because the exam got worse.</p>
+        </article>
+
+        <article class="entry" id="search-vs">
+          <h3>Anthill versus plain search</h3>
+          <p class="gist">What the side-by-side tests found, stated plainly.</p>
+          <p>On LogiAstro, an agent with ordinary search finds the right file as well as one with Anthill, because the code describes itself so well. What only Anthill gives is the picture before reading anything, what a change reaches, which tests prove it, the written rules, and the owner's words.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ IV ═════════════ -->
+      <section class="panel volume" id="the-work" data-title="What is being worked on">
+        <header>
+          <span class="vol">VOL IV</span><h2>What is being worked on</h2>
+          <p>The map says where and the card says how. This volume is the what: the work in progress, what waits on the owner, what they decided, and how Anthill keeps all of it from going stale.</p>
+        </header>
+
+        <article class="entry" id="where">
+          <h3>where <span class="tag reads">reads only</span></h3>
+          <p class="gist">The first command every agent runs. Every piece of work in progress, its next step, and what waits on the owner.</p>
+<pre><b>$ anthill where</b>
+  **Put each story where it happened** — in progress · work/geotag-test-set
+    - Next: After two days side by side, run compare, then switch.
+    - Waiting on the owner: nationwide stories …
+  ## What the owner has decided   <i>7 decisions</i>
+  ## Traps                        <i>what to avoid</i>
+  ## The job board                <i>and where it disagrees with the pages</i></pre>
+          <p>Several chats work on one project at once and cannot see each other. This page is how they stay in step. Tested on 28 September with a fresh agent told only "carry on": it named the right work, waited for the step that wasn't due yet, and stopped at the decision that was the owner's.</p>
+        </article>
+
+        <article class="entry" id="work-page">
+          <h3>Work page</h3>
+          <p class="gist">One piece of work in flight: what it is, where in the code, how to do the next step, what waits on the owner, the traps, and its history.</p>
+          <p>Lives in <code>.anthill/knowledge/work/</code>. LogiAstro has five: placement, reach, the new tests, the two-views redesign, and the sensing rebuild. They replaced notes that sat privately with one chat, where no other chat could read them and nothing could check them.</p>
+        </article>
+
+        <article class="entry" id="work-state">
+          <h3>State</h3>
+          <p class="gist">What a work page's next step is waiting on.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>State</th><th>Means</th></tr></thead>
+            <tbody>
+              <tr><td>in-progress</td><td>The next step can be done now, even if later steps need the owner.</td></tr>
+              <tr><td>waiting-on-owner</td><td>The next step cannot happen without the owner.</td></tr>
+              <tr><td>paused</td><td>The next step waits on other work.</td></tr>
+            </tbody>
+          </table></div>
+          <p>A page once marked "waiting on owner" whose next step needed nobody made a chat report finished work as blocked. So the state describes the next step only.</p>
+        </article>
+
+        <article class="entry" id="true-at">
+          <h3>Page drift</h3>
+          <p class="gist">A work page records the commit it was last true at. Any later commit touching its code means the page may be behind.</p>
+<pre>  ⚠ This page may be behind: 1 commit(s) on its branch since it was last true</pre>
+          <p>Built because a note written at 13:21 ("the new rule isn't wired in yet") was false by 18:09, and nothing noticed. Only commits that touch the code a page cites count, so an unrelated commit doesn't raise a false alarm. The commit hook hands a stale page to the keeper to bring up to date.</p>
+        </article>
+
+        <article class="entry" id="untracked-work">
+          <h3>Work no page describes</h3>
+          <p class="gist">A branch with this week's commits that no work page names.</p>
+          <p>Exactly what fooled the job board: a day's real work that nobody had written down. <code>where</code> names it out loud, and the next commit asks the keeper to write its page. A branch already inside a tracked one counts as that work's history, not separate work.</p>
+        </article>
+
+        <article class="entry" id="being-edited">
+          <h3>Being edited right now</h3>
+          <p class="gist">Files with changes nobody has committed yet, and the work they belong to.</p>
+          <p>Another chat may be working on them this minute, so an agent leaves them alone unless the owner says otherwise. Added after a chat spotted an uncommitted edit to the placement code only because it happened to look.</p>
+        </article>
+
+        <article class="entry" id="decision-page">
+          <h3>Owner's decisions</h3>
+          <p class="gist">What the owner decided, in their words, and why. Only the owner changes these.</p>
+          <p>Seven on LogiAstro, among them: the market is global; the supply chain screen is the product; opening a page never collects news; placement aims for 95% with no hand-typed lists. The keeper may point out that code now contradicts one; it never edits one.</p>
+        </article>
+
+        <article class="entry" id="board-vs-pages">
+          <h3>The board beside the pages</h3>
+          <p class="gist">The job board holds only work that was planned onto it. <code>where</code> shows it next to the work pages and names every disagreement.</p>
+<pre>  ⚠ The board says relevance.impl is ready, but its work page says
+    paused: needs the owner's nationwide answer first. Follow the page.</pre>
+        </article>
+
+        <article class="entry" id="survey">
+          <h3>Installing in a new project</h3>
+          <p class="gist">One command, and Anthill knows the project before it finishes.</p>
+<pre><b>$ anthill install --name "Shop" --stack "Python + React"</b>
+What Anthill knows already:
+  map      2 places in the code, with their pathways and tests
+  finding  a past task goes to the right file first time 100%
+  explain  the largest code no page explains yet: shop/pricing.py
+  work     recent work with no page yet: work/free-shipping</pre>
+          <p>The install switches on the guards, the keeper and the rules, then surveys the code. The first chat answers the charter questions and hands the lists to the keeper, which writes the first work page. Tested end to end on a new project on 28 September, which found and fixed five problems only a fresh install shows. <code>anthill survey</code> re-runs it any time.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ V ═════════════ -->
+      <section class="panel volume" id="memory" data-title="The memory">
+        <header>
+          <span class="vol">VOL V</span><h2>The memory</h2>
+          <p>Why the code is the way it is. The part the code itself cannot say.</p>
+        </header>
+
+        <article class="entry" id="knowledge-page">
+          <h3>Knowledge page</h3>
+          <p class="gist">A page of rules about one area: what must stay true, and the exact code each rule is about.</p>
+          <p>LogiAstro has two: mapping (4 rules) and sensing (17 rules). Both written by an agent, neither confirmed by the owner. They live in <code>.anthill/knowledge/modules/</code>.</p>
+        </article>
+
+        <article class="entry" id="rule-id">
+          <h3>Business rule</h3>
+          <p class="gist">One statement on a knowledge page, with a permanent name.</p>
+<pre>- **BR-LOGIASTRO-gate-cannot-cost-a-signal:** The pre-model proximity
+  gate is 650 km … (sg: logiastro/sensing/scope.py::GATE_KM)</pre>
+          <p>A rule's name is never reused or renamed. A rule that stops applying is retired, with the reason.</p>
+        </article>
+
+        <article class="entry" id="citation">
+          <h3>Citation</h3>
+          <p class="gist">The <code>(sg: file::name)</code> part of a rule, pointing at the code it is about.</p>
+          <p>What makes a rule checkable. When the cited code changes shape, the <a href="#blueprint">blueprint check</a> names the rule that may have gone stale. A rule with no citation is allowed, and counted as a statement nothing can check.</p>
+        </article>
+
+        <article class="entry" id="verified-against">
+          <h3>verified_against</h3>
+          <p class="gist">The commit a page was last checked at.</p>
+          <p>Written at the top of a page as <code>logiastro@&lt;commit&gt;</code>. Anthill compares each cited piece of code as it was then with how it is now.</p>
+        </article>
+
+        <article class="entry" id="attested">
+          <h3>Owner's signature</h3>
+          <p class="gist">The <code>intent_attested_by</code> line on a page. Only the owner fills it; no agent ever may.</p>
+          <p>Until the owner signs, a page records what an agent did, not what the owner wanted, and the area reports as "not settled". Today no page and not the glossary is signed.</p>
+        </article>
+
+        <article class="entry" id="footprint">
+          <h3>Footprint</h3>
+          <p class="gist">The files a page speaks for, such as <code>logiastro/sensing/**</code>.</p>
+          <p>Two pages may not claim the same file.</p>
+        </article>
+
+        <article class="entry" id="lesson">
+          <h3>Lesson</h3>
+          <p class="gist">Something learned the hard way, filed by area so it comes back up when someone works there again.</p>
+          <p class="see"><code>anthill lesson record</code> · <code>anthill lesson for &lt;area&gt;</code></p>
+        </article>
+      </section>
+
+      <!-- ═════════════ V ═════════════ -->
+      <section class="panel volume" id="work" data-title="Doing the work">
+        <header>
+          <span class="vol">VOL VI</span><h2>Doing the work</h2>
+          <p>How a piece of work is planned, claimed, proven and closed. The one rule: an agent cannot say its own work is finished; a test does.</p>
+        </header>
+
+        <article class="entry" id="sprint">
+          <h3>Sprint</h3>
+          <p class="gist">A planned batch of work, split into units.</p>
+          <p class="see"><code>anthill sprint new</code> · <code>add-unit</code> · <code>compile</code> · <code>set-gate</code> · <code>status</code></p>
+        </article>
+
+        <article class="entry" id="unit">
+          <h3>Unit</h3>
+          <p class="gist">One piece of work with a boundary: the files it may touch, and the test that proves it.</p>
+          <p>LogiAstro's board has 24 units: 21 done, 2 blocked, 1 escalated.</p>
+        </article>
+
+        <article class="entry" id="spec-impl">
+          <h3>Spec and impl</h3>
+          <p class="gist">Work is split in two: one unit writes the tests, another writes the code that passes them.</p>
+          <p>The builder of the code can never edit the tests it has to pass. The field report counts this among the things that worked without anyone thinking about it.</p>
+        </article>
+
+        <article class="entry" id="owns">
+          <h3>Owns</h3>
+          <p class="gist">The files a unit is allowed to touch.</p>
+          <p>A unit that writes outside them is refused (exit 64). This produced the only genuine save the field report found: a unit was stopped from editing a file another, finished unit owned.</p>
+        </article>
+
+        <article class="entry" id="contract">
+          <h3>Contract</h3>
+          <p class="gist">The compiled, enforced version of a sprint: every unit, what it owns, and what proves it.</p>
+          <p>Lives in <code>.anthill/contracts/</code>, which agents may not edit.</p>
+        </article>
+
+        <article class="entry" id="board">
+          <h3>Board</h3>
+          <p class="gist">Where every unit stands: ready, claimed, gated, done, blocked or escalated.</p>
+<pre><b>$ anthill work status --repo .</b>     <i>every session runs this first</i>
+<b>$ anthill work next  --repo .</b>     <i>claim the next ready unit</i></pre>
+          <p>An honest note from the field report: about 5% of LogiAstro's work has gone through the board. Most is done on branches outside it.</p>
+        </article>
+
+        <article class="entry" id="gate">
+          <h3>Gate</h3>
+          <p class="gist">The check that decides whether a unit is finished. It passes or fails; nobody argues with it.</p>
+          <p>In order: did the unit stay inside its files, do its tests pass, is the map still true, and has it been reviewed.</p>
+<pre><b>$ anthill work done --repo . --unit mapping.impl</b>
+  <u>refused</u> — no passing gate. Run the gate first.</pre>
+        </article>
+
+        <article class="entry" id="exit-codes">
+          <h3>Exit codes</h3>
+          <p class="gist">The number a gate returns, and what to do about it.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Code</th><th>Meaning</th><th>What you do</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>Passed</td><td>Close it with <code>work done</code>.</td></tr>
+              <tr><td>1</td><td>A test failed, or a review refused it</td><td>Fix the work.</td></tr>
+              <tr><td>3</td><td>Nobody has reviewed this yet</td><td>Not your fault; costs no attempt.</td></tr>
+              <tr><td>64</td><td>Wrote outside its files</td><td>Undo that file; it belongs to another unit.</td></tr>
+              <tr><td>65</td><td>Asked to close without a passing gate</td><td>Run the gate.</td></tr>
+              <tr><td>66</td><td>Two units claim one file</td><td>A planning bug. Escalate.</td></tr>
+              <tr><td>67</td><td>Already done or escalated</td><td>Nothing to do here.</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+
+        <article class="entry" id="escalate">
+          <h3>Escalate and reopen</h3>
+          <p class="gist">Hand a stuck unit to a person, and bring it back once the cause is fixed.</p>
+<pre><b>$ anthill work escalate --repo . --unit X --reason "what stopped you"</b>
+<b>$ anthill work reopen   --repo . --unit X --reason "…" --by "owner"</b></pre>
+          <p>In the tool's first three weeks all three escalations were caused by the tool, not the work. Each was fixed at the source.</p>
+        </article>
+
+        <article class="entry" id="roles">
+          <h3>Roles</h3>
+          <p class="gist">Planner, builder and auditor.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Role</th><th>Does</th><th>Filled by</th></tr></thead>
+            <tbody>
+              <tr><td>planner</td><td>Plans and reports; talks to the owner; writes no code</td><td>claude-code</td></tr>
+              <tr><td>builder</td><td>Does one unit inside its files</td><td>claude-code</td></tr>
+              <tr><td>auditor</td><td>Reviews finished work; changes nothing; can refuse but not pass</td><td>claude-code</td></tr>
+            </tbody>
+          </table></div>
+          <p>All three are the same tool here. A model reviewing its own work shares its blind spots, so its approval means little; the tests remain the real proof.</p>
+        </article>
+
+        <article class="entry" id="audit">
+          <h3>Audit verdicts</h3>
+          <p class="gist">What a reviewer can record about a finished unit.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Verdict</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>PASS</td><td>The work is right.</td></tr>
+              <tr><td>FAIL</td><td>The work is wrong. Always refuses.</td></tr>
+              <tr><td>PARTIAL</td><td>Some of it is right.</td></tr>
+              <tr><td>DEVIATION</td><td>It differs from the plan, recorded rather than refused.</td></tr>
+              <tr><td>ARCH NOTE</td><td>A design concern. Goes to the owner.</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <!-- ═════════════ VI ═════════════ -->
+      <section class="panel volume" id="upkeep-vol" data-title="Keeping it tidy">
+        <header>
+          <span class="vol">VOL VII</span><h2>Keeping it tidy</h2>
+          <p>Every piece of work leaves the anthill as well documented as it found it, without slowing down the agent doing the work.</p>
+        </header>
+
+        <article class="entry" id="upkeep">
+          <h3>upkeep <span class="tag reads">reads only</span></h3>
+          <p class="gist">What a change left undone.</p>
+          <ul>
+            <li><strong>glossary</strong>: a line names code that is gone, or a screen has no line</li>
+            <li><strong>knowledge</strong>: a rule cites code whose shape changed</li>
+            <li><strong>tests</strong>: changed code that no test imports</li>
+          </ul>
+<pre><b>anthill upkeep:</b> 17 thing(s) to bring up to date
+  - tests: web/src/lib/theme.ts changed and no test imports it
+  …</pre>
+          <p>An item stays on the list until its check passes, whoever fixes it.</p>
+        </article>
+
+        <article class="entry" id="keeper">
+          <h3>anthill-keeper</h3>
+          <p class="gist">A helper agent that does the upkeep in the background, so the agent doing your work never stops for it.</p>
+          <ol>
+            <li>The agent builds and commits. You get your work straight away.</li>
+            <li>The commit lists what it left behind.</li>
+            <li>The agent starts the keeper in the background and carries on.</li>
+            <li>The keeper fixes the glossary and notes, suggests the missing tests, and reports in a few lines.</li>
+          </ol>
+          <p>It writes only the knowledge folder, so it cannot collide with the code being changed. It also writes and updates <a href="#work-page">work pages</a>, citing every file a statement depends on. It never writes tests, never changes the owner's words, and never signs a page. Defined in <code>.claude/agents/anthill-keeper.md</code>, so every new chat has it.</p>
+          <p>First real run, 28 September: it recorded that "web sweep" and "wide sweep" are the owner's words for the <code>gemini-sweep</code> and <code>gemini-wide</code> collectors, and sorted 17 test gaps into four groups. It changed no code.</p>
+        </article>
+
+        <article class="entry" id="end-of-task">
+          <h3>Before any task ends</h3>
+          <p class="gist">Two questions every agent asks, whether it committed or not.</p>
+          <ul>
+            <li>Is anything on the upkeep list? Hand it to the keeper.</li>
+            <li>Did I learn something the next agent shouldn't have to rediscover? A word the owner uses, why some code is the way it is, a trap. Hand the keeper one sentence.</li>
+          </ul>
+          <p>A task that only reads never commits, so no hook reminds it. This rule is the reminder.</p>
+        </article>
+
+        <article class="entry" id="post-commit">
+          <h3>After-commit hook</h3>
+          <p class="gist">What runs automatically after every commit.</p>
+          <p>It redraws the map, then runs <code>anthill upkeep</code> and prints the list in the terminal that made the commit. It can never stop a commit.</p>
+        </article>
+
+        <article class="entry" id="open-list">
+          <h3>The open list</h3>
+          <p class="gist">Upkeep that nobody has done yet, carried from one session to the next.</p>
+          <p>Stored in <code>.anthill/build/upkeep.json</code>. <code>anthill work status</code> repeats it to every new session, so a skipped reminder becomes the next agent's first task instead of disappearing.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ VII ═════════════ -->
+      <section class="panel volume" id="rules" data-title="Rules and guards">
+        <header>
+          <span class="vol">VOL VIII</span><h2>Rules and guards</h2>
+          <p>What nobody may do, and which of those rules are enforced by a hook.</p>
+        </header>
+
+        <article class="entry" id="main-protected">
+          <h3>main is protected <span class="tag guard">refused</span></h3>
+          <p class="gist">Nobody commits directly on <code>main</code>. Work happens on a branch.</p>
+          <p><code>main</code> is what everyone branches from and merges into, so a change sitting on it is one nobody agreed to and everybody inherits.</p>
+        </article>
+
+        <article class="entry" id="push-owner">
+          <h3>Pushing is the owner's act <span class="tag guard">refused</span></h3>
+          <p class="gist">An agent never pushes unless the owner asked for that push.</p>
+<pre><b>$ git push</b>
+  <u>refused</u> — pushing is the owner's act.
+<b>$ ANTHILL_OWNER=1 git push</b>     <i>the owner, one command at a time</i></pre>
+          <p>Put <code>ANTHILL_OWNER=1</code> before each push, never in a shell profile. Otherwise every agent inherits owner status too.</p>
+        </article>
+
+        <article class="entry" id="hygiene">
+          <h3>Secrets, junk and force pushes <span class="tag guard">refused</span></h3>
+          <p class="gist">What no shared repository survives.</p>
+          <ul>
+            <li>A commit adding a key, a token, a <code>.env</code> or a <code>.pem</code>. A secret is public from the first push.</li>
+            <li>A commit adding <code>.DS_Store</code>, <code>__pycache__</code>, <code>node_modules</code> or similar.</li>
+            <li>A push that rewrites history someone else already has.</li>
+          </ul>
+          <p>Checked against LogiAstro's whole history on 26 September: no secret or junk file was ever committed.</p>
+        </article>
+
+        <article class="entry" id="ownership-guard">
+          <h3>Ownership guard <span class="tag">off</span></h3>
+          <p class="gist">Refuses a commit of code that no claimed unit owns.</p>
+          <p>Off on LogiAstro, because it would refuse every quick fix made outside the board.</p>
+        </article>
+
+        <article class="entry" id="no-verify">
+          <h3>--no-verify</h3>
+          <p class="gist">The flag that skips every hook. Never used.</p>
+          <p>A hook on one laptop runs the same program for the owner and the agent, so it cannot tell them apart. What holds is that nobody chooses to skip it. The only lock that binds everyone is branch protection on GitHub.</p>
+        </article>
+
+        <article class="entry" id="protected-paths">
+          <h3>Protected paths</h3>
+          <p class="gist">Files agents may never edit.</p>
+          <p><code>CONSTITUTION.md</code>, <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/**</code>, <code>.anthill/roles/**</code>, <code>.anthill/anthill.config.json</code>, <code>.anthill/contracts/**</code>. They change only through the owner or a sanctioned command such as <code>install</code>, <code>onboard</code> or <code>config set</code>.</p>
+        </article>
+
+        <article class="entry" id="owner-outranks">
+          <h3>Briefing, not asking</h3>
+          <p class="gist">How an agent takes an owner's instruction.</p>
+          <ul>
+            <li>Say what is about to happen, then do it. Not "are you sure?".</li>
+            <li>One objection, once. If the owner confirms, it is settled.</li>
+            <li>Never do a smaller version of what was asked.</li>
+            <li>Report plainly what happened, including what went badly.</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ═════════════ VIII ═════════════ -->
+      <section class="panel volume" id="settings" data-title="Settings">
+        <header>
+          <span class="vol">VOL IX</span><h2>Settings</h2>
+          <p>Every setting, and its value on LogiAstro today. Changed only with <code>anthill config set &lt;key&gt; &lt;value&gt; --by "&lt;owner&gt;"</code>, and every change is logged with who asked for it.</p>
+        </header>
+
+        <article class="entry" id="config">
+          <h3>anthill.config.json</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Setting</th><th>Now</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td>execution.mode</td><td>solo</td><td>One agent in place, or a pool of many</td></tr>
+              <tr><td>execution.protected_branches</td><td class="on">main</td><td>Branches nobody commits on</td></tr>
+              <tr><td>execution.push_requires_owner</td><td class="on">on</td><td>Every push needs the owner</td></tr>
+              <tr><td>execution.guard_hygiene</td><td class="on">on</td><td>Refuse secrets, junk and force pushes</td></tr>
+              <tr><td>execution.guard_ownership</td><td class="off">off</td><td>Refuse code no claimed unit owns</td></tr>
+              <tr><td>execution.isolate</td><td>off</td><td>Give each unit its own copy of the repo</td></tr>
+              <tr><td>execution.base_branch</td><td>main</td><td>Where units start from</td></tr>
+              <tr><td>execution.integration_branch</td><td>main</td><td>Where finished units merge (pool mode)</td></tr>
+              <tr><td>execution.venv</td><td>(found)</td><td>Which Python environment gates use</td></tr>
+              <tr><td>audit.required</td><td>on</td><td>A unit needs a review record to close</td></tr>
+              <tr><td>audit.escalate_verdicts</td><td>ARCH NOTE</td><td>Review verdicts that go to the owner</td></tr>
+              <tr><td>blueprint.require_page</td><td>off</td><td>Every gate also needs a knowledge page</td></tr>
+              <tr><td>blueprint.min_coverage</td><td>off</td><td>Minimum share of files with a page</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <!-- ═════════════ IX ═════════════ -->
+      <section class="panel volume" id="skills" data-title="Skills">
+        <header>
+          <span class="vol">VOL X</span><h2>Skills</h2>
+          <p>Reusable instructions an agent loads to know how to behave. The tools of the anthill.</p>
+        </header>
+
+        <article class="entry" id="load-class">
+          <h3>Load classes</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Class</th><th>When it loads</th></tr></thead>
+            <tbody>
+              <tr><td>bootstrap</td><td>Every session</td></tr>
+              <tr><td>phase-scoped</td><td>Only during its phase: idea, planning or execution</td></tr>
+              <tr><td>conditional</td><td>Only when triggered: an audit, an escalation</td></tr>
+              <tr><td>reference</td><td>Never automatically; looked up when needed</td></tr>
+            </tbody>
+          </table></div>
+          <p class="see"><code>anthill skill list --always-on</code> · <code>anthill skill get &lt;name&gt;</code></p>
+        </article>
+
+        <article class="entry" id="find-your-way">
+          <h3>find-your-way <span class="tag">every session</span></h3>
+          <p class="gist">Tells a cold agent to run <code>orient</code> and <code>start</code>, and how to read the card.</p>
+        </article>
+
+        <article class="entry" id="git-ground-rules">
+          <h3>git-ground-rules <span class="tag">every session</span></h3>
+          <p class="gist">The eight git rules no shared repository survives without.</p>
+          <p>Commit before you pull. Branch, never <code>main</code>. <code>main</code> always works. A conflict is resolved when the tests pass, not when the markers are gone. Never rewrite shared history. No secrets. No junk. Never skip a hook, and never push unasked.</p>
+        </article>
+
+        <article class="entry" id="git-playbook">
+          <h3>git-playbook <span class="tag">reference</span></h3>
+          <p class="gist">The full guide behind those rules: commits, branches, pull requests, resolving a conflict, merge or rebase, recovering lost work.</p>
+          <p>Built from the LogiAstro Git Playbook, including the real <code>match.py</code> conflict that crashed the app.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ X ═════════════ -->
+      <section class="panel volume" id="commands" data-title="Commands">
+        <header>
+          <span class="vol">VOL XI</span><h2>Commands</h2>
+          <p>Every command. The first group only reads; the rest change something.</p>
+        </header>
+
+        <article class="entry" id="cmd-read">
+          <h3>Commands that only read <span class="tag reads">safe</span></h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Command</th><th>What it tells you</th></tr></thead>
+            <tbody>
+              <tr><td>anthill</td><td>The starting-cold page (also <code>anthill help</code>)</td></tr>
+              <tr><td>anthill where</td><td>What is being worked on, and what waits on the owner</td></tr>
+              <tr><td>anthill orient</td><td>The codebase on one page</td></tr>
+              <tr><td>anthill start "…"</td><td>Where a task lives, with a card</td></tr>
+              <tr><td>anthill card &lt;node&gt;</td><td>The card for one file</td></tr>
+              <tr><td>anthill impact &lt;node&gt;</td><td>What a change there reaches</td></tr>
+              <tr><td>anthill nodes</td><td>Every file on the map, or a search</td></tr>
+              <tr><td>anthill eval-map</td><td>The exam score</td></tr>
+              <tr><td>anthill blueprint</td><td>Which notes no longer match the code</td></tr>
+              <tr><td>anthill upkeep</td><td>What a change left undone</td></tr>
+              <tr><td>anthill work status</td><td>The board, and the open upkeep list</td></tr>
+              <tr><td>anthill roles show</td><td>Who fills each role</td></tr>
+              <tr><td>anthill skill list</td><td>The installed skills</td></tr>
+              <tr><td>anthill config show</td><td>Every setting</td></tr>
+              <tr><td>anthill control</td><td>Whether a rules file has drifted</td></tr>
+              <tr><td>anthill tidy</td><td>Stray files that belong to nobody</td></tr>
+              <tr><td>anthill status</td><td>Where the installation stands</td></tr>
+              <tr><td>anthill survey</td><td>Redraws the map and reports what Anthill knows</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+
+        <article class="entry" id="cmd-change">
+          <h3>Commands that change something</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Command</th><th>What it changes</th><th>Who runs it</th></tr></thead>
+            <tbody>
+              <tr><td>work next · gate · done · release</td><td>The board</td><td>The builder</td></tr>
+              <tr><td>work escalate · reopen</td><td>A unit's state</td><td>Builder · owner</td></tr>
+              <tr><td>map build</td><td>The map. Safe; the hook runs it anyway</td><td>Anyone</td></tr>
+              <tr><td>upkeep --record</td><td>The open list</td><td>The hook · the keeper</td></tr>
+              <tr><td>sprint new · add-unit · compile</td><td>The plan</td><td>The planner</td></tr>
+              <tr><td>audit record</td><td>A review verdict</td><td>The auditor</td></tr>
+              <tr><td>lesson record</td><td>A lesson</td><td>Anyone</td></tr>
+              <tr><td>skill index · install</td><td>The skills catalogue</td><td>Anyone</td></tr>
+              <tr><td>config set</td><td>A setting</td><td>The owner</td></tr>
+              <tr><td>onboard</td><td>The charter</td><td>The owner</td></tr>
+              <tr><td>roles assign</td><td>Who fills a role</td><td>The owner</td></tr>
+              <tr><td>install --force</td><td>Rules files, hooks, the keeper</td><td>The owner</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <!-- ═════════════ XI ═════════════ -->
+      <section class="panel volume" id="files" data-title="Where things live">
+        <header>
+          <span class="vol">VOL XII</span><h2>Where things live</h2>
+          <p>Every file Anthill reads or writes in LogiAstro.</p>
+        </header>
+
+        <article class="entry" id="file-list">
+          <h3>Files and folders</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Path</th><th>What it is</th><th>In git?</th></tr></thead>
+            <tbody>
+              <tr><td>CONSTITUTION.md</td><td>The charter</td><td>yes</td></tr>
+              <tr><td>CLAUDE.md · AGENTS.md</td><td>What every agent reads first, generated from the settings</td><td>yes</td></tr>
+              <tr><td>.claude/agents/anthill-keeper.md</td><td>The upkeep helper</td><td>yes</td></tr>
+              <tr><td>.claude/settings.json</td><td>Which files agents may not edit</td><td>yes</td></tr>
+              <tr><td>.anthill/anthill.config.json</td><td>The settings</td><td>no</td></tr>
+              <tr><td>.anthill/knowledge/</td><td>Knowledge pages and the glossary</td><td>no</td></tr>
+              <tr><td>.anthill/knowledge/work/</td><td>Work pages</td><td>no</td></tr>
+              <tr><td>.anthill/knowledge/decisions/</td><td>The owner's decisions</td><td>no</td></tr>
+              <tr><td>.anthill/knowledge/TRAPS.md</td><td>Traps that belong to no one piece of work</td><td>no</td></tr>
+              <tr><td>.anthill/build/maps/codebase.json</td><td>The map</td><td>no</td></tr>
+              <tr><td>.anthill/build/upkeep.json</td><td>The open upkeep list</td><td>no</td></tr>
+              <tr><td>.anthill/build/work/</td><td>The board's state</td><td>no</td></tr>
+              <tr><td>.anthill/sprints/ · contracts/</td><td>The plan, and its enforced version</td><td>no</td></tr>
+              <tr><td>.anthill/roles/</td><td>What each role may do</td><td>no</td></tr>
+              <tr><td>.anthill/skills/</td><td>The skills library</td><td>no</td></tr>
+              <tr><td>.git/hooks/</td><td>The three hooks: before commit, before push, after commit</td><td>no</td></tr>
+              <tr><td>~/anthill</td><td>Anthill itself</td><td class="off">no backup</td></tr>
+            </tbody>
+          </table></div>
+          <p>Everything under <code>.anthill/</code> stays on this laptop. A teammate who clones the repository gets the rules files and the keeper, but not the knowledge. Sharing it through git is planned once Anthill has proven itself.</p>
+        </article>
+      </section>
+
+      <!-- ═════════════ XII ═════════════ -->
+      <section class="panel volume" id="timeline" data-title="History">
+        <header>
+          <span class="vol">VOL XIII</span><h2>History</h2>
+          <p>How Anthill got to where it is, and why each change was made.</p>
+        </header>
+
+        <article class="entry" id="history-list">
+          <h3>Timeline</h3>
+          <ol class="timeline">
+            <li><time datetime="2026-09-14">14 Sep</time><span><strong>Anthill as it stands.</strong> The map, the memory, the board and the command line, with git hooks installed.</span></li>
+            <li><time datetime="2026-09-17">17 Sep</time><span><strong>main belongs to the owner.</strong> Commits and pushes to it refused; pushing becomes the owner's act.</span></li>
+            <li><time datetime="2026-09-19">19 Sep</time><span><strong>First field report.</strong> The ownership check measured against a branch 142 commits old and accused correct work.</span></li>
+            <li><time datetime="2026-09-21">21 Sep</time><span><strong>Second field report.</strong> The owner's verdict: "it has created more issues than it helped". Measured: 5% of work went through the board; every escalation was the tool's fault; Anthill had no tests.</span></li>
+            <li><time datetime="2026-09-22">22 Sep</time><span><strong>Solo mode.</strong> The tool stripped back to what helped. One writer for the settings, rules files generated from them, tests for Anthill itself.</span></li>
+            <li><time datetime="2026-09-25">25 Sep</time><span><strong>Hygiene guards.</strong> Secrets, junk files and force pushes refused. The git skills written from the team's playbook.</span></li>
+            <li><time datetime="2026-09-26">26 Sep</time><span><strong>Starting cold.</strong> The frontend on the map, history, the exam, <code>orient</code>, cards that point at the line and say what a change reaches, the glossary. First guess right: 22% → 57%.</span></li>
+            <li><time datetime="2026-09-26">26 Sep</time><span><strong>The upkeep loop.</strong> Every commit lists what it left undone; a background helper does the paperwork.</span></li>
+            <li><time datetime="2026-09-28">28 Sep</time><span><strong>Nothing learned is lost.</strong> Every task, committed or not, hands what it learned to the keeper. The keeper's first real run. Tests written for 16 of the 17 untested files.</span></li>
+            <li><time datetime="2026-09-28">28 Sep</time><span><strong>What to work on.</strong> Private notes moved into work pages and owner decisions every chat reads. <code>anthill where</code>, page drift, the job board beside the pages, and what is being edited right now. A fresh agent told "carry on" got it right.</span></li>
+            <li><time datetime="2026-09-28">28 Sep</time><span><strong>A new project, day one.</strong> Installed into a new project to find what only a fresh install shows: five fixes, and the install now surveys the code before it finishes.</span></li>
+          </ol>
+        </article>
+      </section>
+
+      <!-- ═════════════ XIII ═════════════ -->
+      <section class="panel volume" id="open" data-title="What is still open">
+        <header>
+          <span class="vol">VOL XIV</span><h2>What is still open</h2>
+          <p>The known gaps, stated plainly.</p>
+        </header>
+
+        <article class="entry" id="open-items">
+          <h3>Open items</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Item</th><th>State</th><th>What closes it</th></tr></thead>
+            <tbody>
+              <tr><td>Glossary and pages</td><td class="off">unsigned</td><td>The owner corrects them and signs</td></tr>
+              <tr><td>Anthill backup</td><td class="off">missing</td><td>A private GitHub repository for its 41 commits</td></tr>
+              <tr><td>Anthill's main line</td><td>on a branch</td><td>Merge <code>work/cold-start</code> into Anthill's main line</td></tr>
+              <tr><td>Page freshness</td><td>after commits</td><td>Pages update when a commit fires the keeper; an hour of uncommitted work shows only as "being edited"</td></tr>
+              <tr><td>16 untested files</td><td>tests written</td><td>Merge <code>work/cover-untested</code> once the geotag work is committed</td></tr>
+              <tr><td>Clicking in tests</td><td>not possible</td><td>A browser simulator for the web tests, if the owner wants one</td></tr>
+              <tr><td>The keeper</td><td class="on">working</td><td>First real run on 28 September</td></tr>
+              <tr><td>Shared knowledge</td><td>planned</td><td>Put <code>.anthill/knowledge/</code> in git</td></tr>
+              <tr><td>GitHub lock</td><td>later</td><td>Branch protection when a second person joins</td></tr>
+              <tr><td>Words with no overlap</td><td>known</td><td>A description on settings like <code>TOKEN_KEY</code></td></tr>
+            </tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <div class="panel empty" id="noresults" hidden>No entry mentions that. Try a shorter word, or clear the search.</div>
+    </main>
+  </div>
+
+  <footer class="panel">
+    <span>An agent can't say it's finished. A test says it's finished.</span>
+    <span>LogiAstro · 28 September 2026</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var vols = Array.prototype.slice.call(document.querySelectorAll("section.volume"));
+  var toc = document.getElementById("toc");
+  var numerals = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII"];
+  var links = [];
+  vols.forEach(function (v, i) {
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + v.id;
+    var own = v.querySelector(".vol");
+    var n = document.createElement("span"); n.className = "vol";
+    n.textContent = own ? own.textContent.replace(/^VOL\s+/, "") : (numerals[i] || String(i + 1));
+    var t = document.createElement("span"); t.textContent = v.getAttribute("data-title");
+    var c = document.createElement("span"); c.className = "count";
+    c.textContent = v.querySelectorAll("article.entry").length;
+    a.appendChild(n); a.appendChild(t); a.appendChild(c);
+    li.appendChild(a); toc.appendChild(li);
+    links.push({ li: li, count: c, vol: v });
+  });
+
+  var input = document.getElementById("q");
+  var out = document.getElementById("qcount");
+  var none = document.getElementById("noresults");
+  var entries = Array.prototype.slice.call(document.querySelectorAll("article.entry"));
+  entries.forEach(function (e) { e.dataset.text = e.textContent.toLowerCase(); });
+
+  function run() {
+    var q = input.value.trim().toLowerCase();
+    var shown = 0;
+    links.forEach(function (l) {
+      var hit = 0;
+      l.vol.querySelectorAll("article.entry").forEach(function (e) {
+        var ok = !q || e.dataset.text.indexOf(q) !== -1;
+        e.hidden = !ok;
+        if (ok) hit++;
+      });
+      l.vol.hidden = hit === 0;
+      l.li.hidden = hit === 0;
+      l.count.textContent = hit;
+      shown += hit;
+    });
+    none.hidden = shown !== 0;
+    out.textContent = q ? shown + " of " + entries.length + " entries" : entries.length + " entries";
+  }
+  input.addEventListener("input", run);
+  run();
+})();
+</script>
