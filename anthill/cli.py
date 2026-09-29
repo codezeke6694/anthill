@@ -38,6 +38,7 @@ DELEGATED = [
     ("trail", "What happened here: every command and commit, and any crash"),
     ("note", 'Leave a line for whoever picks this up: "doing X; ruled out Y; next Z"'),
     ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
+    ("correction", "Record that a page said something wrong: --page, --was, --now, --why"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
     ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
@@ -115,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     verb = argv[0] if argv else ""
     # Hook calls and notes record their own, richer event; a second
     # "command" line for each owner message would only be noise.
-    if verb in ("", "help", "start-here", "trail", "note", "prompt", "-h", "--help") or "--hook" in argv:
+    if verb in ("", "help", "start-here", "trail", "note", "prompt", "correction", "-h", "--help") or "--hook" in argv:
         return _dispatch(argv)
     t0 = time.monotonic()
     rc: int | None = None
@@ -206,7 +207,7 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] == "score":
         from anthill import scorecard
         return scorecard.main(argv[1:])
-    if argv and argv[0] in ("note", "resume", "checkpoint", "prompt"):
+    if argv and argv[0] in ("note", "resume", "checkpoint", "prompt", "correction"):
         from anthill import resume
         return resume.main(argv)
     if argv and argv[0] == "trail":

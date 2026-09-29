@@ -139,3 +139,20 @@ def test_a_rule_citing_a_whole_file_does_not_stop_the_check(project):
                        capture_output=True, text=True)
     assert "Traceback" not in r.stderr, r.stderr
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_whole_file_citation_is_listed_only_where_a_precise_one_is_possible(project):
+    write(project.root, ".anthill/knowledge/modules/core/core.md",
+          "---\nid: core\ntype: module\ntitle: Core\nverified_against: proj@HEAD\n---\n\n"
+          "## Rules\n\n- **BR-X-add:** Adding is plain (sg: pkg/core.py).\n"
+          "- **BR-X-start:** The app starts from one script (sg: run.sh).\n")
+    items = [i["detail"] for i in upkeep(project.root)["open"] if i["kind"] == "knowledge"]
+    assert any("cites the whole file pkg/core.py" in d for d in items)
+    assert not any("run.sh" in d for d in items)
+
+
+def test_the_keeper_is_told_to_write_only_what_it_can_show(project):
+    text = (project.root / ".claude" / "agents" / "anthill-keeper.md").read_text()
+    assert "## Before you write a fact" in text
+    assert "quote their words" in text and "suspected:" in text
+    assert "correction --page" in text

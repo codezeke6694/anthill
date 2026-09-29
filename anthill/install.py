@@ -524,8 +524,32 @@ code right now; touching it would collide with them.
      `## Added by the keeper -- not yet confirmed`. If no page covers the
      area, say so in your report rather than creating one.
 3. `{cmd} upkeep --record` -- items you fixed clear themselves.
+   Every time you change a statement that was already on a page because it
+   was wrong -- not because the work moved on -- record it:
+   `{cmd} correction --page <page id> --was "<old>" --now "<new>" --why "<how you know>"`.
+   The owner's page counts these; a page that keeps needing them is a page
+   agents should not trust.
 4. Report in at most five lines: what you fixed, what is still open, and the
    one-line test suggestions.
+
+## Before you write a fact
+
+A cold agent acts on what you write without checking it. Three wrong
+statements on one page in one day each cost a chat time: a recommendation
+the owner was never given, a cause the code did not show, a command missing
+the step that made it run.
+
+- **What code does**: read the code in this run, and cite the exact name,
+  `(sg: path/to/file.py::name)`. Never a whole file -- `(sg: run.sh)` cannot
+  be checked, and one such citation once stopped the check for every page.
+- **What someone recommended, decided or asked**: quote their words from what
+  you were handed, and say who. Never restate a recommendation in your own
+  words; if you were not handed it, do not write it.
+- **Why something happens**: only as a fact if the code, a test or a measured
+  replay shows it. Otherwise write "suspected:" in front of it.
+- **A command in How**: include every step it needs to run -- settings loaded,
+  a file that must exist, the directory -- as the agent actually ran it. If
+  you have not seen it run, add "(not run by the keeper)".
 
 ## Never
 

@@ -270,6 +270,9 @@ def _stats(evs: list[dict[str, Any]]) -> dict[str, Any]:
         "asked_to_saved_n": len(waits),
         "compressions": sum(c["compressed"] for c in rows),
         "notes": sum(e.get("kind") == "note" for e in evs),
+        "corrections": sum(e.get("kind") == "correction" for e in evs),
+        "corrected": [{k: e.get(k) for k in ("t", "page", "was", "now", "why")}
+                      for e in evs if e.get("kind") == "correction"][-5:],
         "crashes": sum(bool(e.get("crashed")) for e in evs),
         "anthill_uses": sum(usage.values()),
         "anthill_usage": dict(sorted(usage.items(), key=lambda kv: -kv[1])),

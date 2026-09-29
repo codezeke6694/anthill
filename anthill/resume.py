@@ -231,6 +231,18 @@ def main(argv: list[str]) -> int:
             return 2
         print(f"noted: {note(ctx, text)['noted']}")
         return 0
+    if verb == "correction":
+        def opt(name: str) -> str:
+            return argv[argv.index(name) + 1] if name in argv and argv.index(name) + 1 < len(argv) else ""
+        page, was, now = opt("--page"), opt("--was"), opt("--now")
+        if not (page and was and now):
+            print('anthill correction --page <id> --was "<old>" --now "<new>" [--why "<how you know>"]',
+                  file=sys.stderr)
+            return 2
+        trail.record("correction", ctx, page=page, was=_clip(was, 300), now=_clip(now, 300),
+                     why=_clip(opt("--why"), 200) or None)
+        print(f"recorded: {page} corrected")
+        return 0
     if verb == "checkpoint":
         checkpoint(ctx, _hook_input() if "--hook" in argv else {})
         return 0

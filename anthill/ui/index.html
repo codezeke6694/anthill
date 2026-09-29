@@ -223,7 +223,8 @@
       tile(sc.messages_per_commit, "your messages per saved change", last.messages_per_commit, prev.messages_per_commit),
       tile(sc.chats, "chats"), tile(sc.commits, "saved changes"),
       tile(sc.compressions, "chats picked up after memory was compressed"),
-      tile(sc.crashes, "Anthill crashes"));
+      tile(sc.crashes, "Anthill crashes"),
+      tile(sc.corrections, "notes found wrong and corrected"));
     const box = el("div", "weeks-box"), tb = el("table", "weeks");
     const hr = el("tr"); ["week", "chats", "your messages", "saved changes", "messages per change", "message → saved", "Anthill used"].forEach((h) => hr.append(el("th", "", h)));
     tb.append(hr);
@@ -240,6 +241,8 @@
     box.append(tb);
     const used = Object.entries(sc.anthill_usage || {}).slice(0, 8).map(([k, v]) => k + " " + v).join(" · ");
     const kids = [tiles, box, el("div", "note", "Anthill parts used this week: " + (used || "none"))];
+    (sc.corrected || []).slice().reverse().forEach((c) => kids.push(el("div", "note",
+      "corrected " + String(c.t || "").slice(5, 10) + " · " + c.page + ": was “" + c.was + "” → now “" + c.now + "”" + (c.why ? " (" + c.why + ")" : ""))));
     if (sc.imported_share > 0.5) kids.push(el("div", "note", "Mostly read from your saved Claude chats and git history (the live trail began on 29 Sep). Chat starts, compressions and notes are recorded live from now on."));
     fill("numbers", kids, "");
   }

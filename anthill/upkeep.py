@@ -140,6 +140,30 @@ def test_items(nodes: list[dict[str, Any]], files: set[str]) -> list[dict[str, s
     return out
 
 
+def citation_items(ctx: _ctx.Context) -> list[dict[str, str]]:
+    """Citations nothing can check, on any page, whatever the commit touched.
+
+    The keeper's instructions already said to cite `path::name`; it cited
+    `(sg: run.sh)` anyway, and that one citation crashed the notes check for
+    all 474. An instruction the writer can miss is not a check.
+    """
+    if not ctx.knowledge_dir.exists():
+        return []
+    from anthill.knowledge import claims
+    from anthill.navigate import structure
+    out = []
+    for c in claims.from_knowledge(ctx.knowledge_dir):
+        sid = (c.get("symbol_id") or "").strip()
+        # Only where a precise citation is possible: a rule about a shell
+        # script or a config file can only ever be checked for existence,
+        # and asking for `run.sh::<name>` would be advice nobody can follow.
+        if sid and "::" not in sid and (sid.endswith(".py") or structure.is_script(sid)):
+            out.append({"kind": "knowledge", "subject": f"{c['source']}#{c['claim_id']}@{sid}",
+                        "detail": f"{c['source']} rule {c['claim_id']} cites the whole file {sid}; "
+                                  f"nothing can check that -- cite {sid}::<the name the rule is about>"})
+    return out
+
+
 def work_items(ctx: _ctx.Context) -> list[dict[str, str]]:
     """A work page behind its own branch, and recent work no page describes.
 
@@ -173,7 +197,7 @@ def work_items(ctx: _ctx.Context) -> list[dict[str, str]]:
 def check(ctx: _ctx.Context, files: set[str]) -> list[dict[str, str]]:
     nodes = _nodes(ctx)
     return (work_items(ctx) + glossary_items(ctx, nodes) + knowledge_items(ctx, files)
-            + test_items(nodes, files))
+            + citation_items(ctx) + test_items(nodes, files))
 
 
 def _record_path(ctx: _ctx.Context) -> Path:

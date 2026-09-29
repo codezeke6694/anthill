@@ -75,3 +75,18 @@ def test_the_page_carries_the_numbers(project):
     cli.main(["where"])
     s = server.state(project)
     assert "weekly" in s["score"] and s["score"]["anthill_usage"].get("where") == 1
+
+
+def test_a_correction_is_recorded_and_counted(project):
+    import subprocess
+    tool = Path(__file__).resolve().parents[1] / "bin" / "anthill"
+    r = subprocess.run([str(tool), "correction", "--page", "placement",
+                        "--was", "Pachpedwa crosses because of NEAR_KM",
+                        "--now", "Pachpedwa crosses because the town list has no country",
+                        "--why", "replayed the story"], cwd=project.root, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    sc = scorecard.scorecard(trail.read(project))
+    assert sc["corrections"] == 1 and sc["corrected"][0]["page"] == "placement"
+    r = subprocess.run([str(tool), "correction", "--page", "placement"], cwd=project.root,
+                       capture_output=True, text=True)
+    assert r.returncode == 2
