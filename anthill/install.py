@@ -45,9 +45,70 @@ PROTECTED_PATHS = [
     ".anthill/anthill.config.json",
     ".anthill/contracts/**",
     "CLAUDE.md",
+    "CLAUDE.local.md",
     "AGENTS.md",
     ".claude/**",
 ]
+
+
+# ---------------------------------------------------------------- local mode
+#
+# The owner, 30 Sep: Anthill should be something a person pulls into the
+# project they are working on and uses, with none of it in that project's git
+# -- their teammates are working on the project, not on Anthill. So when the
+# tool itself sits inside the project (`git clone <anthill> anthill`), the
+# install writes only files git never sees: the rules to CLAUDE.local.md, the
+# guards and hooks to .claude/settings.local.json, and every Anthill path to
+# the clone's private .git/info/exclude -- the project's own .gitignore is not
+# touched. A tool installed from outside the project (LogiAstro's) keeps the
+# shared files, as before.
+
+def tool_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def is_local(ctx: _ctx.Context) -> bool:
+    if (ctx.config.get("install") or {}).get("local") is not None:
+        return bool(ctx.config["install"]["local"])
+    try:
+        tool_root().relative_to(ctx.root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def rules_file(ctx: _ctx.Context) -> str:
+    return "CLAUDE.local.md" if is_local(ctx) else "CLAUDE.md"
+
+
+def _tracked(ctx: _ctx.Context, rel: str) -> bool:
+    import subprocess
+    r = subprocess.run(["git", "ls-files", "--error-unmatch", rel], cwd=ctx.root,
+                       capture_output=True, text=True)
+    return r.returncode == 0
+
+
+EXCLUDE_START, EXCLUDE_END = "# >>> anthill (local install) >>>", "# <<< anthill (local install) <<<"
+
+
+def write_exclude(ctx: _ctx.Context, paths: list[str]) -> str | None:
+    """Put Anthill's paths in this clone's own ignore list, and nowhere shared."""
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=ctx.root,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    p = Path(r.stdout.strip())
+    if not p.is_absolute():
+        p = ctx.root / p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    text = p.read_text(encoding="utf-8") if p.exists() else ""
+    if EXCLUDE_START in text:
+        head, rest = text.split(EXCLUDE_START, 1)
+        text = head.rstrip("\n") + ("\n" if head.strip() else "") + rest.split(EXCLUDE_END, 1)[-1].lstrip("\n")
+    block = "\n".join([EXCLUDE_START, "# written by anthill install; teammates never see these", *paths, EXCLUDE_END])
+    p.write_text((text.rstrip("\n") + "\n\n" if text.strip() else "") + block + "\n", encoding="utf-8")
+    return str(p)
 
 STATE_SUBDIRS = ("contracts", "units", "audits", "sprints", "log",
                  "roles", "maps", "knowledge", "build")
@@ -281,6 +342,33 @@ correct any rule your change made untrue, add a History line.
 
 {audit_note}
 """
+
+
+def update(ctx: _ctx.Context) -> dict[str, Any]:
+    """Pull the newest Anthill into its folder, then re-render this project's rules.
+
+    The install is re-run by the *new* code, in its own process: the running
+    one has the old modules loaded. The owner's settings, charter and notes
+    are kept -- a re-install carries them over.
+    """
+    import subprocess
+    root = tool_root()
+    r = subprocess.run(["git", "-C", str(root), "pull", "--ff-only"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return {"updated": False, "why": (r.stderr or r.stdout).strip()[-400:]}
+    name = (ctx.config.get("project") or {}).get("name") or ctx.root.name
+    re_run = subprocess.run([str(root / "bin" / "anthill"), "install", "--force", "--name", name],
+                            cwd=ctx.root, capture_output=True, text=True)
+    return {"updated": re_run.returncode == 0, "pulled": r.stdout.strip()[-400:],
+            "install": (re_run.stdout + re_run.stderr).strip()[-600:]}
+
+
+def hook_invocation(ctx: _ctx.Context) -> str:
+    """The command Claude's hooks run. A hook's working directory follows the
+    chat -- into a subfolder, into a worktree -- so a relative path breaks;
+    $CLAUDE_PROJECT_DIR stays at the project root."""
+    cmd = invocation(ctx)
+    return "$CLAUDE_PROJECT_DIR/" + cmd[2:] if cmd.startswith("./") else cmd
 
 
 def invocation(ctx: _ctx.Context) -> str:
@@ -627,8 +715,16 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
     if cmd == "anthill":
         return text
     bindir = cmd.rsplit("/bin/", 1)[0] + "/bin"
+    if bindir.startswith("./"):
+        # Inside the project: from the project root, wherever the shell is --
+        # a relative PATH entry breaks the moment an agent cds into a subfolder.
+        where = (f"Anthill is in `{bindir[2:-4]}/` inside this project, kept out of git "
+                 f"(`{cmd}` from the project root).")
+        bindir = '$(git rev-parse --show-toplevel)/' + bindir[2:]
+    else:
+        where = "Anthill lives outside this repository."
     header = (f"## Run this first, every session\n\n"
-              f"Anthill lives outside this repository. Put it on your PATH "
+              f"{where} Put it on your PATH "
               f"before anything else, or every command below fails with "
               f"`command not found`:\n\n"
               f"```bash\nexport PATH=\"{bindir}:$PATH\"\n```\n\n"
@@ -641,6 +737,11 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
 def plan(ctx: _ctx.Context, project_name: str = "",
          exclude: list[str] | None = None) -> dict[str, Any]:
     """What an install would do, without doing it."""
+    try:
+        inside = tool_root().relative_to(ctx.root.resolve()).parts[0]
+        exclude = sorted(set(exclude or []) | {inside})
+    except (ValueError, IndexError):
+        pass
     if exclude:
         # Applied before discovery, not after: a vendored copy of this tool sits
         # in the project it manages, and left in the source set the blueprint
@@ -665,9 +766,10 @@ def plan(ctx: _ctx.Context, project_name: str = "",
             str(ctx.config_path),
             str(ctx.constitution),
             *[str(ctx.roles_dir / f"{r}.md") for r in ctx.config.get("roles", [])],
-            str(ctx.root / "CLAUDE.md"),
-            str(ctx.root / ".claude" / "settings.json"),
+            str(ctx.root / rules_file(ctx)),
+            str(ctx.root / ".claude" / ("settings.local.json" if is_local(ctx) else "settings.json")),
         ],
+        "local": is_local(ctx),
         "protected_paths": PROTECTED_PATHS,
         "first_move": (
             "the install has already surveyed the code (see `survey`): the map "
@@ -787,6 +889,9 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     cfg["roles"] = roles
     cfg["protected_paths"] = PROTECTED_PATHS
     cfg["installed_mode"] = result["mode"]
+    local = is_local(ctx)
+    cfg["install"] = {"local": local,
+                      "tool": (str(tool_root().relative_to(ctx.root.resolve())) if local else str(tool_root()))}
 
     # Settings the owner chose, carried across a re-install. `--force` is the
     # sanctioned way to re-render CLAUDE.md and AGENTS.md after this tool
@@ -841,17 +946,24 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     from anthill import roles as roles_mod
     agents_values = dict(values, ROLE_TABLE=roles_mod.table(ctx),
                          PROTECTED_BLOCK=protected_block, ANTHILL=cmd)
-    (ctx.root / "AGENTS.md").write_text(
-        _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values), encoding="utf-8")
-    written.append(str(ctx.root / "AGENTS.md"))
-    (ctx.root / "CLAUDE.md").write_text(
-        render_claude_md(ctx, name, protected_block), encoding="utf-8")
-    written.append(str(ctx.root / "CLAUDE.md"))
+    # In local mode a project's own AGENTS.md -- one git already tracks -- is
+    # theirs, and left alone; Codex then reads theirs, and the install says so.
+    if local and _tracked(ctx, "AGENTS.md"):
+        result["agents_md_kept"] = ("AGENTS.md belongs to the project, so Anthill left it alone; "
+                                    "tools that read only AGENTS.md will not see Anthill's rules")
+    else:
+        (ctx.root / "AGENTS.md").write_text(
+            _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values), encoding="utf-8")
+        written.append(str(ctx.root / "AGENTS.md"))
+    rules = ctx.root / rules_file(ctx)
+    rules.write_text(render_claude_md(ctx, name, protected_block), encoding="utf-8")
+    written.append(str(rules))
 
     # The deny rules. Merged into an existing settings.json rather than
     # replacing it -- clobbering a developer's own permissions to install a
-    # guardrail would be its own kind of overreach.
-    settings_path = ctx.root / ".claude" / "settings.json"
+    # guardrail would be its own kind of overreach. In local mode they go in
+    # the per-person file with the hooks, so nothing shared changes.
+    settings_path = ctx.root / ".claude" / ("settings.local.json" if local else "settings.json")
     settings: dict[str, Any] = {}
     if settings_path.exists():
         try:
@@ -873,15 +985,15 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     # Anthill lives on this laptop, and settings.json is committed -- a
     # teammate who cloned it would get a hook pointing at nothing.
     local_path = ctx.root / ".claude" / "settings.local.json"
-    local: dict[str, Any] = {}
+    personal: dict[str, Any] = {}
     if local_path.exists():
         try:
-            local = json.loads(local_path.read_text(encoding="utf-8"))
+            personal = json.loads(local_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             shutil.copy2(local_path, local_path.with_suffix(".json.anthill-backup"))
-            local = {}
-    result["claude_hooks"] = merge_claude_hooks(local, invocation(ctx))
-    local_path.write_text(json.dumps(local, indent=2) + "\n", encoding="utf-8")
+            personal = {}
+    result["claude_hooks"] = merge_claude_hooks(personal, hook_invocation(ctx))
+    local_path.write_text(json.dumps(personal, indent=2) + "\n", encoding="utf-8")
     written.append(str(local_path))
 
     # A knowledge dir with no config is a knowledge base you cannot author into,
@@ -929,6 +1041,17 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     if not gitignore.exists():
         gitignore.write_text("build/\nunits/\n", encoding="utf-8")
         written.append(str(gitignore))
+
+    if local:
+        tool = cfg["install"]["tool"]
+        paths = [f"/{tool}/", "/.anthill/", "/CLAUDE.local.md", "/.claude/settings.local.json",
+                 "/.claude/agents/anthill-keeper.md"]
+        if not _tracked(ctx, "AGENTS.md"):
+            paths.append("/AGENTS.md")
+        if not _tracked(ctx, "CONSTITUTION.md"):
+            paths.append("/CONSTITUTION.md")
+        result["excluded_in"] = write_exclude(ctx, paths)
+        result["local"] = True
 
     if run_survey and write and brownfield_now(ctx):
         result["survey"] = survey(ctx)

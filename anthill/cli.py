@@ -39,6 +39,7 @@ DELEGATED = [
     ("note", 'Leave a line for whoever picks this up: "doing X; ruled out Y; next Z"'),
     ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
     ("correction", "Record that a page said something wrong: --page, --was, --now, --why"),
+    ("update", "Pull the newest Anthill into its folder and re-render this project's rules"),
     ("goal", "Work to a goal end to end: set, step, decided, block, done"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
@@ -205,6 +206,15 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] == "integrate":
         from anthill import integrate
         return integrate.main(argv[1:])
+    if argv and argv[0] == "update":
+        from anthill import install as inst
+        ctx = _ctx.resolve(None)
+        if not ctx.installed:
+            print(f"anthill: not installed in {ctx.root}", file=sys.stderr)
+            return 2
+        out = inst.update(ctx)
+        print(out.get("pulled") or "", out.get("install") or out.get("why") or "", sep="\n")
+        return 0 if out.get("updated") else 1
     if argv and argv[0] == "goal":
         from anthill import goal
         return goal.main(argv[1:])

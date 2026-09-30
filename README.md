@@ -60,12 +60,31 @@ area reports `intent_settled: false`. That is drift made visible, not prevented.
 
 ## Install
 
+Pull it into the project you are working on, and install from there:
+
 ```bash
-export PATH="/path/to/anthill/bin:$PATH"
 cd your-project
-anthill status            # what it would do, and whether it sees source
-anthill install --name "Your Project" --stack "Python"
+git clone <this repository> anthill
+./anthill/bin/anthill install --name "Your Project" --stack "Python"
 ```
+
+Nothing of it reaches your project's git. With the tool inside the project,
+the install writes only files git never sees -- the agents' rules to
+`CLAUDE.local.md`, the guards and hooks to `.claude/settings.local.json` --
+and lists every Anthill path in this clone's own `.git/info/exclude`. Your
+`.gitignore` is not touched and your teammates see no change. Every command it
+writes is relative to the project, so the same setup works on any machine that
+pulls it. A project that already tracks its own `AGENTS.md` keeps it.
+
+Update later with one command; your charter, notes and settings are kept:
+
+```bash
+./anthill/bin/anthill update
+```
+
+Installed from a copy *outside* the project instead (`/path/to/anthill/bin/anthill
+install`), it writes the shared `CLAUDE.md` and `.claude/settings.json`, for a
+team that wants every agent on the project under the same rules.
 
 Install writes a human-owned `CONSTITUTION.md`, role definitions under
 `.anthill/roles/`, and — the part that matters — **deny rules in

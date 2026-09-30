@@ -50,10 +50,12 @@ def digest(text: str) -> str:
 
 
 def controlled_files(ctx: _ctx.Context) -> list[Path]:
-    out = [ctx.root / "CLAUDE.md", ctx.root / "AGENTS.md", ctx.constitution]
+    from anthill import install as inst
+    local = inst.is_local(ctx)
+    out = [ctx.root / inst.rules_file(ctx), ctx.root / "AGENTS.md", ctx.constitution]
     for role in (ctx.config.get("roles") or []):
         out.append(ctx.roles_dir / f"{role}.md")
-    out.append(ctx.root / ".claude" / "settings.json")
+    out.append(ctx.root / ".claude" / ("settings.local.json" if local else "settings.json"))
     return [p for p in out]
 
 
@@ -90,7 +92,7 @@ def _fresh_render(ctx: _ctx.Context) -> dict[str, str]:
     cmd = inst.invocation(ctx)
     out: dict[str, str] = {}
 
-    out["CLAUDE.md"] = inst.render_claude_md(ctx, name, protected_block)
+    out[inst.rules_file(ctx)] = inst.render_claude_md(ctx, name, protected_block)
 
     try:
         agents_values = dict(values, ROLE_TABLE=roles_mod.table(ctx),
