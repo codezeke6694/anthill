@@ -70,7 +70,16 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
                       "recent": sorted(events, key=lambda e: e.get("t", ""))[-15:],
                       "last_commit": max((e for e in events if e.get("kind") == "commit"),
                                          key=lambda e: e.get("t", ""), default=None)},
-            "score": _score(events)}
+            "score": _score(events),
+            "goals": _goals(ctx)}
+
+
+def _goals(ctx: _ctx.Context) -> list[dict[str, Any]]:
+    from anthill import goal
+    try:
+        return [{**g, "next": goal.next_step(g)} for g in goal.all_goals(ctx)[:12]]
+    except Exception:                         # noqa: BLE001
+        return []
 
 
 def _score(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -144,6 +153,18 @@ class _Handler(BaseHTTPRequestHandler):
                                      body.get("answer", ""))
             elif self.path == "/api/sign":
                 out = actions.sign(self.ctx, body.get("page", ""), by)
+            elif self.path in ("/api/goal-answer", "/api/overturn"):
+                from anthill import goal
+                try:
+                    g = (goal.owner_answer(self.ctx, body.get("goal", ""), str(body.get("answer", "")))
+                         if self.path == "/api/goal-answer" else
+                         goal.overturn(self.ctx, body.get("goal", ""), int(body.get("index", -1)),
+                                       str(body.get("note", ""))))
+                except (LookupError, ValueError, OSError) as exc:
+                    raise actions.Refused(str(exc))
+                if self.path == "/api/goal-answer" and not str(body.get("answer", "")).strip():
+                    raise actions.Refused("the answer is empty")
+                out = {"goal": g["id"], "status": g["status"]}
             elif self.path == "/api/reopen":
                 out = actions.reopen(self.ctx, body.get("unit", ""), body.get("reason", ""), by,
                                      str(REPO_ROOT / "bin" / "anthill"))

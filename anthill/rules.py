@@ -164,6 +164,53 @@ def upkeep_rule(ctx: _ctx.Context) -> str:
     ])
 
 
+def goal_rule(ctx: _ctx.Context) -> str:
+    """Once the owner says end to end, stopping needs a reason.
+
+    The owner, 30 Sep: an agent told to do something end to end did one step
+    and reported back, so they circled back again and again -- and most of
+    their development time was spent idle, waiting to be asked.
+    """
+    from anthill import goal
+    stops = "\n".join(f"- {s}" for s in goal.HARD_STOPS)
+    return "\n".join([
+        "## Working to a goal: when the owner says \"end to end\"",
+        "",
+        "When the owner hands you something to finish -- \"do it end to end\", \"take it "
+        "all the way\", \"carry on until it's done\" -- write the goal down first, with "
+        "the command that proves it is done:",
+        "",
+        "```bash",
+        'anthill goal set "<the goal, in the owner\'s words>" --done-when "<a test or score command>" --step "..." --step "..."',
+        "```",
+        "",
+        "Then keep working until it is done. **Do not stop to report after each step**, and "
+        "do not ask what the owner's written decisions or rules already answer: decide it, "
+        "and log it so they can overturn it --",
+        "",
+        "```bash",
+        'anthill goal decided "<what you chose>" --because "<the decision or rule that settles it>"',
+        "anthill goal step --done 2                      # tick a step",
+        "anthill goal done                               # runs the check; only a pass closes the goal",
+        "```",
+        "",
+        "Technical choices are yours to make the same way. Stop only for what the owner "
+        "alone decides, and put the question where they will see it, with your "
+        "recommendation:",
+        "",
+        stops,
+        "",
+        "```bash",
+        'anthill goal block "<the question, and what you recommend>"',
+        "```",
+        "",
+        "In Claude a hook sends you back if you end a turn with the goal open and no "
+        "blocker recorded; if nothing was committed, noted or decided since it last did, "
+        "it lets you stop and marks the goal stalled. Every other rule here still holds "
+        "inside a goal: never push, never commit on main, never bypass a hook.",
+    ])
+
+
 def owner_view_rule(ctx: _ctx.Context) -> str:
     """How the owner sees all of this without asking an agent.
 

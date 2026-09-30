@@ -163,6 +163,8 @@ one thing that buys genuine independence.
 
 {upkeep_rule}
 
+{goal_rule}
+
 {owner_view}
 
 {git_rules}
@@ -325,6 +327,7 @@ def render_values(ctx: _ctx.Context, name: str = "", description: str = "",
         "GIT_RULES": rules.git_rules(ctx),
         "COLD_START": rules.cold_start_rule(ctx),
         "UPKEEP_RULE": rules.upkeep_rule(ctx),
+        "GOAL_RULE": rules.goal_rule(ctx),
         "OWNER_VIEW": rules.owner_view_rule(ctx),
         "AUDIT_NOTE": rules.audit_note(ctx),
         "MAX_FILES": "3",
@@ -419,6 +422,7 @@ CLAUDE_HOOKS = {
     "SessionStart": "resume --hook",
     "UserPromptSubmit": "prompt --hook",
     "PreCompact": "checkpoint --hook",
+    "Stop": "goal --hook",
 }
 
 
@@ -615,6 +619,7 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
                             git_rules=rules.git_rules(ctx),
                             cold_start=rules.cold_start_rule(ctx),
                             upkeep_rule=rules.upkeep_rule(ctx),
+                            goal_rule=rules.goal_rule(ctx),
                             owner_view=rules.owner_view_rule(ctx),
                             blueprint_rule=rules.map_build_rule(ctx),
                             escalation_rule=rules.escalation_rule(ctx),

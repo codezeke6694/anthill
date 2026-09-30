@@ -152,6 +152,23 @@ def resume(ctx: _ctx.Context, session: str = "") -> str:
     if pages:
         out.append("")
 
+    try:
+        from anthill import goal as _goal
+        g = _goal.current(ctx, session) or next((x for x in _goal.all_goals(ctx)
+                                                   if x.get("branch") == branch and x.get("status") in ("active", "blocked")), None)
+    except Exception:                          # noqa: BLE001 -- resume must still print
+        g = None
+    if g:
+        out.append(f"**Goal: {g['title']}** ({g['status']}) -- done when `{g.get('done_when')}` passes")
+        out.append(f"- Next: {_goal.next_step(g)}")
+        for a in [a for a in g.get("answers", []) if a.get("answer")][-2:]:
+            out.append(f"- The owner answered \"{_clip(a['question'], 160)}\": {a['answer']}")
+        for d in [d for d in g.get("decided", []) if d.get("overturned")]:
+            out.append(f"- The owner OVERTURNED your decision \"{_clip(d['what'], 120)}\": {d['overturned']['note']}")
+        if g["status"] == "active":
+            out.append("- Keep going until it is done; `anthill goal` shows the steps.")
+        out.append("")
+
     def fmt(e: dict[str, Any]) -> str:
         return f"- {str(e.get('t', ''))[5:16].replace('T', ' ')}  {e.get('text', '')}"
 

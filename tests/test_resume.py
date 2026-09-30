@@ -85,7 +85,7 @@ def test_install_puts_the_hooks_in_the_per_person_file(project):
     shared = json.loads((project.root / ".claude" / "settings.json").read_text())
     assert "hooks" not in shared
     hooks = json.loads(local.read_text())["hooks"]
-    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "PreCompact"}
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "PreCompact", "Stop"}
     assert "resume --hook" in hooks["SessionStart"][0]["hooks"][0]["command"]
 
 

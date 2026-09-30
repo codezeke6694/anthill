@@ -174,9 +174,13 @@
   <section class="panel" role="tabpanel" id="p-you" aria-labelledby="t-you">
     <p class="intro">Questions agents are waiting on. Your answer goes onto that piece of work in your words, and the next chat that picks it up acts on it.</p>
     <div id="asks" class="panel"></div>
+    <h2 class="sec" id="dec-h" hidden>Decided for you by agents working to a goal</h2>
+    <div id="decided" class="panel"></div>
   </section>
   <section class="panel" role="tabpanel" id="p-work" aria-labelledby="t-work" hidden>
     <p class="intro">Every piece of work in progress, what happens next, and anything that has fallen behind.</p>
+    <h2 class="sec">Goals: work an agent is taking end to end</h2><div id="goals" class="panel"></div>
+    <h2 class="sec">Work pages</h2>
     <div id="work" class="panel"></div>
     <h2 class="sec">Being edited right now</h2><div id="editing" class="panel"></div>
     <h2 class="sec">Work no page describes</h2><div id="untracked" class="panel"></div>
@@ -326,6 +330,10 @@
     const open = [], done = [];
     (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) => { const a = answerTo(r, q); (a ? done : open).push({ r, q, a }); }));
 
+    const goals = s.goals || [];
+    const goalQs = goals.reduce((n, gl) => n + (gl.blockers || []).filter((b) => !b.answer).length, 0);
+    const running = goals.filter((gl) => gl.status === "active").length;
+
     // at a glance
     const crashes = (tr.crashes || []).length;
     const lastCommit = tr.last_commit;
@@ -333,14 +341,14 @@
     const g = (cls, big, lbl, hint, go) => { const b = el("button", "g " + cls); b.type = "button"; b.append(el("span", "big", big), el("span", "lbl", lbl), el("span", "hint", hint)); b.addEventListener("click", () => show(go, true)); return b; };
     const behind = (w.work || []).filter((r) => (r.drift || {}).behind).length;
     fill("glance", [
-      g(open.length ? "you" : "good", String(open.length), open.length === 1 ? "question for you" : "questions for you",
+      g(open.length + goalQs ? "you" : "good", String(open.length + goalQs), open.length + goalQs === 1 ? "question for you" : "questions for you",
         open.length ? (done.length ? done.length + " answered, waiting for an agent" : "agents are waiting on these") : "nothing is waiting on you", "you"),
-      g("", String((w.work || []).length), "pieces of work", behind ? behind + " page(s) behind their branch" : "all pages up to date", "work"),
+      g("", String((w.work || []).length), "pieces of work", (running ? running + " goal(s) running end to end · " : "") + (behind ? behind + " page(s) behind" : "all pages up to date"), "work"),
       g("", sc.asked_to_saved_median_min != null ? sc.asked_to_saved_median_min + " min" : "—", "from asking to a saved change", "typical this week · lower is better", "numbers"),
       g(crashes ? "bad" : "good", crashes ? "✕ " + crashes : "✓", crashes ? "Anthill crashed" : "All checks healthy",
         lastMin != null ? "last change saved " + ago(lastMin) : "no change saved yet", "activity"),
     ], "");
-    badge("you", open.length, true);
+    badge("you", open.length + goalQs, true);
     badge("work", (w.work || []).length);
     badge("activity", crashes ? "✕" : "");
     badge("rules", (w.decisions || []).length);
@@ -354,7 +362,40 @@
       else c.append(el("p", "small", "Open the address your terminal printed to answer here."));
       return c;
     };
-    fill("asks", open.map(askCard).concat(done.length ? [el("h2", "sec", "Answered")].concat(done.map(askCard)) : []), "Nothing is waiting on you.");
+    // a goal's open question: an agent stopped for it, and the goal waits on you
+    const goalAsks = [];
+    goals.forEach((gl) => (gl.blockers || []).filter((b) => !b.answer).forEach((b) => {
+      const c = el("article", "card"); c.append(el("h3", "", b.question), el("div", "from", "goal: " + gl.title + " · the agent stopped here and is waiting"));
+      if (KEY) c.append(answerBox(hid("g" + gl.id + b.t), (v) => press("/api/goal-answer", { goal: gl.id, answer: v })));
+      goalAsks.push(c);
+    }));
+    fill("asks", goalAsks.concat(open.map(askCard)).concat(done.length ? [el("h2", "sec", "Answered")].concat(done.map(askCard)) : []), "Nothing is waiting on you.");
+    const dec = [];
+    goals.forEach((gl) => (gl.decided || []).forEach((d, i) => {
+      if (d.overturned) return;
+      const c = el("article", "card"); c.append(el("h3", "", "✓ " + d.what), el("div", "from", "because: " + d.because + " · goal: " + gl.title));
+      if (KEY) { const id = hid("o" + gl.id + i); const a = el("div", "act"); const inp = el("input"); inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Disagree? Say what it should be instead…"; inp.setAttribute("aria-label", "Overturn this decision");
+        inp.addEventListener("input", () => { drafts[id] = inp.value; });
+        const go = el("button", "b ghost", "Overturn"); go.type = "button";
+        go.addEventListener("click", async () => { if (inp.value.trim() && await press("/api/overturn", { goal: gl.id, index: i, note: inp.value.trim() })) delete drafts[id]; });
+        a.append(inp, go); c.append(a); }
+      dec.push(c);
+    }));
+    $("dec-h").hidden = !dec.length;
+    fill("decided", dec, "");
+    const STATE = { active: ["running", "p-in-progress"], blocked: ["waiting on you", "p-waiting-on-owner"], done: ["✓ done", "p-signed"], stalled: ["stuck", "p-escalated"], stopped: ["stopped", "p-paused"] };
+    fill("goals", goals.map((gl) => {
+      const c = el("article", "card"); const h = el("h3", "", gl.title); const st = STATE[gl.status] || [gl.status, "p-paused"]; h.append(pill(st[0], st[1])); c.append(h);
+      const ticked = (gl.steps || []).filter((x) => x.done).length;
+      if ((gl.steps || []).length) c.append(el("div", "from", ticked + " of " + gl.steps.length + " steps done"));
+      if (gl.status === "active" || gl.status === "blocked") { const n = el("div", "next"); n.append(el("b", "", "Next"), document.createTextNode(gl.next)); c.append(n); }
+      c.append(el("div", "from", "done when this passes: " + (gl.done_when || "—")));
+      if ((gl.decided || []).length) c.append(el("div", "from", gl.decided.length + " decision(s) made for you — see Needs you"));
+      if (gl.result) c.append(el("div", gl.result.passed ? "said" : "warn", (gl.result.passed ? "✓ check passed " : "check failed ") + String(gl.result.t || "").slice(5, 16).replace("T", " ")));
+      c.append(el("div", "from", (gl.tool === "claude-code" ? "Claude" : gl.tool) + (gl.session ? " · chat " + gl.session.slice(0, 6) : "") + " · " + (gl.branch || "")));
+      return c;
+    }), "No goal yet. Tell an agent to take something end to end, and it shows here.");
+
 
     // work
     fill("work", (w.work || []).map((r) => {
