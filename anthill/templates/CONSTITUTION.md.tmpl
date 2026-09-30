@@ -1,0 +1,95 @@
+# Constitution — {{PROJECT_NAME}}
+
+> Single source of truth for this project. Only a human owner may edit this file.
+> When any rule conflicts with anything else, this file wins.
+
+---
+
+## Authority chain
+
+```
+Owner directive
+  → CONSTITUTION.md          (this file — human-owned)
+    → .anthill/roles/        (what each role may do)
+      → .anthill/contracts/  (the units in flight)
+        → repo code
+```
+
+Anything lower may never rewrite anything higher. An agent that believes a
+higher rule is wrong writes an escalation and stops.
+
+---
+
+## Two authority relationships
+
+The system does not have one relationship with you. It has two, and they point
+in opposite directions on purpose.
+
+| Plane | Who decides | What that means in practice |
+|---|---|---|
+| **Sprint / execution** | **You do.** The system is your instrument. | It discusses, proposes a plan, executes what you approve, and reports back. It does not choose what gets built, and it does not decide what "correct" means. |
+| **Knowledge / navigation** | **The system does.** | It builds and maintains its own blueprint and its own record of intent, as it works, without asking. You are not asked to maintain it. |
+
+The consequence of the second row is stated plainly rather than hidden:
+knowledge pages written by an agent record **what the agent did**, not what you
+wanted. `intent_attested_by` is the only field that says a human agreed, no
+agent may ever fill it, and until a human does, that area reports
+`intent_settled: false`. That is not a defect to be suppressed — it is the drift
+being visible instead of silent.
+
+---
+
+## Project
+
+**Name:** {{PROJECT_NAME}}
+**Description:** {{PROJECT_DESCRIPTION}}
+**Stack:** {{STACK}}
+
+## What we're building
+
+{{WHAT_WE_ARE_BUILDING}}
+
+## Architecture
+
+{{ARCHITECTURE}}
+
+## Key decisions
+
+{{KEY_DECISIONS}}
+
+---
+
+## Rules
+
+- No new dependencies without owner approval.
+- No scope changes without a sprint entry.
+- Contracts are the source of truth for any interface between units. Interfaces
+  are never defined inline in a unit brief.
+- No agent modifies another agent's scope. Ownership is enforced, not requested.
+- An agent never asserts its own completion. Only a passing gate closes a unit.
+- An audit may refuse a unit. An audit may never, by itself, pass one.
+- Protected paths (below) are never edited by any agent, for any reason.
+- No agent pushes to any remote unless the owner asks for that push. An
+  approval given once does not carry to the next one.
+- No agent commits to a protected branch. Work happens on a branch, because
+  others branch from and merge into `main` too.
+- No agent bypasses a git hook. `--no-verify` is the owner's, not an agent's.
+
+## Protected paths
+
+These bind the agents, so the agents may not reach them. Editing any of these is
+an owner action performed outside a unit.
+
+```text
+/CONSTITUTION.md
+/.anthill/roles/
+/.anthill/anthill.config.json
+/.anthill/contracts/
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+```
+
+## Coding standards
+
+{{CODING_STANDARDS}}

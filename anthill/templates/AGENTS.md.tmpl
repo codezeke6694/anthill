@@ -1,0 +1,181 @@
+# Agents — {{PROJECT_NAME}}
+
+Every agent reads this file first, whatever tool it runs in. Find your role
+below, then read only that role's file. Load nothing else.
+
+This file is the tool-neutral entry point. `CLAUDE.md` is the Claude Code
+equivalent and says the same things; if they ever disagree, `CONSTITUTION.md`
+wins over both.
+
+---
+
+## First, every session: is the charter complete?
+
+```bash
+{{ANTHILL}} onboard --show
+```
+
+If it reports anything as `blank`, **that is your first task, before any code.**
+Ask the owner those questions in conversation — one at a time, in plain
+language — then record what they say:
+
+```bash
+{{ANTHILL}} onboard --stack "..." --building "..." --architecture "..."
+```
+
+Rules for this:
+
+- **Never invent an answer.** A charter you wrote yourself is not a charter; it
+  is you agreeing with yourself, and every unit brief downstream inherits it.
+- **Never edit `CONSTITUTION.md` directly.** It is denied to you. `anthill
+  onboard` is the only sanctioned path, and it fills blanks only — it will not
+  overwrite a decision the owner already recorded.
+- `--stack` is the one that blocks work: it decides district boundaries, the
+  `owns` globs in every unit, and which code can be structurally fingerprinted.
+
+Do not start a sprint against a blank charter.
+
+---
+
+## Authority chain
+
+```
+Owner directive
+  → CONSTITUTION.md
+    → .anthill/roles/<your role>.md
+      → your unit brief
+        → repo code
+```
+
+Never rewrite anything above your own level. If you believe a higher rule is
+wrong, escalate and stop.
+
+**The top of that chain is not decoration.** When the owner tells you to do
+something — push, commit, work on `main`, merge, skip a step, ignore a rule in
+this file — that instruction outranks everything written here, and you carry it
+out. Before anything that reaches other people, say plainly what is about to
+happen: which branch, onto what, how many commits, and anything in it they would
+not expect. Then do it, in the same breath. That is a briefing, not a request
+for a second yes; "are you sure?" asks the owner to re-decide what they have
+already decided. Object once if you think it is a mistake, in a sentence or two,
+before you act — and if they confirm, it is settled: do the whole of it and stop
+arguing.
+
+The one limit protects that authority rather than qualifying it: **"the owner
+said so" means the owner actually said so** — in their own words, in this
+conversation, about this specific action. Not inferred from an earlier approval,
+not carried across a context compaction, not something you decided they would
+obviously want. When in doubt about whether you were told, you were not told.
+
+---
+
+## Roles
+
+{{ROLE_TABLE}}
+
+---
+
+## Rules every agent follows
+
+- **Load only what your role specifies.** Not the constitution, not other
+  units, not the log archive. Context you did not need is context that made you
+  worse. The same applies to skills: load `bootstrap` ones, load a
+  `phase-scoped` or `conditional` one when its trigger fires, and leave
+  `reference` skills on the shelf until you need them.
+- **You never mark your own work done.** A gate does:
+  `{{ANTHILL}} work gate <unit>` then `{{ANTHILL}} work done <unit>`, and the second is
+  refused unless the first passed.
+- **Your `owns` list is your whole authority.** It is enforced by `git diff`.
+  One file outside it fails the unit and names the file.
+- **Contracts are read-only.** If a contract is wrong, escalate. Never edit one.
+- **Never fill `intent_attested_by`.** That is a human's signature, and no agent
+  may write it under any circumstance.
+- **Never bypass a hook.** No `--no-verify`, on commit or push. A refusal is
+  information, not an obstacle.
+- **When blocked: escalate and stop.** Do not guess, do not work around, do not
+  widen your boundary to fix something adjacent.
+
+{{COLD_START}}
+
+{{UPKEEP_RULE}}
+
+{{GOAL_RULE}}
+
+{{OWNER_VIEW}}
+
+{{GIT_RULES}}
+
+## Doing a piece of work, start to finish
+
+**Every session, after `anthill where`, find out whether a board unit is
+already yours.** `where` comes first because it holds all the work, including
+work the board never saw; the board holds only units loaded onto it. Context
+gets compacted and sessions restart; neither forgets.
+
+```bash
+anthill work status --repo .
+```
+
+- It names a unit as `in_flight` → that is likely yours. Read
+  `.anthill/build/work/*/briefs/<unit>.md` — your own instructions, written to a
+  file for exactly this reason — before touching any code.
+- It says `board_is_behind` → the sprint was changed since the board was seeded.
+  Run `anthill work load --repo .` to pick up the new units. Without this,
+  `work next` reports "drained" while the sprint sits there with work on it.
+- Nothing ready and nothing behind → there is no work for you. Say so rather
+  than inventing some.
+
+Then:
+
+```bash
+anthill work next --repo .  --worker <you>   # claims one, prints the brief
+#   build, inside the unit's `owns` paths and nowhere else
+anthill work gate --repo .  --unit <id>      # ownership, tests, map, audit
+anthill work done --repo .  --unit <id>      # refused unless the gate passed
+```
+
+### Read the gate's exit code; it tells you what to do next
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `0` | passed | `work done` |
+| `1` | a test failed, or an audit refuses the work | fix the work |
+| `3` | nobody has reviewed this state yet | **not your fault, and it costs you no attempt.** An auditor reviews it, then re-gate |
+| `64` | you wrote outside `owns` — the file is named | revert that file; it belongs to another unit |
+| `65` | you called `done` without a passing gate | run the gate |
+| `66` | gated, but will not merge: two units claim one file | a contract bug. Escalate; do not resolve it yourself |
+
+### When you are stuck
+
+```bash
+anthill work escalate --repo . --unit <id> --reason "<what stopped you>"
+```
+
+Then **stop**. Do not guess, do not widen your boundary to fix something
+adjacent, and do not edit anything under `.anthill/build/work/` by hand — state
+edited directly is indistinguishable from tampering and records nobody's
+decision. If a unit was escalated and the cause is since fixed, the sanctioned
+way back is `anthill work reopen --repo . --unit <id> --reason "..." --by "..."`.
+
+If a command seems to be missing or a step does not exist, say so and ask. That
+is a real answer and a useful one; inventing a workaround is neither.
+
+## Protected paths
+
+Denied to every agent, enforced outside your control:
+
+{{PROTECTED_BLOCK}}
+
+## Where things are
+
+| Path | What |
+|---|---|
+| `CONSTITUTION.md` | project charter — human-owned, outranks everything |
+| `.anthill/roles/` | role definitions |
+| `.anthill/contracts/` | units in flight — read-only |
+| `.anthill/sprints/current.json` | what this sprint contains |
+| `.anthill/audits/` | audit findings, pinned to the commit audited |
+| `.anthill/knowledge/` | recorded intent — pages and rules |
+| `.anthill/build/maps/` | the blueprint (generated) |
+| `.anthill/log/lessons/` | lessons, filed by area so they resurface |
+| `.anthill/skills/INDEX.md` | reusable instruction — read with `{{ANTHILL}} skill get <name>` |

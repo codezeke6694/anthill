@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anthill</title>
+<!--
+  The owner's page. One file, one data source: GET /api/state, every 5 s.
+  To show something new: add a key in server.py state(), then render it in a
+  tab below. Everything is set with textContent -- page text comes from work
+  pages anyone can edit, so none of it is ever treated as markup.
+
+  Built to be read by a person, not an engineer: the top says what needs
+  them and whether all is well, in plain words; the rest is one tab at a
+  time. Light by default, dark when the system is. State is never shown by
+  colour alone -- every mark also has a word or a symbol.
+-->
+<style>
+  /* The terminal look the owner asked to keep: one dark palette on purpose,
+     monospace throughout. Every colour also carries a word or a symbol. */
+  :root {
+    color-scheme: dark;
+    --ground: #0d0f0c; --card: #13160f; --card-2: #1a1e15; --ink: #e6e4da; --ink-2: #b3b0a3; --ink-3: #85827a;
+    --line: #2a2e22; --accent: #7fc8a9; --accent-soft: #16261f; --you: #e0a15a; --you-soft: #2a1f10;
+    --ok: #7fc8a9; --ok-soft: #16261f; --warn: #e0a15a; --warn-soft: #2a1f10; --bad: #e07a5f; --bad-soft: #2c1712;
+    --bar: #7fc8a9; --focus: #8fb8ff; --link: #8fb8ff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font: 14.5px/1.6 "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .mono, code, .path { font-family: inherit; color: var(--ink-2); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 20px 56px; padding-inline: 16px; display: grid; gap: 18px; }
+  @media (min-width: 720px) { .wrap { padding-inline: 28px; } }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+  /* top bar */
+  header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .brand h1 { margin: 0; font-size: 16px; letter-spacing: .02em; }
+  .brand .ant { color: var(--accent); font-weight: 700; }
+  .meta { color: var(--ink-2); font-size: 14px; }
+  .spacer { flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px;
+          border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink-2); }
+  .chip.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .chip.off { color: var(--you); border-color: var(--you); background: var(--you-soft); }
+  .chip.bad { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+  /* the four cards that answer "what needs me, and is all well?" */
+  .glance { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .g { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px;
+       display: grid; gap: 4px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+  .g:hover { border-color: var(--ink-3); }
+  .g .big { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .g .lbl { font-size: 15px; font-weight: 600; }
+  .g .hint { font-size: 13px; color: var(--ink-2); }
+  .g.you { border-color: var(--you); background: var(--you-soft); }
+  .g.you .big { color: var(--you); }
+  .g.good .big { color: var(--ok); }
+  .g.bad { border-color: var(--bad); background: var(--bad-soft); }
+  .g.bad .big { color: var(--bad); }
+
+  /* tabs */
+  nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  nav.tabs button { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 3px; border: 1px solid transparent;
+                    background: transparent; color: var(--ink-2); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+  nav.tabs button:hover { background: var(--card); }
+  nav.tabs button[aria-selected="true"] { background: var(--card); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+  nav.tabs .key { color: var(--ink-3); }
+  nav.tabs button[aria-selected="true"] .key { color: var(--accent); }
+  .keys { color: var(--ink-3); font-size: 12.5px; margin: -6px 0 0; }
+  .keys b { color: var(--ink-2); font-weight: 600; }
+  .intro::before { content: "# "; color: var(--accent); }
+  .count { font-size: 12px; font-weight: 600; min-width: 22px; padding: 1px 7px; border-radius: 999px;
+           background: var(--card-2); color: var(--ink-2); text-align: center; font-variant-numeric: tabular-nums; }
+  .count:empty { display: none; }
+  .count.you { background: var(--you); color: var(--ground); }
+
+  /* panels and cards inside them */
+  .panel { display: grid; gap: 12px; }
+  .panel[hidden] { display: none; }
+  .intro { color: var(--ink-2); margin: 0; max-width: 70ch; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; display: grid; gap: 8px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 15px; line-height: 1.35; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .card .from { font-size: 13px; color: var(--ink-3); }
+  .card p { margin: 0; color: var(--ink-2); max-width: 75ch; }
+  .card.answered { background: var(--card-2); }
+  .grid2 { display: grid; gap: 12px; }
+  @media (min-width: 860px) { .grid2 { grid-template-columns: 1fr 1fr; align-items: start; } }
+  .sec { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 8px 0 0; }
+  .empty { color: var(--ink-3); padding: 8px 0; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .p-in-progress, .p-ready { color: var(--ok); background: var(--ok-soft); }
+  .p-waiting-on-owner { color: var(--you); background: var(--you-soft); }
+  .p-paused, .p-blocked { color: var(--ink-2); background: var(--card-2); }
+  .p-escalated { color: var(--bad); background: var(--bad-soft); }
+  .p-signed { color: var(--accent); background: var(--accent-soft); }
+
+  .next { border-left: 3px solid var(--accent); padding-left: 10px; color: var(--ink); }
+  .next b { color: var(--ink-3); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
+  .warn { color: var(--warn); }
+  .warn::before { content: "⚠ "; }
+  .said { background: var(--accent-soft); color: var(--ink); border-radius: 3px; padding: 8px 12px; }
+  .said b { color: var(--accent); }
+
+  /* answering */
+  .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .act input { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 15px; padding: 9px 12px; border-radius: 3px;
+               background: var(--ground); color: var(--ink); border: 1px solid var(--line); }
+  .act input::placeholder { color: var(--ink-3); }
+  button.b { font: inherit; font-size: 13.5px; font-weight: 600; padding: 7px 14px; border-radius: 3px; cursor: pointer;
+             background: var(--accent); color: var(--ground); border: 1px solid var(--accent); }
+  button.b:hover { filter: brightness(1.08); }
+  button.q { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+             background: var(--card); color: var(--ink-2); border: 1px solid var(--line); }
+  button.q:hover { border-color: var(--accent); color: var(--accent); }
+  button.ghost { background: transparent; color: var(--accent); }
+  button.b.sure { background: var(--you); border-color: var(--you); color: var(--ground); }
+  #toast { font-size: 14px; } #toast.ok { color: var(--ok); } #toast.bad { color: var(--bad); }
+
+  /* numbers */
+  .tiles { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 520px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 860px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+  .tile .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .k { font-size: 14px; color: var(--ink-2); }
+  .tile .d { font-size: 13px; font-weight: 600; }
+  .better { color: var(--ok); } .worse { color: var(--bad); } .same { color: var(--ink-3); }
+  .bars { display: grid; gap: 8px; }
+  .barrow { display: grid; grid-template-columns: 7.5em 1fr 5em; gap: 10px; align-items: center; font-size: 14px; }
+  .barrow .t { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barrow .track { background: var(--card-2); border-radius: 6px; height: 14px; overflow: hidden; }
+  .barrow .fill { background: var(--bar); height: 100%; border-radius: 6px; }
+  .barrow .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .small { font-size: 13px; color: var(--ink-3); }
+  .table-box { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 13px; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+
+  /* activity */
+  .feed { display: grid; }
+  .ev { display: grid; grid-template-columns: 3.4em 1.6em 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .ev .when { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .ev .ico { text-align: center; }
+  .ev .what { min-width: 0; overflow-wrap: anywhere; }
+  .ev .who { font-size: 13px; color: var(--ink-3); }
+  .ev.bad .what { color: var(--bad); }
+  .check { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 4px 0; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><h1><span class="ant">Anthill</span> · <span id="project">…</span></h1></div>
+    <span class="meta" id="branch"></span>
+    <span class="spacer"></span>
+    <span class="chip" id="mode"></span>
+    <span id="toast" role="status" aria-live="polite"></span>
+    <span class="chip" id="live"><span class="dot"></span> connecting…</span>
+  </header>
+
+  <section class="glance" id="glance" aria-label="At a glance"></section>
+
+  <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
+  <p class="keys">keys: <b>1–5</b> switch sections · <b>/</b> jump to the first answer box · <b>Enter</b> sends an answer · click any card above to open its section</p>
+
+  <section class="panel" role="tabpanel" id="p-you" aria-labelledby="t-you">
+    <p class="intro">Questions agents are waiting on. Your answer goes onto that piece of work in your words, and the next chat that picks it up acts on it.</p>
+    <div id="asks" class="panel"></div>
+    <h2 class="sec" id="dec-h" hidden>Decided for you by agents working to a goal</h2>
+    <div id="decided" class="panel"></div>
+  </section>
+  <section class="panel" role="tabpanel" id="p-work" aria-labelledby="t-work" hidden>
+    <p class="intro">Every piece of work in progress, what happens next, and anything that has fallen behind.</p>
+    <h2 class="sec">Goals: work an agent is taking end to end</h2><div id="goals" class="panel"></div>
+    <h2 class="sec">Work pages</h2>
+    <div id="work" class="panel"></div>
+    <h2 class="sec">Being edited right now</h2><div id="editing" class="panel"></div>
+    <h2 class="sec">Work no page describes</h2><div id="untracked" class="panel"></div>
+    <h2 class="sec">Job board</h2><div id="board" class="panel"></div>
+  </section>
+  <section class="panel" role="tabpanel" id="p-numbers" aria-labelledby="t-numbers" hidden>
+    <p class="intro">Is the work getting faster? Lower is better for the first two. Read from the trail: every chat, message and saved change.</p>
+    <div id="numbers" class="panel"></div>
+  </section>
+  <section class="panel" role="tabpanel" id="p-activity" aria-labelledby="t-activity" hidden>
+    <p class="intro">What just happened, newest first: your messages, what agents ran, what got saved. On the right, whether Anthill's own checks are working.</p>
+    <div class="grid2">
+      <div class="card"><h3>Recent activity</h3><div id="trail" class="feed"></div></div>
+      <div class="panel">
+        <div class="card"><h3>Anthill's own checks</h3><div id="health"></div></div>
+        <div class="card"><h3>Upkeep left undone <span class="count" id="up-n"></span></h3><div id="upkeep"></div></div>
+      </div>
+    </div>
+  </section>
+  <section class="panel" role="tabpanel" id="p-rules" aria-labelledby="t-rules" hidden>
+    <p class="intro">What you've decided, which every agent must follow, and the traps agents have hit before, so the next one doesn't.</p>
+    <div class="grid2">
+      <div class="card"><h3>Your decisions <span class="count" id="dec-n"></span></h3><div id="decisions"></div></div>
+      <div class="card"><h3>Traps to avoid</h3><div id="traps"></div></div>
+    </div>
+  </section>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function clean(s) { return String(s || "").replace(/\*\*/g, "").replace(/`/g, ""); }
+  function fill(id, nodes, empty) {
+    const box = $(id); box.replaceChildren();
+    const real = nodes.filter(Boolean);
+    if (!real.length) { if (empty) box.append(el("div", "empty", empty)); return; }
+    real.forEach((n) => box.append(n));
+  }
+  function pill(text, cls) { return el("span", "pill " + cls, text); }
+  function ago(min) { return min < 1 ? "just now" : min < 60 ? Math.round(min) + " min ago" : min < 1440 ? Math.round(min / 60) + " h ago" : Math.round(min / 1440) + " days ago"; }
+
+  // The key your terminal printed, after #key= in the address. Kept for this
+  // tab only, and taken out of the address bar so it is not copied by accident.
+  const KEY = (() => {
+    try {
+      const m = location.hash.match(/key=([A-Za-z0-9_-]+)/);
+      if (m) { sessionStorage.setItem("anthill-key", m[1]); history.replaceState(null, "", location.pathname); }
+      return sessionStorage.getItem("anthill-key") || "";
+    } catch (e) { return ""; }
+  })();
+  const drafts = {};            // what you are typing survives the 5-second refresh
+  let sure = "";                // signing needs a second click
+  let last = null;              // the latest state, so a click redraws at once
+
+  function toast(text, bad) {
+    const t = $("toast"); t.textContent = text; t.className = bad ? "bad" : "ok";
+    setTimeout(() => { if (t.textContent === text) t.textContent = ""; }, 6000);
+  }
+  async function press(path, body) {
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Anthill-Key": KEY }, body: JSON.stringify(body) });
+      const out = await r.json();
+      if (!r.ok) { toast("✕ " + (out.error || r.status), true); return false; }
+      toast("✓ Saved"); tick(); return true;
+    } catch (e) { toast("✕ The page can't be reached", true); return false; }
+  }
+  function hid(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return "a" + (h >>> 0).toString(36); }
+
+  // ------------------------------------------------------------------ tabs
+  const TABS = [["you", "Needs you"], ["work", "Work"], ["numbers", "Numbers"], ["activity", "Activity"], ["rules", "Decisions & traps"]];
+  let tab = (() => { try { return localStorage.getItem("anthill-tab") || "you"; } catch (e) { return "you"; } })();
+  function show(name, focus) {
+    tab = name;
+    try { localStorage.setItem("anthill-tab", name); } catch (e) {}
+    TABS.forEach(([k]) => {
+      const b = $("t-" + k), p = $("p-" + k);
+      b.setAttribute("aria-selected", k === name ? "true" : "false");
+      b.tabIndex = k === name ? 0 : -1;
+      p.hidden = k !== name;
+    });
+    if (focus) $("t-" + name).focus();
+  }
+  TABS.forEach(([k, label], i) => {
+    const b = el("button"); b.id = "t-" + k; b.type = "button";
+    b.setAttribute("role", "tab"); b.setAttribute("aria-controls", "p-" + k);
+    b.append(el("span", "key", "[" + (i + 1) + "]"), el("span", "", label), el("span", "count", ""));
+    b.addEventListener("click", () => show(k));
+    b.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (d) { e.preventDefault(); show(TABS[(i + d + TABS.length) % TABS.length][0], true); }
+    });
+    $("tabs").append(b);
+  });
+  // Number keys switch sections, like a terminal tool. Ignored while typing.
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || "");
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= TABS.length) { e.preventDefault(); show(TABS[n - 1][0], true); }
+    else if (e.key === "/") { const f = document.querySelector("#p-" + tab + " input"); if (f) { e.preventDefault(); f.focus(); } }
+  });
+  function badge(k, n, you) { const c = $("t-" + k).querySelector(".count"); c.textContent = n ? n : ""; c.className = "count" + (you && n ? " you" : ""); }
+  if (!TABS.some(([k]) => k === tab)) tab = "you";
+  show(tab);
+
+  // ------------------------------------------------------------- answering
+  function answerBox(id, onsend) {
+    const wrap = el("div", "act");
+    const inp = el("input"); inp.id = id; inp.value = drafts[id] || "";
+    inp.placeholder = "Type your answer…"; inp.setAttribute("aria-label", "Your answer");
+    inp.addEventListener("input", () => { drafts[id] = inp.value; });
+    const go = async (v) => { v = (v || inp.value).trim(); if (!v) { inp.focus(); return; } if (await onsend(v)) delete drafts[id]; };
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    const send = el("button", "b", "Answer"); send.type = "button"; send.addEventListener("click", () => go());
+    wrap.append(inp, send);
+    const quick = el("div", "act");
+    quick.append(el("span", "small", "or just:"));
+    ["Yes", "No", "Not now"].forEach((q) => { const b = el("button", "q", q); b.type = "button"; b.addEventListener("click", () => go(q)); quick.append(b); });
+    const box = el("div", "panel"); box.style.gap = "8px"; box.append(wrap, quick); return box;
+  }
+  function twice(id, label, onsend) {
+    const b = el("button", "b ghost" + (sure === id ? " sure" : ""), sure === id ? "Click again to confirm" : label);
+    b.type = "button";
+    b.addEventListener("click", async () => { if (sure !== id) { sure = id; render(last); return; } sure = ""; await onsend(); });
+    return b;
+  }
+
+  // --------------------------------------------------------------- render
+  function render(s) {
+    if (!s) return;
+    last = s;
+    const w = s.where || {}, sc = s.score || {}, tr = s.trail || {};
+    const focused = document.activeElement && document.activeElement.id;
+    $("project").textContent = s.project;
+    document.title = "Anthill · " + s.project;
+    $("branch").textContent = (w.branch ? "on " + w.branch : "") + (w.unpushed_commits ? " · " + w.unpushed_commits + " change(s) not on GitHub" : "");
+    const mode = $("mode"); mode.replaceChildren();
+    if (KEY) { mode.className = "chip on"; mode.append(el("span", "", "✓ Buttons on")); }
+    else { mode.className = "chip off"; mode.append(el("span", "", "View only: open the address your terminal printed")); }
+
+    // questions, and which are already answered
+    const answerTo = (r, q) => { const k = clean(q).slice(0, 60); return (r.owner_answers || []).map(clean).filter((a) => a.includes("“" + k)).pop(); };
+    const open = [], done = [];
+    (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) => { const a = answerTo(r, q); (a ? done : open).push({ r, q, a }); }));
+
+    const goals = s.goals || [];
+    const goalQs = goals.reduce((n, gl) => n + (gl.blockers || []).filter((b) => !b.answer).length, 0);
+    const running = goals.filter((gl) => gl.status === "active").length;
+
+    // at a glance
+    const crashes = (tr.crashes || []).length;
+    const lastCommit = tr.last_commit;
+    const lastMin = lastCommit ? (Date.now() - new Date(lastCommit.t).getTime()) / 60000 : null;
+    const g = (cls, big, lbl, hint, go) => { const b = el("button", "g " + cls); b.type = "button"; b.append(el("span", "big", big), el("span", "lbl", lbl), el("span", "hint", hint)); b.addEventListener("click", () => show(go, true)); return b; };
+    const behind = (w.work || []).filter((r) => (r.drift || {}).behind).length;
+    fill("glance", [
+      g(open.length + goalQs ? "you" : "good", String(open.length + goalQs), open.length + goalQs === 1 ? "question for you" : "questions for you",
+        open.length ? (done.length ? done.length + " answered, waiting for an agent" : "agents are waiting on these") : "nothing is waiting on you", "you"),
+      g("", String((w.work || []).length), "pieces of work", (running ? running + " goal(s) running end to end · " : "") + (behind ? behind + " page(s) behind" : "all pages up to date"), "work"),
+      g("", sc.asked_to_saved_median_min != null ? sc.asked_to_saved_median_min + " min" : "—", "from asking to a saved change", "typical this week · lower is better", "numbers"),
+      g(crashes ? "bad" : "good", crashes ? "✕ " + crashes : "✓", crashes ? "Anthill crashed" : "All checks healthy",
+        lastMin != null ? "last change saved " + ago(lastMin) : "no change saved yet", "activity"),
+    ], "");
+    badge("you", open.length + goalQs, true);
+    badge("work", (w.work || []).length);
+    badge("activity", crashes ? "✕" : "");
+    badge("rules", (w.decisions || []).length);
+
+    // needs you
+    const askCard = ({ r, q, a }) => {
+      const c = el("article", "card" + (a ? " answered" : ""));
+      c.append(el("h3", "", clean(q)), el("div", "from", "from: " + r.title));
+      if (a) c.append(el("div", "said", "✓ You answered: " + a.split("”:").slice(1).join("”:").trim() + " — waiting for an agent to act on it."));
+      else if (KEY) c.append(answerBox(hid(r.id + q), (v) => press("/api/answer", { work: r.id, question: clean(q), answer: v })));
+      else c.append(el("p", "small", "Open the address your terminal printed to answer here."));
+      return c;
+    };
+    // a goal's open question: an agent stopped for it, and the goal waits on you
+    const goalAsks = [];
+    goals.forEach((gl) => (gl.blockers || []).filter((b) => !b.answer).forEach((b) => {
+      const c = el("article", "card"); c.append(el("h3", "", b.question), el("div", "from", "goal: " + gl.title + " · the agent stopped here and is waiting"));
+      if (KEY) c.append(answerBox(hid("g" + gl.id + b.t), (v) => press("/api/goal-answer", { goal: gl.id, answer: v })));
+      goalAsks.push(c);
+    }));
+    fill("asks", goalAsks.concat(open.map(askCard)).concat(done.length ? [el("h2", "sec", "Answered")].concat(done.map(askCard)) : []), "Nothing is waiting on you.");
+    const dec = [];
+    goals.forEach((gl) => (gl.decided || []).forEach((d, i) => {
+      if (d.overturned) return;
+      const c = el("article", "card"); c.append(el("h3", "", "✓ " + d.what), el("div", "from", "because: " + d.because + " · goal: " + gl.title));
+      if (KEY) { const id = hid("o" + gl.id + i); const a = el("div", "act"); const inp = el("input"); inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Disagree? Say what it should be instead…"; inp.setAttribute("aria-label", "Overturn this decision");
+        inp.addEventListener("input", () => { drafts[id] = inp.value; });
+        const go = el("button", "b ghost", "Overturn"); go.type = "button";
+        go.addEventListener("click", async () => { if (inp.value.trim() && await press("/api/overturn", { goal: gl.id, index: i, note: inp.value.trim() })) delete drafts[id]; });
+        a.append(inp, go); c.append(a); }
+      dec.push(c);
+    }));
+    $("dec-h").hidden = !dec.length;
+    fill("decided", dec, "");
+    const STATE = { active: ["running", "p-in-progress"], blocked: ["waiting on you", "p-waiting-on-owner"], done: ["✓ done", "p-signed"], stalled: ["stuck", "p-escalated"], stopped: ["stopped", "p-paused"] };
+    fill("goals", goals.map((gl) => {
+      const c = el("article", "card"); const h = el("h3", "", gl.title); const st = STATE[gl.status] || [gl.status, "p-paused"]; h.append(pill(st[0], st[1])); c.append(h);
+      const ticked = (gl.steps || []).filter((x) => x.done).length;
+      if ((gl.steps || []).length) c.append(el("div", "from", ticked + " of " + gl.steps.length + " steps done"));
+      if (gl.status === "active" || gl.status === "blocked") { const n = el("div", "next"); n.append(el("b", "", "Next"), document.createTextNode(gl.next)); c.append(n); }
+      c.append(el("div", "from", "done when this passes: " + (gl.done_when || "—")));
+      if ((gl.decided || []).length) c.append(el("div", "from", gl.decided.length + " decision(s) made for you — see Needs you"));
+      if (gl.result) c.append(el("div", gl.result.passed ? "said" : "warn", (gl.result.passed ? "✓ check passed " : "check failed ") + String(gl.result.t || "").slice(5, 16).replace("T", " ")));
+      c.append(el("div", "from", (gl.tool === "claude-code" ? "Claude" : gl.tool) + (gl.session ? " · chat " + gl.session.slice(0, 6) : "") + " · " + (gl.branch || "")));
+      return c;
+    }), "No goal yet. Tell an agent to take something end to end, and it shows here.");
+
+
+    // work
+    fill("work", (w.work || []).map((r) => {
+      const c = el("article", "card");
+      const h = el("h3", "", r.title); h.append(pill(r.state.replace(/-/g, " "), "p-" + r.state));
+      if (r.confirmed_by_owner) h.append(pill("✓ signed by you", "p-signed"));
+      c.append(h);
+      if (r.next) { const n = el("div", "next"); n.append(el("b", "", "Next"), document.createTextNode(clean(r.next))); c.append(n); }
+      (r.owner_answers || []).slice(-2).forEach((a) => { const d = el("div", "said"); d.append(el("b", "", "You said: "), document.createTextNode(clean(a))); c.append(d); });
+      const d = r.drift || {};
+      if (d.behind) c.append(el("div", "warn", "This page may be behind: " + d.behind.length + " change(s) since it was last checked."));
+      (r.broken_citations || []).forEach((x) => c.append(el("div", "warn", "It points at code that is gone: " + x)));
+      c.append(el("div", "from", [r.branch, r.updated ? "updated " + r.updated : ""].filter(Boolean).join(" · ")));
+      const rel = String(r.page || "").split("knowledge/").slice(1).join("knowledge/");
+      if (!r.confirmed_by_owner && KEY && rel) { const a = el("div", "act"); a.append(el("span", "small", "Is this page right?"), twice("sign:" + rel, "Sign it as correct", () => press("/api/sign", { page: rel }))); c.append(a); }
+      return c;
+    }), "No work page yet.");
+    fill("editing", (w.uncommitted || []).map((u) => { const c = el("div", "card"); c.append(el("div", "path", u.file)); if (u.work && u.work.length) c.append(el("div", "from", "part of: " + u.work.join(", "))); return c; }),
+         "Nothing is being edited.");
+    fill("untracked", (w.untracked || []).map((u) => { const c = el("div", "card"); c.append(el("h3", "", u.branch), el("div", "from", u.commits + " change(s) · latest: " + u.latest)); return c; }),
+         "Every branch with recent work has a page.");
+    const b = w.board || {}, units = [];
+    (b.escalated || []).forEach((u) => {
+      const c = el("article", "card"); const h = el("h3", "", u.id); h.append(pill("stuck", "p-escalated")); c.append(h);
+      c.append(el("div", "from", "since " + (u.since || "?") + (u.why ? " · " + clean(u.why) : "")));
+      if (KEY) {
+        const id = hid("reopen" + u.id), a = el("div", "act"), inp = el("input");
+        inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Why it can go back on the board…"; inp.setAttribute("aria-label", "Reason to reopen");
+        inp.addEventListener("input", () => { drafts[id] = inp.value; });
+        const go = el("button", "b", "Reopen"); go.type = "button";
+        go.addEventListener("click", async () => { if (inp.value.trim() && await press("/api/reopen", { unit: u.id, reason: inp.value.trim() })) delete drafts[id]; });
+        a.append(inp, go); c.append(a);
+      }
+      units.push(c);
+    });
+    (b.ready || []).forEach((u) => { const c = el("div", "card"); const h = el("h3", "", u.id); h.append(pill("ready", "p-ready")); c.append(h, el("p", "", clean(u.title))); units.push(c); });
+    (b.blocked || []).forEach((u) => { const c = el("div", "card"); const h = el("h3", "", u.id); h.append(pill("blocked", "p-blocked")); c.append(h, el("p", "", u.needs && u.needs.length ? "waits on " + u.needs.join(", ") : "")); units.push(c); });
+    (w.board_disagrees || []).forEach((x) => units.push(el("div", "warn", clean(x))));
+    fill("board", units, b.total ? "Every job on the board is done (" + b.done + " of " + b.total + ")." : "No job board in this project.");
+
+    renderNumbers(sc);
+
+    // activity
+    const ICON = { commit: "💾", command: "▸", prompt: "💬", session: "◉", note: "✎", checkpoint: "⏸", answer: "✓", signed: "✍", reopened: "↺", correction: "✎" };
+    fill("trail", (tr.recent || []).slice().reverse().map((e) => {
+      const r = el("div", "ev" + (e.crashed ? " bad" : ""));
+      const what = e.kind === "commit" ? "Saved: " + (e.subject || e.sha) :
+                   e.kind === "command" ? (e.crashed ? "Crashed: " : "") + "anthill " + (e.args || e.verb || "") :
+                   e.kind === "prompt" ? "You: " + (e.text || "") :
+                   e.kind === "session" ? "A chat " + ({ startup: "started", resume: "resumed", compact: "was compressed and picked up" }[e.source] || e.source) :
+                   e.kind === "answer" ? "You answered: " + (e.text || "") :
+                   e.kind === "signed" ? "You signed " + (e.page || "") :
+                   e.kind === "note" ? "Note: " + (e.text || "") : e.kind + " " + (e.text || "");
+      const who = e.kind === "prompt" || e.via === "owner page" ? "you" : (e.tool === "claude-code" ? "Claude" : e.tool) + (e.session ? " · chat " + e.session.slice(0, 6) : "");
+      const body = el("div", "what"); body.append(el("div", "", what), el("div", "who", who));
+      r.append(el("span", "when", String(e.t || "").slice(11, 16)), el("span", "ico", ICON[e.kind] || "•"), body);
+      return r;
+    }), "Nothing recorded yet.");
+    const m = s.map || {};
+    const checks = [el("div", "small", "Map of the code: " + (m.nodes !== undefined ? m.nodes + " files, drawn " + ago(m.age_min || 0) : "not drawn yet"))];
+    const NAMES = { blueprint: "Notes match the code", map: "Map redrawn", upkeep: "Upkeep list", where: "Work overview", work: "Job board" };
+    (tr.checks || []).forEach((c) => {
+      const bad = !!c.crashed, warn = !bad && c.rc;
+      const r = el("div", "check" + (bad ? " warn" : ""));
+      r.append(el("span", "", bad ? "✕" : warn ? "!" : "✓"),
+        el("span", "", (NAMES[c.verb] || c.verb) + " — " + (bad ? "crashed: " + c.crashed : warn ? (c.verb === "blueprint" ? "some notes are out of date" : "finished with a problem") : "ok") + " · " + String(c.t || "").slice(11, 16)));
+      checks.push(r);
+    });
+    fill("health", checks, "");
+    const up = s.upkeep || [];
+    $("up-n").textContent = up.length || "";
+    if (up.length) { const d = el("details"); d.append(el("summary", "", up.length + " item(s) — the keeper clears these after commits")); const ul = el("ul"); up.forEach((i) => ul.append(el("li", "", i.kind + ": " + i.detail))); d.append(ul); fill("upkeep", [d], ""); }
+    else fill("upkeep", [], "Nothing left undone.");
+
+    // decisions & traps
+    $("dec-n").textContent = (w.decisions || []).length || "";
+    fill("decisions", (w.decisions || []).map((d) => { const x = el("div", ""); x.style.padding = "6px 0"; x.append(el("div", "", d.title), el("div", "small", d.decided || "")); return x; }), "None recorded.");
+    const byWork = {};
+    (w.traps || []).forEach((t) => (byWork[t.work] = byWork[t.work] || []).push(t.trap));
+    fill("traps", Object.keys(byWork).sort((a, b) => (a === "everywhere" ? -1 : b === "everywhere" ? 1 : a.localeCompare(b))).map((k) => {
+      const d = el("details"); if (k === "everywhere") d.open = true;
+      d.append(el("summary", "", (k === "everywhere" ? "Everywhere" : k) + " (" + byWork[k].length + ")"));
+      const ul = el("ul"); byWork[k].forEach((t) => ul.append(el("li", "", clean(t)))); d.append(ul); return d;
+    }), "None recorded.");
+
+    if (focused && $(focused)) { const f = $(focused); f.focus(); if (f.setSelectionRange && f.value) { const n = f.value.length; try { f.setSelectionRange(n, n); } catch (e) {} } }
+  }
+
+  function renderNumbers(sc) {
+    if (!sc || sc.error || !sc.weekly) { fill("numbers", [], sc && sc.error ? "Couldn't read the trail: " + sc.error : "No numbers yet. anthill score import reads your saved chats."); return; }
+    const wk = sc.weekly, now = wk[wk.length - 1] || {}, before = wk[wk.length - 2] || {};
+    function tile(v, k, a, b, unit, lowerBetter) {
+      const t = el("div", "tile"); t.append(el("span", "v", v == null ? "—" : v + (unit || "")), el("span", "k", k));
+      if (a != null && b != null && b !== 0 && lowerBetter !== undefined) {
+        const pct = Math.round(Math.abs(a - b) / b * 100), good = lowerBetter ? a < b : a > b;
+        t.append(el("span", "d " + (a === b ? "same" : good ? "better" : "worse"), a === b ? "same as last week" : (good ? "▼ better by " : "▲ worse by ") + pct + "% than last week"));
+      }
+      return t;
+    }
+    const tiles = el("div", "tiles");
+    tiles.append(
+      tile(sc.asked_to_saved_median_min, "from your message to a saved change (typical)", now.asked_to_saved_median_min, before.asked_to_saved_median_min, " min", true),
+      tile(sc.messages_per_commit, "your messages per saved change", now.messages_per_commit, before.messages_per_commit, "", true),
+      tile(sc.chats, "chats this week"), tile(sc.commits, "changes saved this week"),
+      tile(sc.compressions, "chats picked up after their memory was compressed"),
+      tile(sc.corrections, "notes found wrong and corrected"));
+    const weeks = el("div", "card"); weeks.append(el("h3", "", "Week by week"));
+    const bars = el("div", "bars"), maxT = Math.max(1, ...wk.map((x) => x.asked_to_saved_median_min || 0));
+    wk.forEach((x) => {
+      const r = el("div", "barrow"), track = el("div", "track"), f = el("div", "fill");
+      f.style.width = Math.round(100 * (x.asked_to_saved_median_min || 0) / maxT) + "%"; track.append(f);
+      r.setAttribute("aria-label", "week of " + x.from + ": " + (x.asked_to_saved_median_min ?? "no") + " minutes from asking to saved");
+      r.append(el("span", "t", x.from.slice(5).replace("-", "/")), track, el("span", "n", x.asked_to_saved_median_min != null ? x.asked_to_saved_median_min + " min" : "—"));
+      bars.append(r);
+    });
+    weeks.append(el("div", "small", "From asking to saved, week by week (shorter is better)"), bars);
+    const tw = el("div", "table-box"), tb = el("table"), hr = el("tr");
+    ["Week", "Chats", "Your messages", "Saved changes", "Messages per change", "Asking → saved", "Anthill used"].forEach((h) => hr.append(el("th", "", h)));
+    tb.append(hr);
+    wk.forEach((x) => { const r = el("tr"); [x.from.slice(5).replace("-", "/") + " – " + x.to.slice(5).replace("-", "/"), x.chats, x.owner_messages, x.commits, x.messages_per_commit ?? "—", x.asked_to_saved_median_min != null ? x.asked_to_saved_median_min + " min" : "—", x.anthill_uses].forEach((v) => r.append(el("td", "", v))); tb.append(r); });
+    tw.append(tb); weeks.append(tw);
+    const used = el("div", "card"); used.append(el("h3", "", "Which parts of Anthill got used this week"));
+    const u = Object.entries(sc.anthill_usage || {}).slice(0, 8), maxU = Math.max(1, ...u.map(([, v]) => v)), ub = el("div", "bars");
+    u.forEach(([k, v]) => { const r = el("div", "barrow"), t = el("div", "track"), f = el("div", "fill"); f.style.width = Math.round(100 * v / maxU) + "%"; t.append(f); r.append(el("span", "t mono", k), t, el("span", "n", v)); ub.append(r); });
+    used.append(u.length ? ub : el("div", "empty", "Nothing yet."));
+    const kids = [tiles, weeks, used];
+    if ((sc.corrected || []).length) { const c = el("div", "card"); c.append(el("h3", "", "Notes that were wrong")); (sc.corrected || []).slice().reverse().forEach((x) => c.append(el("p", "", String(x.t || "").slice(5, 10) + " · " + x.page + ": was “" + x.was + "”, now “" + x.now + "”" + (x.why ? " (" + x.why + ")" : "")))); kids.push(c); }
+    if (sc.imported_share > 0.5) kids.push(el("p", "small", "Mostly read from your saved Claude chats and git history; the live record began on 29 Sep."));
+    fill("numbers", kids, "");
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch("/api/state", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      render(await r.json());
+      const live = $("live"); live.className = "chip on"; live.replaceChildren(el("span", "dot"), document.createTextNode(" Live · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+    } catch (e) {
+      const live = $("live"); live.className = "chip bad"; live.replaceChildren(el("span", "dot"), document.createTextNode(" Not reachable: is the app still running?"));
+    }
+  }
+  tick();
+  setInterval(tick, 5000);
+</script>
+</body>
+</html>
