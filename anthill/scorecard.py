@@ -213,6 +213,8 @@ def _chats(evs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                                    "prompts_before_first_commit": 0, "compressed": 0,
                                    "anthill": 0, "notes": 0, "waits": [], "_last": None})
         k = e.get("kind")
+        if k == "prompt" and not trail.owner_spoke(e):
+            continue                                   # a helper's report, not the owner
         if k == "prompt":
             c["start"] = c["start"] or e["t"]
             c["prompts"] += 1

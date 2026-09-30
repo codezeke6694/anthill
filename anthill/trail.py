@@ -32,6 +32,17 @@ from typing import Any
 from anthill import context as _ctx
 
 FILE = "trail.jsonl"
+
+# What reaches a chat as if typed by the owner but is not them: a helper
+# agent's report handed back, a background task finishing, the harness's own
+# notes. Counted as the owner speaking, one two-hour goal the owner started
+# with a single message read as 49 of theirs.
+RELAYED = ("<agent-message", "<task-notification", "<system-reminder", "<command-",
+           "[Request interrupted", "Another Claude session sent a message")
+
+
+def owner_spoke(ev: dict) -> bool:
+    return ev.get("kind") == "prompt" and not str(ev.get("text") or "").lstrip().startswith(RELAYED)
 ARGS_MAX = 160
 
 

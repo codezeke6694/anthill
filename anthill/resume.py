@@ -233,7 +233,8 @@ def session_start_hook(ctx: _ctx.Context, hook: dict[str, Any]) -> str:
 def prompt_hook(ctx: _ctx.Context, hook: dict[str, Any]) -> None:
     """Claude's UserPromptSubmit: when the owner spoke, and how much. Never blocks."""
     text = str(hook.get("prompt") or "")
-    trail.record("prompt", ctx, session=hook.get("session_id") or "",
+    kind = "relay" if text.lstrip().startswith(trail.RELAYED) else "prompt"
+    trail.record(kind, ctx, session=hook.get("session_id") or "",
                  chars=len(text), text=_clip(text, 120))
 
 

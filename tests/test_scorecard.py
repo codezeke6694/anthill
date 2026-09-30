@@ -90,3 +90,21 @@ def test_a_correction_is_recorded_and_counted(project):
     r = subprocess.run([str(tool), "correction", "--page", "refunds"], cwd=project.root,
                        capture_output=True, text=True)
     assert r.returncode == 2
+
+
+def test_a_helpers_report_is_not_the_owner_speaking(project):
+    import subprocess
+    tool = Path(__file__).resolve().parents[1] / "bin" / "anthill"
+    for text in ["Do everything in the review, end to end.",
+                 '<agent-message from="a1"> [Subagent hand-back] done step 2',
+                 "<task-notification> background job finished"]:
+        subprocess.run([str(tool), "prompt", "--hook"], cwd=project.root, capture_output=True, text=True,
+                       input=json.dumps({"session_id": "s9", "prompt": text}))
+    kinds = [e["kind"] for e in trail.read(project) if e.get("session") == "s9"]
+    assert kinds == ["prompt", "relay", "relay"]
+    # an older trail, written before the fix, is read the same way
+    now = datetime.now().astimezone()
+    evs = [{"t": at(now - timedelta(hours=2), 0), "kind": "prompt", "session": "x", "text": "build it"},
+           {"t": at(now - timedelta(hours=2), 5), "kind": "prompt", "session": "x", "text": "<agent-message> hand-back"},
+           {"t": at(now - timedelta(hours=2), 9), "kind": "commit", "session": "x"}]
+    assert scorecard.scorecard(evs, now=now)["owner_messages"] == 1
