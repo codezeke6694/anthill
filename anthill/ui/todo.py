@@ -102,6 +102,10 @@ def parse(raw: str) -> dict[str, Any]:
             title = title[8:]
             title = title[:1].upper() + title[1:] + "?"
             kind = "question"
+    rec = fields.get("recommend", "")
+    if rec:                                              # the recommendation, not what follows it
+        rec = (_sentences(rec) or [rec])[0].rstrip(".")
+        fields["recommend"] = rec
     why = fields.get("why") or rest
     if len(why) > 260:
         why = why[:259].rsplit(" ", 1)[0] + "…"

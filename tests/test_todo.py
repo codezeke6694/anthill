@@ -56,3 +56,8 @@ def test_a_decision_marked_right_leaves_the_review(project, monkeypatch):
     goal.decided(project, "picked A", "the rule")
     goal.acknowledge(project, g["id"], 0)
     assert todo.build({"work": []}, goal.all_goals(project))["review"] == []
+
+
+def test_a_recommendation_stops_at_its_own_sentence():
+    p = todo.parse("Risk floor is left. Recommendation: group by what failed. Everything else is built; merging is the owner's.")
+    assert p["recommend"] == "group by what failed"
