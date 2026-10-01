@@ -207,6 +207,17 @@ def owner_answer(ctx: _ctx.Context, gid: str, answer: str) -> dict[str, Any]:
     return g
 
 
+def acknowledge(ctx: _ctx.Context, gid: str, index: int) -> dict[str, Any]:
+    """The owner looked at a decision made for them and agrees: it leaves their to-do."""
+    g = load(ctx, gid)
+    if not 0 <= index < len(g["decided"]):
+        raise LookupError("no such decision")
+    g["decided"][index]["acknowledged"] = _now()
+    save(ctx, g)
+    trail.record("acknowledged", ctx, goal=gid, text=g["decided"][index]["what"][:240], via="owner page")
+    return g
+
+
 def overturn(ctx: _ctx.Context, gid: str, index: int, note: str) -> dict[str, Any]:
     g = load(ctx, gid)
     if not 0 <= index < len(g["decided"]):

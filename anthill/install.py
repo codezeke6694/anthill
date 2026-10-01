@@ -606,6 +606,11 @@ code right now; touching it would collide with them.
      when the next step cannot happen without the owner; `in-progress` when
      it can, even if later steps need the owner; `paused` when it waits on
      other work. A cold agent reads the state first.
+   - **Waiting on the owner**, on any work page you write: one bullet per real
+     question, in the form the owner's page turns into buttons --
+     `- **<the question, one line>** Why: <one line> Recommend: <your pick> Options: <A> / <B>`.
+     Never put there a pointer to another page, a status ("now built"), or a
+     question the owner has already answered or decided: move those out.
    - **work, a branch no page describes**: write `{knowledge}/work/<id>.md`
      from its log, in the same shape as the others (What, Where, How,
      Waiting on the owner, Traps, History), `state: in-progress`.

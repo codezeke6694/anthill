@@ -201,8 +201,12 @@ def goal_rule(ctx: _ctx.Context) -> str:
         stops,
         "",
         "```bash",
-        'anthill goal block "<the question, and what you recommend>"',
+        'anthill goal block "<the question, one line> Why: <one line> Recommend: <your pick> Options: <A> / <B>"',
         "```",
+        "",
+        "The owner answers from their page with one click, so write the question in "
+        "that form: one line, why it matters, what you recommend, and the real "
+        "choices when there are some.",
         "",
         "In Claude a hook sends you back if you end a turn with the goal open and no "
         "blocker recorded; if nothing was committed, noted or decided since it last did, "

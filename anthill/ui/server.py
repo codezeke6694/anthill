@@ -71,7 +71,17 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
                       "last_commit": max((e for e in events if e.get("kind") == "commit"),
                                          key=lambda e: e.get("t", ""), default=None)},
             "score": _score(events),
-            "goals": _goals(ctx)}
+            "goals": _goals(ctx),
+            "todo": _todo(w, ctx)}
+
+
+def _todo(where: dict[str, Any], ctx: _ctx.Context) -> dict[str, Any]:
+    from anthill import goal
+    from anthill.ui import todo
+    try:
+        return todo.build(where, goal.all_goals(ctx))
+    except Exception as exc:                  # noqa: BLE001 -- a bad note must not blank the page
+        return {"todo": [], "answered": [], "review": [], "error": str(exc)}
 
 
 def _goals(ctx: _ctx.Context) -> list[dict[str, Any]]:
@@ -153,6 +163,13 @@ class _Handler(BaseHTTPRequestHandler):
                                      body.get("answer", ""))
             elif self.path == "/api/sign":
                 out = actions.sign(self.ctx, body.get("page", ""), by)
+            elif self.path == "/api/ack":
+                from anthill import goal
+                try:
+                    g = goal.acknowledge(self.ctx, body.get("goal", ""), int(body.get("index", -1)))
+                except (LookupError, ValueError, OSError) as exc:
+                    raise actions.Refused(str(exc))
+                out = {"goal": g["id"], "acknowledged": int(body.get("index", -1))}
             elif self.path in ("/api/goal-answer", "/api/overturn"):
                 from anthill import goal
                 try:

@@ -152,6 +152,27 @@
   .ev.bad .what { color: var(--bad); }
   .check { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; }
   details summary { cursor: pointer; font-weight: 600; }
+  /* the to-do: what the owner is asked, and how to answer it */
+  .banner { font-size: 22px; line-height: 1.35; font-weight: 600; margin: 4px 0 0; }
+  .banner .sub { display: block; font-size: 14px; font-weight: 400; color: var(--ink-2); margin-top: 6px; }
+  .todo { border-left: 4px solid var(--you); }
+  .todo.hold { border-left-color: var(--bad); }
+  .todo .kind { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--you); font-weight: 600; }
+  .todo.hold .kind { color: var(--bad); }
+  .todo h3 { font-size: 19px; line-height: 1.4; }
+  .todo .why { color: var(--ink-2); font-size: 14.5px; }
+  .rec { background: var(--accent-soft); border-radius: 3px; padding: 10px 12px; font-size: 14.5px; }
+  .rec b { color: var(--accent); }
+  .after { font-size: 13px; color: var(--ink-3); }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button.c { font: inherit; font-size: 13.5px; padding: 8px 14px; border-radius: 3px; cursor: pointer;
+             background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button.c:hover { border-color: var(--accent); color: var(--accent); }
+  button.c.main { background: var(--accent); color: var(--ground); border-color: var(--accent); font-weight: 600; }
+  button.c.quiet { color: var(--ink-3); border-color: transparent; }
+  .bar { height: 8px; background: var(--card-2); border-radius: 4px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); }
+  .row2 { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
   ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 4px 0; color: var(--ink-2); }
 </style>
 </head>
@@ -166,25 +187,27 @@
     <span class="chip" id="live"><span class="dot"></span> connecting…</span>
   </header>
 
-  <section class="glance" id="glance" aria-label="At a glance"></section>
+  <p class="banner" id="banner" role="status"></p>
 
   <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
-  <p class="keys">keys: <b>1–5</b> switch sections · <b>/</b> jump to the first answer box · <b>Enter</b> sends an answer · click any card above to open its section</p>
+  <p class="keys">keys: <b>1–5</b> switch sections · <b>/</b> jump to the first answer box · <b>Enter</b> sends</p>
 
   <section class="panel" role="tabpanel" id="p-you" aria-labelledby="t-you">
-    <p class="intro">Questions agents are waiting on. Your answer goes onto that piece of work in your words, and the next chat that picks it up acts on it.</p>
-    <div id="asks" class="panel"></div>
-    <h2 class="sec" id="dec-h" hidden>Decided for you by agents working to a goal</h2>
-    <div id="decided" class="panel"></div>
+    <p class="intro">What the agents need from you, most urgent first. Answer with one click; your answer goes where the next chat will read it.</p>
+    <div id="todo" class="panel"></div>
+    <h2 class="sec" id="review-h" hidden>Check what agents decided for you</h2>
+    <div id="review" class="panel"></div>
+    <details id="answered-box" hidden><summary class="small" id="answered-sum"></summary><div id="answered" class="panel" style="margin-top:10px"></div></details>
   </section>
   <section class="panel" role="tabpanel" id="p-work" aria-labelledby="t-work" hidden>
-    <p class="intro">Every piece of work in progress, what happens next, and anything that has fallen behind.</p>
-    <h2 class="sec">Goals: work an agent is taking end to end</h2><div id="goals" class="panel"></div>
-    <h2 class="sec">Work pages</h2>
-    <div id="work" class="panel"></div>
-    <h2 class="sec">Being edited right now</h2><div id="editing" class="panel"></div>
-    <h2 class="sec">Work no page describes</h2><div id="untracked" class="panel"></div>
-    <h2 class="sec">Job board</h2><div id="board" class="panel"></div>
+    <p class="intro">What's running now, what each piece of work does next, and what's finished.</p>
+    <h2 class="sec">Running now</h2><div id="goals" class="panel"></div>
+    <h2 class="sec">Work in progress</h2><div id="work" class="panel"></div>
+    <details><summary class="small">More: files being edited, untracked work, the job board</summary>
+      <h2 class="sec">Being edited right now</h2><div id="editing" class="panel"></div>
+      <h2 class="sec">Work no page describes</h2><div id="untracked" class="panel"></div>
+      <h2 class="sec">Job board</h2><div id="board" class="panel"></div>
+    </details>
   </section>
   <section class="panel" role="tabpanel" id="p-numbers" aria-labelledby="t-numbers" hidden>
     <p class="intro">Is the work getting faster? Lower is better for the first two. Read from the trail: every chat, message and saved change.</p>
@@ -254,7 +277,7 @@
   function hid(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return "a" + (h >>> 0).toString(36); }
 
   // ------------------------------------------------------------------ tabs
-  const TABS = [["you", "Needs you"], ["work", "Work"], ["numbers", "Numbers"], ["activity", "Activity"], ["rules", "Decisions & traps"]];
+  const TABS = [["you", "Your to-do"], ["work", "Happening now"], ["numbers", "Numbers"], ["activity", "Activity"], ["rules", "Decisions & traps"]];
   let tab = (() => { try { return localStorage.getItem("anthill-tab") || "you"; } catch (e) { return "you"; } })();
   function show(name, focus) {
     tab = name;
@@ -325,94 +348,114 @@
     if (KEY) { mode.className = "chip on"; mode.append(el("span", "", "✓ Buttons on")); }
     else { mode.className = "chip off"; mode.append(el("span", "", "View only: open the address your terminal printed")); }
 
-    // questions, and which are already answered
-    const answerTo = (r, q) => { const k = clean(q).slice(0, 60); return (r.owner_answers || []).map(clean).filter((a) => a.includes("“" + k)).pop(); };
-    const open = [], done = [];
-    (w.work || []).forEach((r) => (r.waiting_on_owner || []).forEach((q) => { const a = answerTo(r, q); (a ? done : open).push({ r, q, a }); }));
-
+    const T = s.todo || { todo: [], answered: [], review: [] };
     const goals = s.goals || [];
-    const goalQs = goals.reduce((n, gl) => n + (gl.blockers || []).filter((b) => !b.answer).length, 0);
-    const running = goals.filter((gl) => gl.status === "active").length;
-
-    // at a glance
     const crashes = (tr.crashes || []).length;
-    const lastCommit = tr.last_commit;
-    const lastMin = lastCommit ? (Date.now() - new Date(lastCommit.t).getTime()) / 60000 : null;
-    const g = (cls, big, lbl, hint, go) => { const b = el("button", "g " + cls); b.type = "button"; b.append(el("span", "big", big), el("span", "lbl", lbl), el("span", "hint", hint)); b.addEventListener("click", () => show(go, true)); return b; };
-    const behind = (w.work || []).filter((r) => (r.drift || {}).behind).length;
-    fill("glance", [
-      g(open.length + goalQs ? "you" : "good", String(open.length + goalQs), open.length + goalQs === 1 ? "question for you" : "questions for you",
-        open.length ? (done.length ? done.length + " answered, waiting for an agent" : "agents are waiting on these") : "nothing is waiting on you", "you"),
-      g("", String((w.work || []).length), "pieces of work", (running ? running + " goal(s) running end to end · " : "") + (behind ? behind + " page(s) behind" : "all pages up to date"), "work"),
-      g("", sc.asked_to_saved_median_min != null ? sc.asked_to_saved_median_min + " min" : "—", "from asking to a saved change", "typical this week · lower is better", "numbers"),
-      g(crashes ? "bad" : "good", crashes ? "✕ " + crashes : "✓", crashes ? "Anthill crashed" : "All checks healthy",
-        lastMin != null ? "last change saved " + ago(lastMin) : "no change saved yet", "activity"),
-    ], "");
-    badge("you", open.length + goalQs, true);
-    badge("work", (w.work || []).length);
+    const snoozed = (() => { try { return JSON.parse(localStorage.getItem("anthill-snooze") || "{}"); } catch (e) { return {}; } })();
+    const now = Date.now();
+    const todo = (T.todo || []).filter((t) => !(snoozed[t.id] > now));
+    const hold = todo.filter((t) => t.holding_up).length;
+    const running = goals.filter((g) => g.status === "active").length;
+
+    // the one sentence that says what the page wants from you
+    const banner = $("banner"); banner.replaceChildren();
+    if (todo.length) {
+      banner.append(document.createTextNode(todo.length === 1 ? "1 thing for you to decide." : todo.length + " things for you to decide."));
+      banner.append(el("span", "sub", (hold ? (hold === 1 ? "The first is holding up work. " : hold + " are holding up work; they're first. ") : "") +
+        (running ? running + " goal(s) running end to end. " : "") + (crashes ? "✕ Anthill reported a crash: see Activity." : "")));
+    } else {
+      banner.append(document.createTextNode("Nothing needs you right now."));
+      banner.append(el("span", "sub", running ? running + " goal(s) running end to end; see Happening now." : "No goal is running. Tell an agent to take something end to end."));
+    }
+    badge("you", todo.length, true);
+    badge("work", running ? running + " running" : "");
     badge("activity", crashes ? "✕" : "");
     badge("rules", (w.decisions || []).length);
 
-    // needs you
-    const askCard = ({ r, q, a }) => {
-      const c = el("article", "card" + (a ? " answered" : ""));
-      c.append(el("h3", "", clean(q)), el("div", "from", "from: " + r.title));
-      if (a) c.append(el("div", "said", "✓ You answered: " + a.split("”:").slice(1).join("”:").trim() + " — waiting for an agent to act on it."));
-      else if (KEY) c.append(answerBox(hid(r.id + q), (v) => press("/api/answer", { work: r.id, question: clean(q), answer: v })));
-      else c.append(el("p", "small", "Open the address your terminal printed to answer here."));
-      return c;
-    };
-    // a goal's open question: an agent stopped for it, and the goal waits on you
-    const goalAsks = [];
-    goals.forEach((gl) => (gl.blockers || []).filter((b) => !b.answer).forEach((b) => {
-      const c = el("article", "card"); c.append(el("h3", "", b.question), el("div", "from", "goal: " + gl.title + " · the agent stopped here and is waiting"));
-      if (KEY) c.append(answerBox(hid("g" + gl.id + b.t), (v) => press("/api/goal-answer", { goal: gl.id, answer: v })));
-      goalAsks.push(c);
-    }));
-    fill("asks", goalAsks.concat(open.map(askCard)).concat(done.length ? [el("h2", "sec", "Answered")].concat(done.map(askCard)) : []), "Nothing is waiting on you.");
-    const dec = [];
-    goals.forEach((gl) => (gl.decided || []).forEach((d, i) => {
-      if (d.overturned) return;
-      const c = el("article", "card"); c.append(el("h3", "", "✓ " + d.what), el("div", "from", "because: " + d.because + " · goal: " + gl.title));
-      if (KEY) { const id = hid("o" + gl.id + i); const a = el("div", "act"); const inp = el("input"); inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Disagree? Say what it should be instead…"; inp.setAttribute("aria-label", "Overturn this decision");
+    // your to-do
+    function send(t, answer) {
+      return t.kind === "goal" ? press("/api/goal-answer", { goal: t.ref, answer: answer })
+                               : press("/api/answer", { work: t.ref, question: t.question_raw || t.title, answer: answer });
+    }
+    function snooze(t) { try { snoozed[t.id] = now + 24 * 3600 * 1000; localStorage.setItem("anthill-snooze", JSON.stringify(snoozed)); } catch (e) {} render(last); toast("Hidden until tomorrow"); }
+    const LABEL = { question: "Question", task: "To do", decide: "Decide" };
+    fill("todo", todo.map((t, i) => {
+      const c = el("article", "card todo" + (t.holding_up ? " hold" : ""));
+      c.append(el("div", "kind", (i + 1) + " · " + (t.holding_up ? "holding up " + (t.kind === "goal" ? "a goal" : "work") + " · " : "") + LABEL[t.ask || "decide"]));
+      c.append(el("h3", "", t.title));
+      if (t.why) c.append(el("p", "why", t.why));
+      if (t.recommend) { const r = el("div", "rec"); r.append(el("b", "", "Recommended: "), document.createTextNode(t.recommend)); c.append(r); }
+      const ch = el("div", "choices");
+      if (!KEY) ch.append(el("span", "small", "Open the address your terminal printed to answer here."));
+      else {
+        const btn = (label, cls, fn) => { const b = el("button", "c " + cls, label); b.type = "button"; b.addEventListener("click", fn); ch.append(b); };
+        if (t.ask === "task") btn("✓ Done", "main", () => send(t, "Done"));
+        if (t.recommend) btn("✓ Go with recommended", "main", () => send(t, "Go with the recommendation: " + t.recommend));
+        (t.options || []).forEach((o) => btn(o, "", () => send(t, o)));
+        btn("Something else…", "", () => { const box = c.querySelector(".act"); if (box) box.hidden = false, box.querySelector("input").focus(); });
+        btn("Already decided", "quiet", () => send(t, "Already decided; take it off the list"));
+        btn("Not now", "quiet", () => snooze(t));
+      }
+      c.append(ch);
+      if (KEY) {
+        const id = hid("t" + t.id), a = el("div", "act"), inp = el("input");
+        a.hidden = !drafts[id]; inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Your answer, in your words…"; inp.setAttribute("aria-label", "Your answer");
         inp.addEventListener("input", () => { drafts[id] = inp.value; });
-        const go = el("button", "b ghost", "Overturn"); go.type = "button";
-        go.addEventListener("click", async () => { if (inp.value.trim() && await press("/api/overturn", { goal: gl.id, index: i, note: inp.value.trim() })) delete drafts[id]; });
-        a.append(inp, go); c.append(a); }
-      dec.push(c);
-    }));
-    $("dec-h").hidden = !dec.length;
-    fill("decided", dec, "");
+        const go = async () => { const v = inp.value.trim(); if (v && await send(t, v)) delete drafts[id]; };
+        inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+        const b = el("button", "b", "Send"); b.type = "button"; b.addEventListener("click", go);
+        a.append(inp, b); c.append(a);
+      }
+      c.append(el("div", "after", "from: " + t.from + " · when you answer, " + t.after));
+      return c;
+    }), "Nothing needs you right now.");
+
+    // what agents decided for you, to confirm or overturn
+    const rv = (T.review || []).map((d) => {
+      const c = el("article", "card");
+      c.append(el("h3", "", d.what), el("p", "why", "Because: " + d.because), el("div", "after", "goal: " + d.from));
+      if (KEY) {
+        const ch = el("div", "choices");
+        const ok = el("button", "c main", "✓ Looks right"); ok.type = "button"; ok.addEventListener("click", () => press("/api/ack", { goal: d.goal, index: d.index }));
+        const id = hid("o" + d.goal + d.index), inp = el("input"); inp.id = id; inp.value = drafts[id] || ""; inp.placeholder = "Or say what it should be instead…";
+        inp.setAttribute("aria-label", "Overturn this decision"); inp.addEventListener("input", () => { drafts[id] = inp.value; });
+        const no = el("button", "c", "Overturn"); no.type = "button";
+        no.addEventListener("click", async () => { if (!inp.value.trim()) { inp.focus(); return; } if (await press("/api/overturn", { goal: d.goal, index: d.index, note: inp.value.trim() })) delete drafts[id]; });
+        const a = el("div", "act"); a.append(inp, no); ch.append(ok); c.append(ch, a);
+      }
+      return c;
+    });
+    $("review-h").hidden = !rv.length;
+    fill("review", rv, "");
+    const ans = T.answered || [];
+    $("answered-box").hidden = !ans.length;
+    $("answered-sum").textContent = ans.length + " answered, waiting for an agent to act";
+    fill("answered", ans.map((t) => { const c = el("div", "card answered"); c.append(el("h3", "", t.title), el("div", "said", "You answered: " + t.answer)); return c; }), "");
+
+    // happening now
     const STATE = { active: ["running", "p-in-progress"], blocked: ["waiting on you", "p-waiting-on-owner"], done: ["✓ done", "p-signed"], stalled: ["stuck", "p-escalated"], stopped: ["stopped", "p-paused"] };
     fill("goals", goals.map((gl) => {
       const c = el("article", "card"); const h = el("h3", "", gl.title); const st = STATE[gl.status] || [gl.status, "p-paused"]; h.append(pill(st[0], st[1])); c.append(h);
-      const ticked = (gl.steps || []).filter((x) => x.done).length;
-      if ((gl.steps || []).length) c.append(el("div", "from", ticked + " of " + gl.steps.length + " steps done"));
-      if (gl.status === "active" || gl.status === "blocked") { const n = el("div", "next"); n.append(el("b", "", "Next"), document.createTextNode(gl.next)); c.append(n); }
-      c.append(el("div", "from", "done when this passes: " + (gl.done_when || "—")));
-      if ((gl.decided || []).length) c.append(el("div", "from", gl.decided.length + " decision(s) made for you — see Needs you"));
-      if (gl.result) c.append(el("div", gl.result.passed ? "said" : "warn", (gl.result.passed ? "✓ check passed " : "check failed ") + String(gl.result.t || "").slice(5, 16).replace("T", " ")));
-      c.append(el("div", "from", (gl.tool === "claude-code" ? "Claude" : gl.tool) + (gl.session ? " · chat " + gl.session.slice(0, 6) : "") + " · " + (gl.branch || "")));
+      const n = (gl.steps || []).length, ticked = (gl.steps || []).filter((x) => x.done).length;
+      if (n) { const bar = el("div", "bar"); const f = el("span"); f.style.width = Math.round(100 * ticked / n) + "%"; bar.append(f); c.append(bar, el("div", "after", ticked + " of " + n + " steps done")); }
+      if (gl.status === "active") { const x = el("div", "next"); x.append(el("b", "", "Now"), document.createTextNode(gl.next)); c.append(x); }
+      if (gl.status === "blocked") c.append(el("div", "warn", "Stopped for a question from you: see Your to-do"));
+      if (gl.result && gl.result.passed) c.append(el("div", "said", "✓ Finished: its check passed " + String(gl.result.t || "").slice(5, 16).replace("T", " ")));
       return c;
-    }), "No goal yet. Tell an agent to take something end to end, and it shows here.");
-
-
-    // work
+    }), "No goal running. Tell an agent to take something end to end, and it shows here.");
+    const short = (t, n) => { t = clean(t).replace(/\s*\((?:sg|cite):[^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, "") + "…" : t; };
     fill("work", (w.work || []).map((r) => {
       const c = el("article", "card");
       const h = el("h3", "", r.title); h.append(pill(r.state.replace(/-/g, " "), "p-" + r.state));
       if (r.confirmed_by_owner) h.append(pill("✓ signed by you", "p-signed"));
       c.append(h);
-      if (r.next) { const n = el("div", "next"); n.append(el("b", "", "Next"), document.createTextNode(clean(r.next))); c.append(n); }
-      (r.owner_answers || []).slice(-2).forEach((a) => { const d = el("div", "said"); d.append(el("b", "", "You said: "), document.createTextNode(clean(a))); c.append(d); });
+      if (r.next) { const x = el("div", "next"); x.append(el("b", "", "Next"), document.createTextNode(short(r.next, 220))); c.append(x); }
       const d = r.drift || {};
-      if (d.behind) c.append(el("div", "warn", "This page may be behind: " + d.behind.length + " change(s) since it was last checked."));
-      (r.broken_citations || []).forEach((x) => c.append(el("div", "warn", "It points at code that is gone: " + x)));
-      c.append(el("div", "from", [r.branch, r.updated ? "updated " + r.updated : ""].filter(Boolean).join(" · ")));
+      if (d.behind) c.append(el("div", "warn", "Its page may be out of date: " + d.behind.length + " change(s) since it was last checked."));
       const rel = String(r.page || "").split("knowledge/").slice(1).join("knowledge/");
       if (!r.confirmed_by_owner && KEY && rel) { const a = el("div", "act"); a.append(el("span", "small", "Is this page right?"), twice("sign:" + rel, "Sign it as correct", () => press("/api/sign", { page: rel }))); c.append(a); }
       return c;
-    }), "No work page yet.");
+    }), "No work in progress.");
     fill("editing", (w.uncommitted || []).map((u) => { const c = el("div", "card"); c.append(el("div", "path", u.file)); if (u.work && u.work.length) c.append(el("div", "from", "part of: " + u.work.join(", "))); return c; }),
          "Nothing is being edited.");
     fill("untracked", (w.untracked || []).map((u) => { const c = el("div", "card"); c.append(el("h3", "", u.branch), el("div", "from", u.commits + " change(s) · latest: " + u.latest)); return c; }),
