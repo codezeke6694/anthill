@@ -651,6 +651,8 @@ the step that made it run.
   signature; a page you edited stays unconfirmed until they look.
 - Change the owner's words on the left of a glossary arrow.
 - Edit, stage or commit anything outside `{knowledge}/`.
+- Edit anything under `{knowledge}/_map/`. It is a picture of the map, redrawn
+  after every commit; what you would change there belongs on a work page.
 """
 
 

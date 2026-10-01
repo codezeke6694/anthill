@@ -39,6 +39,7 @@ DELEGATED = [
     ("note", 'Leave a line for whoever picks this up: "doing X; ruled out Y; next Z"'),
     ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
     ("correction", "Record that a page said something wrong: --page, --was, --now, --why"),
+    ("obsidian", "Draw the anthill as linked notes for an Obsidian vault"),
     ("update", "Pull the newest Anthill into its folder and re-render this project's rules"),
     ("goal", "Work to a goal end to end: set, step, decided, block, done"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
@@ -166,7 +167,17 @@ def _dispatch(argv: list[str]) -> int:
             print(f"anthill: unknown map subcommand {rest[0]!r}; "
                   f"the only one is `map build`", file=sys.stderr)
             return 2
-        return build_map.main(rest) or 0
+        rc = build_map.main(rest) or 0
+        # The Obsidian picture is redrawn with the map, once the owner has
+        # asked for it -- its folder existing is the opt-in.
+        try:
+            ctx = _ctx.resolve(None)
+            if rc == 0 and (ctx.knowledge_dir / "_map").exists():
+                from anthill import obsidian
+                obsidian.build(ctx)
+        except Exception:                     # noqa: BLE001 -- a picture never fails the map
+            pass
+        return rc
     if argv and argv[0] == "guard":
         from anthill import guard
         return guard.main(argv[1:])
@@ -206,6 +217,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] == "integrate":
         from anthill import integrate
         return integrate.main(argv[1:])
+    if argv and argv[0] == "obsidian":
+        from anthill import obsidian
+        return obsidian.main(argv[1:])
     if argv and argv[0] == "update":
         from anthill import install as inst
         ctx = _ctx.resolve(None)

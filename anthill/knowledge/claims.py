@@ -151,7 +151,7 @@ def from_maps(maps_dir: Path | None = None) -> list[dict[str, Any]]:
 # Markdown in a knowledge repository that is not content. `_generated/` is
 # derived, and `templates/` is worse: its example rules would enter the ledger as
 # real claims citing `path/to/file.py::symbol`, which reports as missing code.
-NON_CONTENT_DIRS = {"_generated", "templates", "node_modules", ".git", "archive"}
+NON_CONTENT_DIRS = {"_generated", "_map", "templates", "node_modules", ".git", "archive"}
 _FM_OPEN = re.compile(r"\A---\s*$", re.M)
 
 
