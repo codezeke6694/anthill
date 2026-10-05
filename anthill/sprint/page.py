@@ -169,6 +169,13 @@ def render_page(ctx: _ctx.Context, g: dict[str, Any], text: str = "") -> str:
            for d in g.get("decided") or []]
     if dec:
         body = _put_block(body, "decided", "Decisions taken for the owner", "\n".join(dec))
+    pieces = g.get("pieces") or []
+    if pieces:
+        body = _put_block(body, "pieces", "Pieces", "\n".join(
+            f"- **{x['id']}** [{x.get('status', 'todo')}] — {x['title']} · owns "
+            + ", ".join(f"`{o}`" for o in x["owns"])
+            + (f" · after {', '.join(x['after'])}" if x.get("after") else "")
+            + (f" — {x['why']}" if x.get("why") else "") for x in pieces))
     asks = [b for b in g.get("blockers") or []]
     if asks:
         body = _put_block(body, "asks", "Waiting on the owner",
@@ -356,11 +363,16 @@ anthill sprint block "<the question only the owner can answer, with your recomme
 anthill sprint done  [--sprint <id>]               runs the check; only a pass closes it and files what it learned
 anthill sprint stop "<why>"  [--sprint <id>]       pause it
 anthill sprint list [--all] [--json]   |   anthill sprint show <id>
+A planned sprint with independent pieces, run by one lead chat and its helpers (skill: parallel-sprint):
+  anthill sprint piece add <id> "<title>" --owns "<glob>" --check "<cmd>" [--after <piece>]
+  anthill sprint waves <id>   |   brief <id> <piece>   |   referee <id> <piece> --branch <b>   |   ask <id> <piece> "<q>"
 Any chat, in any tool, may work any sprint. Without --sprint, the one this chat
 drives is meant, else the only open sprint on this branch.
 """
 
-VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help"}
+VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help",
+         "piece", "waves", "brief", "referee", "ask"}
+PARALLEL = {"piece", "waves", "brief", "referee", "ask"}
 
 
 def _line(g: dict[str, Any]) -> str:
@@ -382,6 +394,9 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
     verb, rest = (argv[0] if argv else "list"), argv[1:]
+    if verb in PARALLEL:
+        from anthill.sprint import parallel
+        return parallel.main(verb, rest)
     gid = G._opt(rest, "--sprint")
     try:
         if verb == "start":

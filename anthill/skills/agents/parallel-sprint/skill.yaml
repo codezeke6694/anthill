@@ -1,0 +1,12 @@
+name: parallel-sprint
+category: agents
+version: '1.0'
+description: The owner said "work on this sprint" and it is a planned sprint with independent
+  pieces. You are the lead -- plan the waves, start one helper per piece, referee what comes
+  back, batch the owner's questions. Load it before starting any helper.
+tags:
+- sprints
+- parallel
+load_class: conditional
+always_on: false
+author: anthill

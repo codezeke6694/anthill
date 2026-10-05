@@ -394,8 +394,9 @@ def _git_short(ctx: _ctx.Context) -> str:
 def rules_file_v2(ctx: _ctx.Context, name: str, protected_block: str, cmd: str = "anthill") -> str:
     from anthill import goal
     stops = "; ".join(goal.HARD_STOPS)
-    board = ("\n\nA planned sprint run on the job board (several pieces, each owning its files): "
-             "load the `planned-board` skill first (`anthill skill get planned-board`).")
+    board = ("\n\nA big planned sprint whose pieces do not depend on each other, which the owner "
+             "asks you to work on: you lead it, with helpers. Load the `parallel-sprint` skill first "
+             "(`anthill skill get parallel-sprint`).")
     return f"""# {name}
 
 This project is run with Anthill. The owner's charter is `.anthill/owner/charter.md`;
