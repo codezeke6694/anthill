@@ -20,7 +20,7 @@ def test_chambers_link_to_what_they_use_and_the_work_on_them(project):
     (project.root / "pkg" / "billing" / "__init__.py").write_text('"""Charging customers."""\n')
     (project.root / "pkg" / "billing" / "invoice.py").write_text('"""Invoices."""\nfrom pkg.core import add\n\ndef total(a, b):\n    return add(a, b)\n')
     commit_all(project.root, "billing")
-    wk = project.knowledge_dir / "work"
+    wk = project.sprint_pages_dir / "active"
     wk.mkdir(parents=True, exist_ok=True)
     (wk / "refunds.md").write_text("---\nid: refunds\ntype: work\ntitle: Refunds on the receipt\nstate: in-progress\n"
                                    "branch: work/test\n---\n\n## Where\n\n- `pkg/billing/invoice.py`\n")
@@ -29,9 +29,9 @@ def test_chambers_link_to_what_they_use_and_the_work_on_them(project):
     assert out["chambers"] >= 2
     mp = project.knowledge_dir / "_map"
     billing = (mp / "chambers" / "pkg.billing.md").read_text()
-    assert "[[_map/chambers/pkg|pkg]]" in billing                # a pathway: billing uses pkg
-    assert "[[work/refunds|Refunds on the receipt]]" in billing  # the work hangs on its chamber
-    assert "[[_map/chambers/pkg.billing" in (mp / "chambers" / "pkg.md").read_text()   # and the way back
+    assert "[[knowledge/_map/chambers/pkg|pkg]]" in billing                # a pathway: billing uses pkg
+    assert "[[sprints/active/refunds|Refunds on the receipt]]" in billing  # the work hangs on its chamber
+    assert "[[knowledge/_map/chambers/pkg.billing" in (mp / "chambers" / "pkg.md").read_text()   # and the way back
     assert "Start here.md" in [p.name for p in mp.iterdir()]
 
 

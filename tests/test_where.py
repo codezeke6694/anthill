@@ -17,7 +17,10 @@ def anthill(repo: Path, *args: str) -> str:
 
 
 def page(repo: Path, rel: str, text: str) -> None:
-    p = repo / ".anthill" / "knowledge" / rel
+    # Pages about work are sprint pages on the new layout.
+    if rel.startswith("work/"):
+        rel = "../sprints/active/" + rel[len("work/"):]
+    p = (repo / ".anthill" / "knowledge" / rel).resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text)
 
@@ -41,7 +44,7 @@ def test_where_names_the_work_its_next_step_and_what_waits_on_the_owner(project)
     out = anthill(project.root, "where")
     assert "**Make adding faster** — waiting on owner" in out
     assert "Next: Measure it, then switch." in out
-    assert "Waiting on the owner: Is 2x fast enough?" in out
+    assert "## Waiting on the owner\n\n- Is 2x fast enough?  _(adding)_" in out   # every question, in one place
     assert "The market is global (2026-09-18)" in out
     assert "Saving restarts the server." in out
     assert "may be behind" not in out
@@ -90,7 +93,7 @@ def test_a_page_citing_code_that_is_gone_says_so(project):
 
 def test_the_rules_send_a_cold_agent_to_where_first(project):
     text = (project.root / "CLAUDE.md").read_text()
-    assert "anthill where" in text and rules.cold_start_rule(project) in text
+    assert "anthill where" in text and text.index("anthill where") < text.index("anthill start")
     assert "carry on" in text
     keeper = (project.root / ".claude/agents/anthill-keeper.md").read_text()
     assert "a page is behind its branch" in keeper and "decisions/" in keeper
@@ -175,3 +178,17 @@ def test_install_surveys_the_code_before_it_finishes(tmp_path, monkeypatch):
     assert (repo / ".anthill/local/map/codebase.json").exists()
     assert "What Anthill knows already" in inst.render_survey(out["survey"])
     assert "places in the code" in anthill(repo, "survey")
+
+
+def test_where_has_a_budget_and_all_shows_everything(project):
+    for i in range(6):
+        page(project.root, f"work/job{i}.md",
+             f"---\nid: job{i}\ntitle: Job {i}\nstate: in-progress\nbranch: work/other{i}\n"
+             f"updated: 2026-10-0{i + 1}\nnext: step {i}\n---\n\n## Traps\n\n- trap of job {i}\n")
+    out = anthill(project.root, "where")
+    assert "**Job 5** — in progress" in out and "**Job 4** — in progress" in out   # the latest two, in full
+    assert "- **Job 0** — in progress — next: step 0" in out                     # the rest, one line
+    assert "trap of job 5" in out and "trap of job 0" not in out
+    assert "and 4 more on the other sprints" in out
+    full = anthill(project.root, "where", "--all")
+    assert "trap of job 0" in full and "Also open" not in full

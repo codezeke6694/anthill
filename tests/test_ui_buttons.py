@@ -35,8 +35,8 @@ Something.
 
 @pytest.fixture
 def page_server(project):
-    (project.knowledge_dir / "work").mkdir(parents=True, exist_ok=True)
-    (project.knowledge_dir / "work" / "demo.md").write_text(PAGE)
+    (project.sprint_pages_dir / "active").mkdir(parents=True, exist_ok=True)
+    (project.sprint_pages_dir / "active" / "demo.md").write_text(PAGE)
     port = server.free_port()
     server._Handler.ctx, server._Handler.key, server._Handler.port = project, "k3y", port
     httpd = server.ThreadingHTTPServer(("127.0.0.1", port), server._Handler)
@@ -63,7 +63,7 @@ def test_an_answer_lands_on_the_page_in_the_owners_words(page_server):
     code, out = post(port, "/api/answer", {"work": "demo", "question": "Refunds?",
                                            "answer": "on the receipt"})
     assert code == 200, out
-    text = (project.knowledge_dir / "work" / "demo.md").read_text()
+    text = (project.sprint_pages_dir / "active" / "demo.md").read_text()
     assert "## Owner's answers" in text and "**on the receipt**" in text
     assert text.index("## Owner's answers") < text.index("## Traps")
     row = [r for r in work.where(project)["work"] if r["id"] == "demo"][0]
@@ -75,9 +75,9 @@ def test_an_answer_lands_on_the_page_in_the_owners_words(page_server):
 
 def test_signing_fills_the_line_no_agent_may(page_server):
     project, port = page_server
-    code, out = post(port, "/api/sign", {"page": "work/demo.md"})
+    code, out = post(port, "/api/sign", {"page": "sprints/active/demo.md"})
     assert code == 200, out
-    text = (project.knowledge_dir / "work" / "demo.md").read_text()
+    text = (project.sprint_pages_dir / "active" / "demo.md").read_text()
     assert "intent_attested_by: owner" in text and "intent_attested_on:" in text
     assert text.count("intent_attested_by") == 1
     assert trail.read(project)[-1]["kind"] == "signed"
@@ -85,11 +85,11 @@ def test_signing_fills_the_line_no_agent_may(page_server):
 
 def test_no_key_wrong_key_or_wrong_host_is_refused(page_server):
     project, port = page_server
-    before = (project.knowledge_dir / "work" / "demo.md").read_text()
+    before = (project.sprint_pages_dir / "active" / "demo.md").read_text()
     assert post(port, "/api/answer", {"work": "demo", "answer": "x"}, key="")[0] == 403
     assert post(port, "/api/answer", {"work": "demo", "answer": "x"}, key="guess")[0] == 403
     assert post(port, "/api/answer", {"work": "demo", "answer": "x"}, host="evil.example:80")[0] == 403
-    assert (project.knowledge_dir / "work" / "demo.md").read_text() == before
+    assert (project.sprint_pages_dir / "active" / "demo.md").read_text() == before
 
 
 def test_it_cannot_reach_outside_the_knowledge_folder(page_server):

@@ -44,6 +44,9 @@ MOVES: list[tuple[str, str]] = [
     ("plans", "knowledge/plans"),
     ("idea.md", "knowledge/plans/idea.md"),
     ("prd", "knowledge/plans/prd"),
+    # The Obsidian vault becomes all of .anthill/, so sprints and knowledge
+    # link to each other; the owner's vault settings come up with it.
+    ("knowledge/.obsidian", ".obsidian"),
     ("control-fingerprints.json", "local/control-fingerprints.json"),
     ("goals", "local/goals"),
     ("build/maps", "local/map"),
@@ -192,6 +195,57 @@ def _rewrite_board_paths(ctx: _ctx.Context) -> int:
     return changed
 
 
+def to_sprints(ctx: _ctx.Context) -> list[str]:
+    """Work pages and goals become sprints (owner, 5 Oct): a work page is a
+    short sprint already, and a goal is a sprint driven end to end."""
+    from anthill.sprint import page as sp
+    from anthill.knowledge import pages as _pages
+    s = ctx.state
+    out: list[str] = []
+    work = s / "knowledge" / "work"
+    for p in sorted(work.glob("*.md")) if work.exists() else []:
+        text = p.read_text(encoding="utf-8")
+        fm = _pages.parse_frontmatter(text) or {}
+        home = s / "sprints" / ("done" if str(fm.get("state")) == "done" else "active")
+        home.mkdir(parents=True, exist_ok=True)
+        if not fm.get("kind") and text.startswith("---"):
+            text = "---\nkind: short" + text[3:]
+        dest = home / p.name
+        if dest.exists():
+            out.append(f"kept {p.relative_to(ctx.root)}: a sprint called {p.stem} already exists")
+            continue
+        dest.write_text(text, encoding="utf-8")
+        p.unlink()
+        out.append(f"work page {p.stem} -> sprints/{home.name}/")
+    try:
+        work.rmdir()
+    except OSError:
+        pass
+    goals = s / "local" / "goals"
+    keep = s / "local" / "goals-before-sprints"
+    for gp in sorted(goals.glob("*.json")) if goals.exists() else []:
+        try:
+            g = json.loads(gp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        sid = sp.slug(g.get("id") or gp.stem)
+        if (s / "sprints" / "active" / f"{sid}.md").exists() or (s / "sprints" / "done" / f"{sid}.md").exists():
+            sid = f"goal-{sid}"[:60]
+        g["id"] = sid
+        g.setdefault("kind", "short")
+        g["driving"] = g.get("status") in ("active", "blocked")
+        # Saved through the sprint code, on a context that now reads v2 paths.
+        sp.save(_ctx.resolve(ctx.root), g)
+        keep.mkdir(parents=True, exist_ok=True)
+        gp.replace(keep / gp.name)
+        out.append(f"goal {gp.stem} -> sprint {sid} ({g.get('status')})")
+    try:
+        goals.rmdir()
+    except OSError:
+        pass
+    return out
+
+
 def apply(ctx: _ctx.Context, now: bool = False) -> dict:
     p = plan(ctx)
     if ctx.layout == "v2":
@@ -219,13 +273,14 @@ def apply(ctx: _ctx.Context, now: bool = False) -> dict:
     if build.exists() and not any(build.iterdir()):
         build.rmdir()
     board_files = _rewrite_board_paths(ctx)
+    sprints = to_sprints(ctx)
 
     # The rules files, hooks, locks and ignore lists all name paths; the new
     # code re-renders them, in its own process, from the moved settings.
     tool = Path(__file__).resolve().parents[1] / "bin" / "anthill"
     r = subprocess.run([str(tool), "install", "--force", "--name", name], cwd=ctx.root,
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    return {"migrated": True, "moved": moved, "refused": refused,
+    return {"migrated": True, "moved": moved, "refused": refused, "sprints": sprints,
             "board_records_rewritten": board_files,
             "reinstalled": r.returncode == 0,
             "install_output": (r.stdout + r.stderr).strip()[-600:] if r.returncode else "",

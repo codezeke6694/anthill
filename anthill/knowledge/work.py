@@ -74,7 +74,31 @@ def _bullets(body: str) -> list[str]:
 
 
 def load(knowledge_dir: Path, kind: str) -> list[dict[str, Any]]:
-    base = knowledge_dir / kind
+    return load_dir(knowledge_dir / kind)
+
+
+def load_work(ctx: Any) -> list[dict[str, Any]]:
+    """Pages about work: sprint pages on the new layout, work pages on the old."""
+    from anthill.sprint import page as _sprint
+    out: list[dict[str, Any]] = []
+    for d in _sprint.page_dirs(ctx):
+        out += load_dir(d)
+    return out
+
+
+def _steps(path: Path) -> dict[str, int]:
+    sp = path.with_suffix(".json")
+    if not sp.exists():
+        return {}
+    try:
+        import json
+        steps = json.loads(sp.read_text(encoding="utf-8")).get("steps") or []
+    except (OSError, ValueError):
+        return {}
+    return {"done": sum(1 for x in steps if x.get("done")), "total": len(steps)} if steps else {}
+
+
+def load_dir(base: Path) -> list[dict[str, Any]]:
     if not base.is_dir():
         return []
     out = []
@@ -263,7 +287,7 @@ def uncommitted(root: Path, active: list[dict[str, Any]], pages_: list[dict[str,
 
 def where(ctx: Any) -> dict[str, Any]:
     kd, root = ctx.knowledge_dir, ctx.root
-    work = load(kd, WORK_DIR)
+    work = load_work(ctx)
     decisions = load(kd, DECISIONS_DIR)
     active, finished = [], []
     for p in work:
@@ -272,6 +296,9 @@ def where(ctx: Any) -> dict[str, Any]:
         row = {
             "id": fm.get("id") or p["path"].stem,
             "title": fm.get("title", ""),
+            "kind": str(fm.get("kind") or ""),
+            "steps": _steps(p["path"]),
+            "check": str(fm.get("check") or ""),
             "state": fm.get("state", "in-progress"),
             "branch": fm.get("branch", ""),
             "next": fm.get("next", ""),
@@ -325,7 +352,32 @@ def _shared_traps(knowledge_dir: Path) -> list[str]:
     return _bullets(path.read_text(encoding="utf-8").split("---", 2)[-1])
 
 
-def render(w: dict[str, Any], _unused: Any = None) -> str:
+FOCUS_OTHERS = 2       # besides this branch's sprints, the most recently touched shown in full
+
+
+def _cut(text: str, n: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
+def focus(w: dict[str, Any]) -> set[str]:
+    """Sprints worth reading in full: this branch's, and the latest few others."""
+    here = {r["id"] for r in w["work"] if r["branch"] and r["branch"] == w["branch"]}
+    others = sorted((r for r in w["work"] if r["id"] not in here),
+                    key=lambda r: r["updated"], reverse=True)[:FOCUS_OTHERS]
+    return here | {r["id"] for r in others}
+
+
+def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
+    """The page a chat reads before anything else.
+
+    It has a budget (C1): it used to print every page in full and every trap of
+    every page, 136 lines on one project and growing with every sprint. Now the
+    sprints this chat is likely here for are in full, the rest are one line,
+    and every question for the owner is listed once, in one place. `--all`
+    prints everything.
+    """
+    shown = {r["id"] for r in w["work"]} if full else focus(w)
     L = ["# Where we are", ""]
     L.append(f"You are on `{w['branch']}`. {w['unpushed_commits']} commit(s) exist only on "
              "this machine." if w["unpushed_commits"] else f"You are on `{w['branch']}`.")
@@ -335,21 +387,32 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
               "working on them this minute: do not edit them without asking the owner.", ""]
         for u in w["uncommitted"]:
             L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
+    asks = [(r, q) for r in w["work"] for q in r["waiting_on_owner"]]
+    if asks:
+        L += ["", "## Waiting on the owner", ""]
+        L += [f"- {_cut(q, 240)}  _({r['id']})_" for r, q in asks]
     L += ["", "## Work in progress", ""]
     if not w["work"]:
         L.append("No work page is open yet. After your next commit the keeper writes one "
                  "for any branch with work on it; until then, the history below is the "
                  "record.")
+    brief = []
     for r in w["work"]:
-        L.append(f"**{r['title']}** — {r['state'].replace('-', ' ')}"
-                 + (f" · `{r['branch']}`" if r["branch"] else "")
+        kind = f"{r['kind']} sprint · " if r.get("kind") else ""
+        st = r.get("steps") or {}
+        head = (f"**{r['title']}** — {kind}{r['state'].replace('-', ' ')}"
+                + (f" · {st['done']}/{st['total']} steps" if st else ""))
+        if r["id"] not in shown:
+            brief.append(f"- {head}" + (f" — next: {_cut(r['next'], 110)}" if r["next"] else "")
+                         + f" (`{r['page']}`)")
+            continue
+        L.append(head + (f" · `{r['branch']}`" if r["branch"] else "")
                  + (f" · updated {r['updated']}" if r["updated"] else ""))
         if r["next"]:
-            L.append(f"  - Next: {r['next']}")
-        for a in r.get("owner_answers") or []:
-            L.append(f"  - The owner answered: {a}")
-        for q in r["waiting_on_owner"]:
-            L.append(f"  - Waiting on the owner: {q}")
+            L.append(f"  - Next: {_cut(r['next'], 400) if not full else r['next']}")
+        answers = r.get("owner_answers") or []
+        for a in (answers if full else answers[-3:]):
+            L.append(f"  - The owner answered: {_cut(a, 240) if not full else a}")
         d = r["drift"]
         if d.get("behind"):
             L.append(f"  - ⚠ This page may be behind: {len(d['behind'])} commit(s) on its "
@@ -358,9 +421,16 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
             L.append(f"  - ⚠ Its branch `{d['branch_missing']}` no longer exists.")
         elif d.get("never_pinned"):
             L.append("  - ⚠ Never pinned to a commit, so drift cannot be checked.")
-        for c in r["broken_citations"]:
-            L.append(f"  - ⚠ Cites code that is gone: {c}")
+        gone = r["broken_citations"]
+        if gone and not full and len(gone) > 2:
+            L.append(f"  - ⚠ Cites {len(gone)} pieces of code that are gone: "
+                     + ", ".join(gone[:2]) + f", and {len(gone) - 2} more")
+        else:
+            for c in gone:
+                L.append(f"  - ⚠ Cites code that is gone: {c}")
         L.append(f"  - Read: `{r['page']}`")
+    if brief:
+        L += ["", "Also open:" if len(brief) < len(w["work"]) else "", *brief]
     if not w["work"] and w.get("recent"):
         L += ["", "## What has been happening (from git, no pages yet)", ""]
         L += [f"- {r}" for r in w["recent"]]
@@ -374,10 +444,15 @@ def render(w: dict[str, Any], _unused: Any = None) -> str:
         L += ["", "## What the owner has decided", ""]
         for d in w["decisions"]:
             L.append(f"- {d['title']}" + (f" ({d['decided']})" if d["decided"] else ""))
-    if w["traps"]:
+    traps = [t for t in w["traps"] if t["work"] == "everywhere" or t["work"] in shown]
+    hidden = len(w["traps"]) - len(traps)
+    if traps or hidden:
         L += ["", "## Traps", ""]
-        for t in w["traps"]:
-            L.append(f"- {t['trap']}  _({t['work']})_")
+        for t in traps:
+            L.append(f"- {_cut(t['trap'], 300) if not full else t['trap']}  _({t['work']})_")
+        if hidden:
+            L.append(f"- …and {hidden} more on the other sprints: read a sprint's page before "
+                     "working on it, or `anthill where --all`.")
     if w.get("howto"):
         L += ["", "## How-to", ""]
         L += [f"- {h['title']} — `{h['page']}`" for h in w["howto"]]

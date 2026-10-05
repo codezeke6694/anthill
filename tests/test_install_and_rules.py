@@ -29,7 +29,7 @@ def test_claude_md_git_rules_follow_the_config(project):
     text = (ctx.root / "CLAUDE.md").read_text()
     assert "does **not** refuse pushes" in text
     assert "No branch is protected by a hook" in text
-    assert "you do not push unless the owner asked" in text  # the rule survives
+    assert "push unless the owner asked for this push" in text  # the rule survives
 
 
 def test_role_file_and_brief_agree_on_map_build(project):
@@ -48,8 +48,8 @@ def test_role_file_and_brief_agree_on_map_build(project):
 def test_agents_md_carries_the_same_git_rules(project):
     agents = (project.root / "AGENTS.md").read_text()
     claude = (project.root / "CLAUDE.md").read_text()
-    assert rules.git_rules(project) in agents
-    assert rules.git_rules(project) in claude
+    assert rules._git_short(project) in agents
+    assert rules._git_short(project) in claude
 
 
 def test_control_sees_a_fresh_install_as_unchanged(project):
@@ -67,3 +67,14 @@ def test_control_reports_render_pending_after_config_change(project):
     assert states["CLAUDE.md"] == "stale"
     assert states["AGENTS.md"] == "stale"
     assert "install --force" in out["next"]
+
+
+def test_the_rules_file_is_about_sprints_and_within_its_budget(project):
+    from anthill import rules
+    text = (project.root / "CLAUDE.md").read_text()
+    assert len(text) // 4 <= rules.RULES_BUDGET_TOKENS, len(text) // 4
+    assert "anthill sprint start" in text and "anthill sprint go" in text
+    assert ".anthill/owner/charter.md" in text and "CONSTITUTION.md" not in text
+    assert "anthill work next" not in text                 # the board's detail is a skill now
+    for stop in ("customers would see", "live data", "money", "pushing, or merging", "cannot be restored"):
+        assert stop in text

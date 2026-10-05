@@ -102,4 +102,4 @@ def test_install_adds_the_stop_hook_and_the_rule(project):
     assert "goal --hook" in hooks["Stop"][0]["hooks"][0]["command"]
     for doc in ("CLAUDE.md", "AGENTS.md"):
         text = (project.root / doc).read_text()
-        assert "Working to a goal" in text and "anthill goal decided" in text
+        assert "End to end" in text and "anthill sprint go" in text and "sprint decided" in text

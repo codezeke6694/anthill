@@ -1158,7 +1158,7 @@ def cmd_where(args: argparse.Namespace) -> None:
     if args.json:
         _print_json(w)
     else:
-        print(work_pages.render(w, _board_summary()), end="")
+        print(work_pages.render(w, _board_summary(), full=args.all), end="")
 
 
 def cmd_orient(args: argparse.Namespace) -> None:
@@ -1460,6 +1460,7 @@ def build_parser() -> argparse.ArgumentParser:
     wh = sub.add_parser("where", help="Start here: the work in progress, what waits on the "
                         "owner, the owner's decisions, the traps -- and what has drifted")
     wh.add_argument("--json", action="store_true")
+    wh.add_argument("--all", action="store_true", help="every sprint and every trap in full")
     wh.set_defaults(func=cmd_where)
 
     orp = sub.add_parser("orient", help="Start here: what this codebase is, its "

@@ -1,0 +1,12 @@
+name: planned-board
+category: agents
+version: '1.0'
+description: Running a planned sprint on the job board -- claiming a piece, working only in
+  the files it owns, the gate and what each exit code means, escalating, reopening. Load
+  it before any `anthill work` command.
+tags:
+- sprints
+- board
+load_class: conditional
+always_on: false
+author: anthill

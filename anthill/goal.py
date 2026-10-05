@@ -19,6 +19,11 @@ decided since it last sent the agent back, it lets the turn end and marks the
 goal stalled, so a stuck agent cannot spin.
 
 Goals live in `.anthill/goals/<id>.json`; every change is on the trail.
+
+On the new layout a goal *is* a sprint driven end to end (owner, 5 Oct): its
+steps, check, decisions and questions live with the sprint page, so any chat
+in any tool can continue it, and only "which chat is driving" stays with that
+chat. `anthill sprint` is the full surface; these verbs keep working on it.
 """
 from __future__ import annotations
 
@@ -61,10 +66,17 @@ def _path(ctx: _ctx.Context, gid: str) -> Path:
 
 
 def load(ctx: _ctx.Context, gid: str) -> dict[str, Any]:
+    if ctx.v2:
+        from anthill.sprint import page
+        return page.load(ctx, gid)
     return json.loads(_path(ctx, gid).read_text(encoding="utf-8"))
 
 
 def save(ctx: _ctx.Context, g: dict[str, Any]) -> None:
+    if ctx.v2:
+        from anthill.sprint import page
+        page.save(ctx, g)
+        return
     p = _path(ctx, g["id"])
     p.parent.mkdir(parents=True, exist_ok=True)
     g["updated"] = _now()
@@ -74,6 +86,9 @@ def save(ctx: _ctx.Context, g: dict[str, Any]) -> None:
 
 
 def all_goals(ctx: _ctx.Context) -> list[dict[str, Any]]:
+    if ctx.v2:
+        from anthill.sprint import page
+        return page.all_sprints(ctx)
     d = goals_dir(ctx)
     out = []
     for p in sorted(d.glob("*.json")) if d.exists() else []:
@@ -93,9 +108,15 @@ def current(ctx: _ctx.Context, session: str = "") -> dict[str, Any] | None:
     """The goal this chat is working toward: its own open goal, newest first."""
     session = session or trail.who()["session"]
     for g in all_goals(ctx):
-        if g.get("status") in (ACTIVE, BLOCKED) and session and g.get("session") == session:
+        if g.get("status") in (ACTIVE, BLOCKED) and session and g.get("session") == session \
+                and (g.get("driving") or not ctx.v2):
             return g
     return None
+
+
+def _actor(g: dict[str, Any]) -> str:
+    """Who is acting: on v2 any chat may work a sprint, so it is this chat."""
+    return trail.who()["session"] or g.get("session", "")
 
 
 # ------------------------------------------------------------------ verbs
@@ -104,6 +125,13 @@ def set_goal(ctx: _ctx.Context, title: str, done_when: str, steps: list[str],
              session: str = "") -> dict[str, Any]:
     who = trail.who()
     session = session or who["session"]
+    if ctx.v2:
+        from anthill.sprint import page
+        g = page.new(ctx, title, kind="short", check=done_when, steps=steps)
+        g.update({"driving": True, "session": session, "tool": who["tool"]})
+        save(ctx, g)
+        trail.record("goal", ctx, session=session, goal=g["id"], action="set", text=g["title"])
+        return g
     base = _slug(title)
     gid, n = base, 2
     while _path(ctx, gid).exists():
@@ -120,8 +148,20 @@ def set_goal(ctx: _ctx.Context, title: str, done_when: str, steps: list[str],
 
 def _open(ctx: _ctx.Context, gid: str = "") -> dict[str, Any]:
     g = load(ctx, gid) if gid else current(ctx)
+    if not g and ctx.v2:
+        # Any chat can continue a sprint. Without a name, the one active sprint
+        # on this branch is the one meant; two or more, and it must be named.
+        here = trail._branch(ctx.root)
+        open_here = [x for x in all_goals(ctx)
+                     if x.get("status") in (ACTIVE, BLOCKED) and x.get("branch") == here]
+        if len(open_here) == 1:
+            g = open_here[0]
+        elif open_here:
+            raise LookupError("more than one sprint is open on this branch: "
+                              + ", ".join(x["id"] for x in open_here) + " -- name one with --sprint")
     if not g:
-        raise LookupError("this chat has no open goal -- start one with anthill goal set")
+        raise LookupError("this chat has no open goal -- start one with anthill goal set"
+                          + (", or name a sprint with --sprint" if ctx.v2 else ""))
     return g
 
 
@@ -136,7 +176,7 @@ def step(ctx: _ctx.Context, text: str = "", done: int = 0, gid: str = "") -> dic
         g["steps"].append({"text": text.strip(), "done": False})
         what = f"step added: {text.strip()}"
     save(ctx, g)
-    trail.record("goal", ctx, session=g["session"], goal=g["id"], action="step", text=what)
+    trail.record("goal", ctx, session=_actor(g), goal=g["id"], action="step", text=what)
     return g
 
 
@@ -146,7 +186,7 @@ def decided(ctx: _ctx.Context, what: str, because: str, gid: str = "") -> dict[s
     entry = {"t": _now(), "what": what.strip(), "because": because.strip(), "overturned": None}
     g["decided"].append(entry)
     save(ctx, g)
-    trail.record("decided", ctx, session=g["session"], goal=g["id"], text=entry["what"],
+    trail.record("decided", ctx, session=_actor(g), goal=g["id"], text=entry["what"],
                  because=entry["because"])
     return g
 
@@ -156,7 +196,7 @@ def block(ctx: _ctx.Context, question: str, gid: str = "") -> dict[str, Any]:
     g["blockers"].append({"t": _now(), "question": question.strip(), "answer": None})
     g["status"] = BLOCKED
     save(ctx, g)
-    trail.record("goal", ctx, session=g["session"], goal=g["id"], action="blocked", text=question.strip())
+    trail.record("goal", ctx, session=_actor(g), goal=g["id"], action="blocked", text=question.strip())
     return g
 
 
@@ -174,8 +214,12 @@ def finish(ctx: _ctx.Context, gid: str = "") -> dict[str, Any]:
     g["result"] = {"t": _now(), "passed": ok, "output": tail}
     if ok:
         g["status"] = DONE
+        g["driving"] = False
     save(ctx, g)
-    trail.record("goal", ctx, session=g["session"], goal=g["id"], action="done" if ok else "check-failed",
+    if ok and ctx.v2:
+        from anthill.sprint import page
+        g["filed"] = page.file_learned(ctx, g)
+    trail.record("goal", ctx, session=_actor(g), goal=g["id"], action="done" if ok else "check-failed",
                  text=tail[-160:])
     return g
 
@@ -184,7 +228,7 @@ def stop(ctx: _ctx.Context, why: str, gid: str = "") -> dict[str, Any]:
     g = _open(ctx, gid)
     g["status"], g["stopped_because"] = STOPPED, why.strip()
     save(ctx, g)
-    trail.record("goal", ctx, session=g["session"], goal=g["id"], action="stopped", text=why.strip())
+    trail.record("goal", ctx, session=_actor(g), goal=g["id"], action="stopped", text=why.strip())
     return g
 
 
@@ -360,6 +404,7 @@ def main(argv: list[str]) -> int:
         return 0
     verb = argv[0] if argv else "status"
     rest = argv[1:]
+    gid = _opt(rest, "--sprint") or _opt(rest, "--goal")
     try:
         if verb == "set":
             title, dw = _words(rest), _opt(rest, "--done-when")
@@ -369,28 +414,30 @@ def main(argv: list[str]) -> int:
             g = set_goal(ctx, title, dw, _all(rest, "--step"))
         elif verb == "step":
             n = _opt(rest, "--done")
-            g = step(ctx, done=int(n)) if n else step(ctx, text=_words(rest))
+            g = step(ctx, done=int(n), gid=gid) if n else step(ctx, text=_words(rest), gid=gid)
         elif verb == "decided":
             what, because = _words(rest), _opt(rest, "--because")
             if not what or not because:
                 print('anthill goal decided "<what>" --because "<which decision or rule>"', file=sys.stderr)
                 return 2
-            g = decided(ctx, what, because)
+            g = decided(ctx, what, because, gid=gid)
         elif verb == "block":
             q = _words(rest)
             if not q:
                 print('anthill goal block "<the question>"', file=sys.stderr)
                 return 2
-            g = block(ctx, q)
+            g = block(ctx, q, gid=gid)
         elif verb == "done":
-            g = finish(ctx)
+            g = finish(ctx, gid=gid)
             print(render(g), end="")
+            for f in g.get("filed") or []:
+                print(f"  filed on the shared shelf: {f}")
             if not g["result"]["passed"]:
                 print("not done: the check failed --\n" + g["result"]["output"], file=sys.stderr)
                 return 1
             return 0
         elif verb == "stop":
-            g = stop(ctx, _words(rest) or "stopped")
+            g = stop(ctx, _words(rest) or "stopped", gid=gid)
         elif verb in ("status", "list"):
             gs = [current(ctx)] if verb == "status" and current(ctx) else all_goals(ctx)
             gs = [g for g in gs if g]

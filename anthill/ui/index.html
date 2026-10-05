@@ -454,7 +454,7 @@
       if (r.next) { const x = el("div", "next"); x.append(el("b", "", "Next"), document.createTextNode(short(r.next, 220))); c.append(x); }
       const d = r.drift || {};
       if (d.behind) c.append(el("div", "warn", "Its page may be out of date: " + d.behind.length + " change(s) since it was last checked."));
-      const rel = String(r.page || "").split("knowledge/").slice(1).join("knowledge/");
+      const rel = String(r.page || "").split(".anthill/").slice(1).join(".anthill/");
       if (!r.confirmed_by_owner && KEY && rel) { const a = el("div", "act"); a.append(el("span", "small", "Is this page right?"), twice("sign:" + rel, "Sign it as correct", () => press("/api/sign", { page: rel }))); c.append(a); }
       return c;
     }), "No work in progress.");

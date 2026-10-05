@@ -106,3 +106,28 @@ def test_a_project_not_yet_moved_keeps_working(project):
     assert (ctx.state / "build/maps/codebase.json").read_text() != '{"nodes": []}'
     assert "still on the old layout" in (ctx.state / "trail.jsonl").read_text()
     assert not (ctx.state / "local").exists() and not (ctx.state / "owner").exists()
+
+
+def test_work_pages_and_goals_become_sprints(project):
+    ctx = to_v1(project)
+    wk = ctx.knowledge_dir / "work"
+    wk.mkdir(parents=True, exist_ok=True)
+    (wk / "refunds.md").write_text("---\nid: refunds\ntitle: Refunds\nstate: in-progress\nnext: total it\n---\n\nbody\n")
+    (wk / "old.md").write_text("---\nid: old\ntitle: Old\nstate: done\n---\n")
+    (ctx.state / "goals").mkdir()
+    (ctx.state / "goals" / "speed-up.json").write_text(json.dumps({
+        "id": "speed-up", "title": "Speed up", "done_when": "true", "status": "blocked",
+        "steps": [{"text": "profile", "done": True}], "session": "s1", "stalls": 1,
+        "decided": [], "blockers": [{"question": "Cache it?", "answer": None}], "answers": []}))
+    out = migrate.apply(ctx, now=True)
+    assert out["migrated"], out
+    ctx = reload(ctx)
+    a, d = ctx.sprint_pages_dir / "active", ctx.sprint_pages_dir / "done"
+    assert (a / "refunds.md").exists() and (d / "old.md").exists()
+    assert "kind: short" in (a / "refunds.md").read_text()
+    from anthill.sprint import page
+    g = page.load(ctx, "speed-up")
+    assert g["status"] == "blocked" and g["steps"][0]["done"] and g["session"] == "s1"
+    assert "Cache it?" in (a / "speed-up.md").read_text()
+    assert not (ctx.knowledge_dir / "work").exists()
+    assert (ctx.local_dir / "goals-before-sprints" / "speed-up.json").exists()

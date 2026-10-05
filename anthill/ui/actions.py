@@ -35,17 +35,28 @@ class Refused(Exception):
 def _work_page(ctx: _ctx.Context, work_id: str) -> Path:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", work_id or ""):
         raise Refused("no such work page")
-    p = ctx.knowledge_dir / "work" / f"{work_id}.md"
+    from anthill.sprint import page as _sprint
+    try:
+        p = _sprint.find(ctx, work_id) or ctx.knowledge_dir / "work" / f"{work_id}.md"
+    except ValueError:
+        p = ctx.knowledge_dir / "work" / f"{work_id}.md"
     if not p.is_file():
         raise Refused(f"no work page called {work_id}")
     return p
 
 
 def _knowledge_page(ctx: _ctx.Context, rel: str) -> Path:
-    p = (ctx.knowledge_dir / (rel or "")).resolve()
-    base = ctx.knowledge_dir.resolve()
-    if base not in p.parents or p.suffix != ".md" or not p.is_file():
-        raise Refused("that is not a page in the knowledge folder")
+    """A page the owner may sign: on the shared shelf, or a sprint page.
+
+    `rel` is relative to `.anthill/` (`sprints/active/x.md`, `knowledge/...`),
+    or, as the page used to send it, relative to the knowledge folder.
+    """
+    rel = rel or ""
+    bases = [ctx.knowledge_dir.resolve(), ctx.sprint_pages_dir.resolve()]
+    first = rel.split("/", 1)[0]
+    p = ((ctx.state if first in ("knowledge", "sprints") else ctx.knowledge_dir) / rel).resolve()
+    if not any(b in p.parents for b in bases) or p.suffix != ".md" or not p.is_file():
+        raise Refused("that is not a page in the knowledge folder or a sprint")
     return p
 
 
@@ -92,7 +103,7 @@ def sign(ctx: _ctx.Context, rel: str, by: str) -> dict[str, Any]:
     new = "---\n" + "\n".join(lines) + "\n---" + rest
     page.write_text(new, encoding="utf-8")
     digest = hashlib.sha256(new.encode("utf-8")).hexdigest()[:16]
-    rel_out = str(page.relative_to(ctx.knowledge_dir.resolve()))
+    rel_out = str(page.relative_to(ctx.state.resolve()))
     trail.record("signed", ctx, page=rel_out, by=by, sha=digest, via="owner page")
     return {"signed": rel_out, "by": by}
 

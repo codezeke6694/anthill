@@ -81,7 +81,8 @@ def test_a_page_started_by_an_agent_has_no_working_buttons(project):
 
 def test_agents_are_told_how_to_run_it_with_the_app(project):
     for doc in ("CLAUDE.md", "AGENTS.md"):
-        assert rules.owner_view_rule(project) in (project.root / doc).read_text()
+        text = (project.root / doc).read_text()
+        assert "anthill ui start --detach --with-parent $$" in text and "never ask for" in text
     assert "--with-parent $$" in rules.owner_view_rule(project)
 
 

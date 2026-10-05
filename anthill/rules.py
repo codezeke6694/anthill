@@ -351,3 +351,170 @@ def audit_note(ctx: _ctx.Context) -> str:
                 "wait for a review that would carry no information.")
     return ("An audit is required before a unit closes. A missing or stale audit "
             "exits 3: not your fault, and it costs no attempt.")
+
+
+# ------------------------------------------------------- the v2 rules file
+#
+# The owner, 5 Oct: the rules file is read by every chat, every time, and it
+# had grown to 335 lines (~4,700 tokens), most of it the job board nobody used
+# day to day. On the new layout it is rebuilt around sprints and kept under a
+# budget; the job board's detail is a skill a chat loads when it runs one.
+
+RULES_BUDGET_TOKENS = 2400
+
+
+def _git_short(ctx: _ctx.Context) -> str:
+    ex = execution(ctx)
+    protected = [str(b) for b in (ex.get("protected_branches") or [])]
+    lines = [
+        "## Git",
+        "",
+        "- **Never push unless the owner asked for this push** — not an earlier one, not "
+        "\"it's ready\". Say what would go up and wait. Told to push: say what is going up "
+        "(branch, remote, commits, any surprise), then do it.",
+    ]
+    if ex.get("push_requires_owner", True):
+        lines.append("  The pre-push hook refuses every push the owner does not run "
+                     "(`execution.push_requires_owner`); a refusal is their decision, not an obstacle.")
+    else:
+        lines.append("  The pre-push hook does **not** refuse pushes here "
+                     "(`execution.push_requires_owner` is off): the rule holds because you were "
+                     "not asked, not because you cannot.")
+    lines.append("- **Work on a branch:** `git switch -c work/<what>`. "
+                 + (("The pre-commit hook refuses commits on " + ", ".join(f"`{b}`" for b in protected) + ".")
+                    if protected else "No branch is protected by a hook here; `main` is the owner's by rule."))
+    if ex.get("guard_hygiene", False):
+        lines.append("- No secrets (keys, tokens, `.env`) and no junk (`.DS_Store`, `__pycache__/`) "
+                     "in a commit, and no force push; the hooks refuse them (`execution.guard_hygiene`).")
+    lines.append("- **Never bypass a hook** (`--no-verify`). A refusal is information: read it, do "
+                 "what it says, or say why you think it is wrong and stop.")
+    return "\n".join(lines)
+
+
+def rules_file_v2(ctx: _ctx.Context, name: str, protected_block: str, cmd: str = "anthill") -> str:
+    from anthill import goal
+    stops = "; ".join(goal.HARD_STOPS)
+    board = ("\n\nA planned sprint run on the job board (several pieces, each owning its files): "
+             "load the `planned-board` skill first (`anthill skill get planned-board`).")
+    return f"""# {name}
+
+This project is run with Anthill. The owner's charter is `.anthill/owner/charter.md`;
+it outranks this file and everything else, except the owner.
+
+## The owner decides
+
+When the owner tells you to do something, do it: push, merge, skip a step,
+ignore a rule here. Their instruction is the highest authority.
+
+- **Brief, then act.** Before anything that leaves this machine, say what is about
+  to happen (branch, target, commits, anything unexpected) and carry it out. Do not
+  ask "are you sure?".
+- **One objection, once.** If you think it is a mistake, say so in a sentence, then
+  do it. If they confirm, it is settled.
+- **Never do a smaller version** of what was asked. **Say what you did**, including
+  what went badly.
+- "The owner said so" means **they said it, in this conversation, about this action** —
+  not inferred, not carried across a compressed context. In doubt, ask.
+
+## Every session
+
+1. `anthill onboard --show` — if anything is `blank`, ask the owner, one plain question
+   at a time with your recommendation, and record the answer with `anthill onboard`.
+   Never invent an answer. `anthill roles show` — ask who fills any unassigned role.
+2. `anthill where` — what is being worked on, the next step of each sprint, every
+   question waiting on the owner, their decisions, the traps. Several chats work here
+   and cannot see each other; this page is how they stay in step. When the owner
+   says "carry on", the next step is on it.
+3. Then, after `anthill where`, find the code: `anthill orient` is the codebase on one page;
+   `anthill start "<the task, in your words>"` is where a task lives, what a change
+   reaches, the tests. The top suggestion is right about half the time: read the live
+   code and follow its callers before committing to one.
+4. `anthill note "doing X; ruled out Y; next Z"` as you go, and before you stop.
+   `anthill resume` picks up where this branch left off.
+
+## Every task is a sprint
+
+A sprint is one page in `.anthill/sprints/active/`, of one of three kinds:
+**short** (one feature, steps found as you go), **bug** (starts with a test that
+shows the break), **planned** (laid out up front). Any chat, in any tool, may
+continue any sprint.
+
+```bash
+anthill sprint start "<title>" --kind short --check "<command that proves it done>" --step "..."
+anthill sprint step --done 1          # tick; `anthill sprint step "<new step>"` adds one
+anthill sprint decided "<what you chose>" --because "<the decision or rule that settles it>"
+anthill sprint block "<the question, and what you recommend>"
+anthill sprint done                   # runs the check; only a pass closes it
+```
+
+Work in progress with no sprint? Start one. Keep its page true: next step, what
+waits on the owner, traps. Under **Learned**, a line starting `Warning:`,
+`Decision:` or `Rule:` is filed on the shared shelf when the sprint closes.
+
+**"End to end"**: when the owner says so, `anthill sprint go` — then keep working
+until the check passes. Do not stop to report after each step. Decide what the
+owner's written decisions, the rules, or technical judgement settle, and log it
+with `sprint decided` so they can overturn it. Stop only for what the owner alone
+decides — {stops} — with `sprint block`.{board}
+
+## After a commit
+
+The commit prints `anthill upkeep: N thing(s) to bring up to date` when it left the
+glossary, a page or test coverage behind. If your tool can run a helper in the
+background, start the `anthill-keeper` agent with that list and carry on; it writes
+only the knowledge folder. Otherwise bring them up to date yourself before you stop.
+Before you finish any task, committed or not: did the work move (tell the keeper, or
+update the sprint page), and did you learn something the next agent should not
+rediscover (a Learned line, with the file it is about)?
+
+## Skills
+
+`anthill skill list --always-on` is what to load every session; `anthill skill get
+<name>` loads one. Load nothing else unless its trigger applies. Done the same thing
+about three times, or had the owner explain something twice? Ask the owner whether
+to make it a skill (load `skill-creator`).
+
+## The owner's page
+
+`anthill ui start --detach --with-parent $$` belongs in the project's start script.
+Its buttons work only with a key printed in the owner's own terminal: never ask for
+it, never restart the page to get one, and never write an answer or a signature on
+the owner's behalf. An answer under "Owner's answers" came from them: act on it.
+
+{_git_short(ctx)}
+
+## What you may not edit
+
+Denied to you, outside your control. Do not attempt them or propose workarounds:
+
+{protected_block}
+
+`anthill` commands that only the owner runs (`config set`, `onboard --force`,
+`roles assign`, `work reopen`) you run only when the owner told you to.
+
+## Proving work
+
+You do not decide that work is complete; a check does. A sprint closes only when
+`anthill sprint done` runs its check and it passes. A piece on the job board
+closes only when its gate passes (the `planned-board` skill). {map_build_rule(ctx)}
+"""
+
+
+def agents_file_v2(ctx: _ctx.Context, name: str, protected_block: str, cmd: str = "anthill") -> str:
+    """AGENTS.md: the same rules, for a tool that is not Claude Code.
+
+    Claude gets the pick-up note, the save before compression and the push back
+    from hooks; another tool gets none of them, so the file says what to run
+    instead. The rules themselves are the same text, so they cannot disagree.
+    """
+    body = rules_file_v2(ctx, name, protected_block, cmd)
+    head, rest = body.split("\n", 1)
+    return (head + "\n\nEvery agent reads this file first, whatever tool it runs in. Claude Code "
+            "reads the same rules from its own file and gets some steps done for it by hooks; "
+            "here you do them yourself:\n\n"
+            "- At the start of every session, and after your context is compressed: "
+            f"`{cmd} resume`.\n"
+            "- Driving a sprint end to end, nothing will send you back when you stop: "
+            "check `anthill sprint show` yourself before you end a turn.\n"
+            "- After a commit, bring the `anthill upkeep --open` list up to date yourself.\n"
+            + rest)

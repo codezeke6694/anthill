@@ -97,8 +97,7 @@ def _fresh_render(ctx: _ctx.Context) -> dict[str, str]:
     try:
         agents_values = dict(values, ROLE_TABLE=roles_mod.table(ctx),
                              PROTECTED_BLOCK=protected_block, ANTHILL=cmd)
-        out["AGENTS.md"] = inst._render(
-            inst.TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values, ctx)
+        out["AGENTS.md"] = inst.render_agents_md(ctx, name, agents_values)
     except OSError:
         pass
     for role in (ctx.config.get("roles") or []):

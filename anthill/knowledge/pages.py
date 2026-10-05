@@ -18,6 +18,7 @@ schema uses and a parser we own cannot drift from a parser we don't.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,13 @@ def _scalar(raw: str) -> Any:
         if not inner:
             return []
         return [p.strip().strip("'\"") for p in inner.split(",") if p.strip()]
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        # Written by `json.dumps`, so it is read back the same way: a value with
+        # a colon or a quote in it survives the round trip.
+        try:
+            return json.loads(v)
+        except ValueError:
+            pass
     return v.strip("'\"")
 
 
@@ -94,6 +102,11 @@ def parse_frontmatter(text: str) -> dict[str, Any]:
             if not isinstance(out.get(key), list):
                 out[key] = [] if not str(out.get(key, "")).strip() else [out[key]]
             out[key].append(item.group(1).strip().strip("'\""))
+            continue
+        if key and line[:1] in (" ", "\t") and isinstance(out.get(key), str) and out[key]:
+            # A value wrapped onto the next line. It was dropped, so a `next:`
+            # that ran to two lines reached every chat cut off mid-sentence.
+            out[key] = out[key] + " " + line.strip()
             continue
         kv = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):(.*)$", line)
         if kv:

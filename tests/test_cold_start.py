@@ -144,7 +144,7 @@ def test_agent_docs_tell_a_cold_agent_to_orient_first(project):
     from anthill import rules
     for doc in ("CLAUDE.md", "AGENTS.md"):
         text = (project.root / doc).read_text()
-        assert "anthill orient" in text and rules.cold_start_rule(project) in text
+        assert "anthill orient" in text and text.index("anthill where") < text.index("anthill orient")
 
 
 def test_card_points_at_the_deciding_line_including_constants(project):

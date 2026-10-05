@@ -135,7 +135,7 @@ STATE_SUBDIRS_V2 = ("owner", "owner/roles", "owner/history", "sprints",
 # What the project's git must never see, inside `.anthill/`. Written as
 # `.anthill/.gitignore` so it holds for a shared install and for every clone.
 GITIGNORE_V2 = ("# written by anthill install: these stay on one laptop\n"
-                "local/\nknowledge/_map/\nknowledge/.obsidian/\n*.tmp\n")
+                "local/\nknowledge/_map/\nknowledge/.obsidian/\n.obsidian/\n*.tmp\n")
 
 
 def state_subdirs(ctx: _ctx.Context) -> tuple[str, ...]:
@@ -692,8 +692,32 @@ the step that made it run.
 
 
 def render_keeper(ctx: _ctx.Context) -> str:
-    return KEEPER_AGENT.format(cmd=invocation(ctx),
-                               knowledge=str(ctx.knowledge_dir.relative_to(ctx.root)))
+    kd = str(ctx.knowledge_dir.relative_to(ctx.root))
+    cmd = invocation(ctx)
+    text = KEEPER_AGENT.format(cmd=cmd, knowledge=kd)
+    if not ctx.v2:
+        return text
+    # On the new layout the work is sprint pages, beside the knowledge.
+    sp = str(ctx.sprint_pages_dir.relative_to(ctx.root))
+    pairs = [
+        (f"Only under `{kd}/`. Nothing else in the repository",
+         f"Only under `{kd}/`, and the prose of sprint pages in `{sp}/` -- never a sprint's "
+         f"`.json` state, and never the sections between `<!-- anthill:... -->` markers, which "
+         f"`anthill sprint` writes. Nothing else in the repository"),
+        (f"   - **work, a branch no page describes**: write `{kd}/work/<id>.md`\n"
+         f"     from its log, in the same shape as the others (What, Where, How,\n"
+         f"     Waiting on the owner, Traps, History), `state: in-progress`.",
+         f"   - **work, a branch no page describes**: start a sprint for it,\n"
+         f"     `{cmd} sprint start \"<what it is>\" --kind short --branch <branch>`, then\n"
+         f"     fill its page from the log (What, Where, Traps, History)."),
+        (f"- Edit, stage or commit anything outside `{kd}/`.",
+         f"- Edit, stage or commit anything outside `{kd}/` and the sprint pages' prose."),
+    ]
+    for old, new in pairs:
+        if old not in text:
+            raise AssertionError(f"keeper text moved: {old[:60]}")
+        text = text.replace(old, new)
+    return text
 
 
 def install_keeper(ctx: _ctx.Context) -> dict[str, Any]:
@@ -726,30 +750,8 @@ def install_post_hook(ctx: _ctx.Context) -> dict[str, Any]:
                        f"{cmd} map build >/dev/null 2>&1 || true")
 
 
-def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
-    """The exact text install writes. Shared with `control` on purpose.
-
-    These were two copies of the same construction and drifted the moment the
-    vendored-invocation footer was added here and not there -- so `control`
-    reported CLAUDE.md as EDITED on every vendored install, permanently.
-
-    The path is stated once, at the top, rather than substituted into every
-    example. Substituting turned every command in the work sequence into a
-    60-character absolute path and made the section unreadable; one export the
-    agent runs first is both shorter and how a person would actually work.
-    """
-    from anthill import rules
-    cmd = invocation(ctx)
-    text = CLAUDE_MD.format(name=name, protected=protected_block,
-                            git_rules=rules.git_rules(ctx),
-                            cold_start=rules.cold_start_rule(ctx),
-                            upkeep_rule=rules.upkeep_rule(ctx),
-                            goal_rule=rules.goal_rule(ctx),
-                            owner_view=rules.owner_view_rule(ctx),
-                            blueprint_rule=rules.map_build_rule(ctx),
-                            escalation_rule=rules.escalation_rule(ctx),
-                            audit_note=rules.audit_note(ctx))
-    text = _ctx.layout_text(ctx, text)
+def _with_path_header(ctx: _ctx.Context, text: str, cmd: str) -> str:
+    """Say once, at the top, how to put Anthill on PATH; every example then reads `anthill`."""
     if cmd == "anthill":
         return text
     bindir = cmd.rsplit("/bin/", 1)[0] + "/bin"
@@ -768,8 +770,47 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
               f"```bash\nexport PATH=\"{bindir}:$PATH\"\n```\n\n"
               f"Every `anthill ...` in this file assumes you have done that.\n\n")
     # after the H1 and its opening lines, before the first section
-    marker = "## First, every session: is the charter complete?"
+    marker = "## Every session" if ctx.v2 else "## First, every session: is the charter complete?"
     return text.replace(marker, header + marker, 1) if marker in text else header + text
+
+
+def render_agents_md(ctx: _ctx.Context, name: str, agents_values: dict[str, str]) -> str:
+    """AGENTS.md as install writes it; shared with `control`, like the rules file."""
+    if ctx.v2:
+        from anthill import rules
+        cmd = invocation(ctx)
+        return _with_path_header(ctx, rules.agents_file_v2(ctx, name, agents_values["PROTECTED_BLOCK"], cmd), cmd)
+    return _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values, ctx)
+
+
+def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
+    """The exact text install writes. Shared with `control` on purpose.
+
+    These were two copies of the same construction and drifted the moment the
+    vendored-invocation footer was added here and not there -- so `control`
+    reported CLAUDE.md as EDITED on every vendored install, permanently.
+
+    The path is stated once, at the top, rather than substituted into every
+    example. Substituting turned every command in the work sequence into a
+    60-character absolute path and made the section unreadable; one export the
+    agent runs first is both shorter and how a person would actually work.
+    """
+    from anthill import rules
+    cmd = invocation(ctx)
+    if ctx.v2:
+        text = rules.rules_file_v2(ctx, name, protected_block, cmd)
+    else:
+        text = CLAUDE_MD.format(name=name, protected=protected_block,
+                                git_rules=rules.git_rules(ctx),
+                                cold_start=rules.cold_start_rule(ctx),
+                                upkeep_rule=rules.upkeep_rule(ctx),
+                                goal_rule=rules.goal_rule(ctx),
+                                owner_view=rules.owner_view_rule(ctx),
+                                blueprint_rule=rules.map_build_rule(ctx),
+                                escalation_rule=rules.escalation_rule(ctx),
+                                audit_note=rules.audit_note(ctx))
+        text = _ctx.layout_text(ctx, text)
+    return _with_path_header(ctx, text, cmd)
 
 
 def plan(ctx: _ctx.Context, project_name: str = "",
@@ -990,8 +1031,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         result["agents_md_kept"] = ("AGENTS.md belongs to the project, so Anthill left it alone; "
                                     "tools that read only AGENTS.md will not see Anthill's rules")
     else:
-        (ctx.root / "AGENTS.md").write_text(
-            _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values, ctx), encoding="utf-8")
+        (ctx.root / "AGENTS.md").write_text(render_agents_md(ctx, name, agents_values), encoding="utf-8")
         written.append(str(ctx.root / "AGENTS.md"))
     rules = ctx.root / rules_file(ctx)
     rules.write_text(render_claude_md(ctx, name, protected_block), encoding="utf-8")
@@ -1090,7 +1130,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         # are the project's to commit, so only what stays on this laptop is
         # hidden here. v1 hid the whole state directory.
         state_paths = ["/.anthill/local/", "/.anthill/knowledge/_map/",
-                       "/.anthill/knowledge/.obsidian/"] if ctx.v2 else ["/.anthill/"]
+                       "/.anthill/knowledge/.obsidian/", "/.anthill/.obsidian/"] if ctx.v2 else ["/.anthill/"]
         paths = [f"/{tool}/", *state_paths, "/CLAUDE.local.md", "/.claude/settings.local.json",
                  "/.claude/agents/anthill-keeper.md"]
         if not _tracked(ctx, "AGENTS.md"):

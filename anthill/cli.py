@@ -42,7 +42,7 @@ DELEGATED = [
     ("obsidian", "Draw the anthill as linked notes for an Obsidian vault"),
     ("update", "Pull the newest Anthill into its folder and re-render this project's rules"),
     ("migrate", "Move this project to the new layout: what travels, what stays local"),
-    ("goal", "Work to a goal end to end: set, step, decided, block, done"),
+    ("goal", "Work to a goal end to end: set, step, decided, block, done (on the new layout, a sprint)"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
     ("onboard", "Fill the charter by interview; the only writer of CONSTITUTION.md"),
@@ -144,6 +144,9 @@ def main(argv: list[str] | None = None) -> int:
                      secs=round(time.monotonic() - t0, 2))
 
 
+_SPRINT_VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help"}
+
+
 def _dispatch(argv: list[str]) -> int:
     if not argv or argv[0] in ("help", "start-here"):
         # `anthill help` is what a person types; it used to be an argparse
@@ -230,6 +233,11 @@ def _dispatch(argv: list[str]) -> int:
         out = inst.update(ctx)
         print(out.get("pulled") or "", out.get("install") or out.get("why") or "", sep="\n")
         return 0 if out.get("updated") else 1
+    if argv and argv[0] == "sprint" and (len(argv) == 1 or argv[1] in _SPRINT_VERBS):
+        # Sprint pages (owner, 5 Oct). The planned-sprint board keeps its own
+        # verbs below -- new, add-unit, compile, set-gate, status.
+        from anthill.sprint import page as sprint_page
+        return sprint_page.main(argv[1:])
     if argv and argv[0] == "migrate":
         from anthill import migrate
         return migrate.main(argv[1:])
@@ -281,7 +289,7 @@ def _dispatch(argv: list[str]) -> int:
     st = sub.add_parser("status", help="Where this installation stands")
 
     # --------------------------------------------------------------- sprint
-    sp = sub.add_parser("sprint", help="Plan and report on work (human-facing)")
+    sp = sub.add_parser("sprint", help="Sprint pages: start, go, step, done, list. The planned-sprint board: new, add-unit, compile")
     sps = sp.add_subparsers(dest="sub", required=True)
     n = sps.add_parser("new"); n.add_argument("name"); n.add_argument("--goal", required=True)
     n.add_argument("--owner", default="")

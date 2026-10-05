@@ -89,7 +89,8 @@ def test_install_writes_the_keeper_and_the_handoff_rule(project):
     assert keeper.startswith("---\nname: anthill-keeper\n")
     assert "intent_attested_by" in keeper and "Never" in keeper
     for doc in ("CLAUDE.md", "AGENTS.md"):
-        assert rules.upkeep_rule(project) in (project.root / doc).read_text()
+        text = (project.root / doc).read_text()
+        assert "anthill-keeper" in text and "upkeep: N thing(s)" in text and "committed or not" in text
 
 
 def test_a_rule_citing_a_constant_is_not_reported_missing(project):

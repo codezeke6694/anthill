@@ -44,7 +44,7 @@ def _load_map(ctx: _ctx.Context) -> dict[str, Any]:
 def _work_pages(ctx: _ctx.Context) -> list[dict[str, Any]]:
     from anthill.knowledge import work
     try:
-        return work.load(ctx.knowledge_dir, work.WORK_DIR)
+        return work.load_work(ctx)
     except Exception:                       # noqa: BLE001 -- a picture must not fail a build
         return []
 
@@ -54,8 +54,14 @@ def _module_pages(ctx: _ctx.Context) -> list[tuple[Path, str]]:
     return [(p, p.read_text(encoding="utf-8", errors="replace")) for p in sorted(base.rglob("*.md"))] if base.exists() else []
 
 
+def vault(ctx: _ctx.Context) -> Path:
+    """The folder opened in Obsidian. On the new layout sprints sit beside the
+    knowledge, not inside it, so the vault is the whole of `.anthill/`."""
+    return ctx.state if ctx.v2 else ctx.knowledge_dir
+
+
 def _link(ctx: _ctx.Context, p: Path, label: str = "") -> str:
-    rel = p.relative_to(ctx.knowledge_dir).with_suffix("").as_posix()
+    rel = p.relative_to(vault(ctx)).with_suffix("").as_posix()
     return f"[[{rel}|{label}]]" if label else f"[[{rel}]]"
 
 
@@ -102,9 +108,12 @@ def build(ctx: _ctx.Context) -> dict[str, Any]:
     goals = []
     try:
         from anthill import goal as goal_mod
-        goals = goal_mod.all_goals(ctx)
+        # On the new layout a goal is a sprint, and its page already shows its
+        # steps; drawing a second note for it would put every sprint in twice.
+        goals = [] if ctx.v2 else goal_mod.all_goals(ctx)
     except Exception:                       # noqa: BLE001
         pass
+    mp = (ctx.knowledge_dir / DIR).relative_to(vault(ctx)).as_posix()
 
     out = ctx.knowledge_dir / DIR
     tmp = ctx.knowledge_dir / (DIR + ".new")
@@ -114,7 +123,7 @@ def build(ctx: _ctx.Context) -> dict[str, Any]:
     (tmp / "goals").mkdir()
 
     def chamber_link(d: str) -> str:
-        return f"[[{DIR}/chambers/{_safe(d)}|{d}]]"
+        return f"[[{mp}/chambers/{_safe(d)}|{d}]]"
 
     written = 0
     for d in sorted(files):
@@ -160,8 +169,12 @@ def build(ctx: _ctx.Context) -> dict[str, Any]:
             "Drawn from Anthill's map after every commit. Open the graph (Cmd+G) to see the chambers and "
             "what connects them. These notes are redrawn; edit the work pages, not these.", "",
             "## Chambers", *[f"- {chamber_link(d)} — {about(d)[:90]}" for d in sorted(files)], "",
-            "## Work", *[f"- {_link(ctx, pg['path'], pg['frontmatter'].get('title') or pg['path'].stem)}" for pg in _work_pages(ctx)], "",
-            "## Goals", *[f"- [[{DIR}/goals/{_safe(g.get('id', ''))}|{g.get('title', '')}]] — {g.get('status')}" for g in goals], "",
+            "## Sprints" if ctx.v2 else "## Work",
+            *[f"- {_link(ctx, pg['path'], pg['frontmatter'].get('title') or pg['path'].stem)}"
+              + (f" — {pg['frontmatter'].get('kind', 'short')}, {pg['frontmatter'].get('state', '')}" if ctx.v2 else "")
+              for pg in _work_pages(ctx)], "",
+            *(["## Goals", *[f"- [[{mp}/goals/{_safe(g.get('id', ''))}|{g.get('title', '')}]] — {g.get('status')}"
+                             for g in goals], ""] if goals else []),
             "## Your decisions", *[f"- {_link(ctx, p)}" for p in decisions], ""]
     if (kd / "TRAPS.md").exists():
         home += ["## Traps", f"- {_link(ctx, kd / 'TRAPS.md')}", ""]
@@ -171,7 +184,7 @@ def build(ctx: _ctx.Context) -> dict[str, Any]:
     if out.exists():
         shutil.rmtree(out)
     tmp.replace(out)
-    _graph_colours(kd)
+    _graph_colours(vault(ctx))
     return {"written": written, "chambers": len(files), "goals": len(goals), "where": str(out)}
 
 
@@ -187,7 +200,7 @@ def _graph_colours(vault: Path) -> None:
     rgb = lambda h: int(h.lstrip("#"), 16)  # noqa: E731
     data["colorGroups"] = [
         {"query": "path:_map/chambers", "color": {"a": 1, "rgb": rgb("#7fc8a9")}},
-        {"query": "path:work", "color": {"a": 1, "rgb": rgb("#e0a15a")}},
+        {"query": "path:work OR path:sprints", "color": {"a": 1, "rgb": rgb("#e0a15a")}},
         {"query": "path:_map/goals", "color": {"a": 1, "rgb": rgb("#8fb8ff")}},
         {"query": "path:decisions", "color": {"a": 1, "rgb": rgb("#e07a5f")}},
     ]
@@ -205,5 +218,5 @@ def main(argv: list[str]) -> int:
         print(f"anthill obsidian: {out.get('why')}", file=sys.stderr)
         return 1
     print(f"anthill obsidian: {out['chambers']} chambers and {out['goals']} goals drawn into {out['where']}\n"
-          f"Open {ctx.knowledge_dir} as a vault in Obsidian; start from _map/Start here.")
+          f"Open {vault(ctx)} as a vault in Obsidian; start from {(ctx.knowledge_dir / DIR).relative_to(vault(ctx)).as_posix()}/Start here.")
     return 0
