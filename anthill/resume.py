@@ -154,8 +154,11 @@ def resume(ctx: _ctx.Context, session: str = "") -> str:
 
     try:
         from anthill import goal as _goal
+        # A goal has a check that proves it done; on the new layout every piece
+        # of work is a sprint, and one with no check is shown above as work.
         g = _goal.current(ctx, session) or next((x for x in _goal.all_goals(ctx)
-                                                   if x.get("branch") == branch and x.get("status") in ("active", "blocked")), None)
+                                                   if x.get("branch") == branch and x.get("done_when")
+                                                   and x.get("status") in ("active", "blocked")), None)
     except Exception:                          # noqa: BLE001 -- resume must still print
         g = None
     if g:
