@@ -45,6 +45,13 @@ MANIFEST = "skill.yaml"
 CONTENT = "content.md"
 
 
+# The must-have skills ship inside Anthill and are read from here, never copied
+# into a project, so `anthill update` keeps every project on the current ones
+# (owner, 5 Oct: "keep must skills in the repo"). A project's own skill of the
+# same name wins: the project knows itself best.
+GLOBAL_DIR = Path(__file__).resolve().parent / "skills"
+
+
 def skills_dir(ctx: _ctx.Context) -> Path:
     return ctx.skills_dir
 
@@ -81,8 +88,26 @@ def _parse_manifest(text: str) -> dict:
     return out
 
 
-def load_all(ctx: _ctx.Context) -> list[dict]:
-    root = skills_dir(ctx)
+def load_all(ctx: _ctx.Context, scope: str = "all") -> list[dict]:
+    """Installed skills: the project's own (`local`), then Anthill's (`global`).
+
+    `scope="local"` for anything that writes -- the index, a retarget -- so the
+    tool's own files are never rewritten from inside a project.
+    """
+    local = _scan(skills_dir(ctx), "local")
+    if scope == "local":
+        return local
+    names = {r.get("name") for r in local}
+    shipped = _scan(GLOBAL_DIR, "global")
+    shipped_names = {g.get("name") for g in shipped}
+    for r in local:
+        if r.get("name") in shipped_names:
+            r["overrides_global"] = True
+    glob = [g for g in shipped if g.get("name") not in names]
+    return local + glob if scope == "all" else glob
+
+
+def _scan(root: Path, scope: str) -> list[dict]:
     if not root.exists():
         return []
     found: list[dict] = []
@@ -103,6 +128,7 @@ def load_all(ctx: _ctx.Context) -> list[dict]:
         meta.setdefault("name", d.name)
         meta.setdefault("category", d.parent.name)
         meta.setdefault("load_class", "reference")
+        meta["scope"] = scope
         found.append(meta)
     return found
 
@@ -133,6 +159,7 @@ def listing(ctx: _ctx.Context, category: str = "", load_class: str = "",
         "skills": [{"name": r.get("name"), "category": r.get("category"),
                     "load_class": r.get("load_class"),
                     "always_on": bool(r.get("always_on")),
+                    "scope": r.get("scope"),
                     "description": r.get("description", "")} for r in rows],
         "note": ("`bootstrap` and `always_on` skills are meant to be loaded every "
                  "session; `reference` skills are installed and looked up, never "
@@ -221,7 +248,7 @@ PATH_MAP = [
 def stale_paths(ctx: _ctx.Context) -> list[dict]:
     """Skills citing a path this install does not have."""
     out = []
-    for r in load_all(ctx):
+    for r in load_all(ctx, "local"):
         p = Path(r["_content"])
         if not p.exists():
             continue
@@ -239,7 +266,7 @@ def stale_paths(ctx: _ctx.Context) -> list[dict]:
 def retarget(ctx: _ctx.Context, write: bool = True) -> dict:
     """Rewrite Peregrine-era path citations to this system's layout."""
     changed = []
-    for r in load_all(ctx):
+    for r in load_all(ctx, "local"):
         p = Path(r["_content"])
         if not p.exists():
             continue
@@ -287,7 +314,8 @@ def build_index(ctx: _ctx.Context, write: bool = True) -> dict:
                           "description": r.get("description", ""),
                           "tags": r.get("tags") or [],
                           "load_class": r.get("load_class"),
-                          "always_on": bool(r.get("always_on"))}
+                          "always_on": bool(r.get("always_on")),
+                          "scope": r.get("scope")}
                          for r in sorted(items, key=lambda x: str(x.get("name")))]
                    for cat, items in sorted(by_cat.items())},
     }
@@ -312,7 +340,8 @@ def build_index(ctx: _ctx.Context, write: bool = True) -> dict:
         lines += [f"## {cat}", "", "| Skill | Load class | Description |", "|---|---|---|"]
         for r in sorted(items, key=lambda x: str(x.get("name"))):
             desc = str(r.get("description", "")).replace("|", "\\|")
-            lines.append(f"| `{r.get('name')}` | {r.get('load_class')} | {desc} |")
+            where = " (ships with Anthill)" if r.get("scope") == "global" else ""
+            lines.append(f"| `{r.get('name')}`{where} | {r.get('load_class')} | {desc} |")
         lines += [""]
 
     stale = stale_paths(ctx)
@@ -324,7 +353,7 @@ def build_index(ctx: _ctx.Context, write: bool = True) -> dict:
         lines += [""]
 
     root = skills_dir(ctx)
-    if write and rows:
+    if write and any(r.get("scope") == "local" for r in rows):
         root.mkdir(parents=True, exist_ok=True)
         (root / "registry.json").write_text(json.dumps(registry, indent=2) + "\n",
                                             encoding="utf-8")
@@ -335,6 +364,41 @@ def build_index(ctx: _ctx.Context, write: bool = True) -> dict:
             "excluded_templates": sorted(TEMPLATE_DIRS),
             "stale_path_citations": len(stale),
             "written": [str(root / "registry.json"), str(root / "INDEX.md")] if write else []}
+
+
+def new(ctx: _ctx.Context, path: str, description: str, approved_by: str,
+        load_class: str = "reference", proposed_by: str = "") -> dict:
+    """Write a project skill the owner said yes to (see the skill-creator skill)."""
+    from datetime import date
+    from anthill import trail
+    if not approved_by.strip():
+        raise SystemExit("anthill: a skill is made only after the owner says yes -- "
+                         "pass --approved-by <owner>")
+    m = re.fullmatch(r"([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*)", path or "")
+    if not m:
+        raise SystemExit("anthill: name it <category>/<name>, lowercase and hyphenated "
+                         "(e.g. testing/sign-in-headless)")
+    if load_class not in LOAD_CLASSES:
+        raise SystemExit(f"anthill: load class is one of {', '.join(LOAD_CLASSES)}")
+    category, name = m.groups()
+    if any(r.get("name") == name and r.get("scope") == "local" for r in load_all(ctx)):
+        raise SystemExit(f"anthill: this project already has a skill called {name}")
+    d = skills_dir(ctx) / category / name
+    d.mkdir(parents=True)
+    who = trail.who()
+    (d / MANIFEST).write_text(
+        f"name: {name}\ncategory: {category}\nversion: '1.0'\n"
+        f"description: {description.strip()}\nload_class: {load_class}\nalways_on: false\n"
+        f"proposed_by: {proposed_by or (who['tool'] + ' ' + who['session'][:8]).strip()}\n"
+        f"approved_by: {approved_by.strip()}\napproved_on: {date.today().isoformat()}\n",
+        encoding="utf-8")
+    (d / CONTENT).write_text(f"# {name}\n\n## Purpose\n{description.strip()}\n\n## Steps\n1. \n\n"
+                             "## Don't\n- \n", encoding="utf-8")
+    trail.record("skill", ctx, action="new", skill=f"{category}/{name}", by=approved_by.strip())
+    idx = build_index(ctx)
+    return {"created": str(d.relative_to(ctx.root)), "write_next": str((d / CONTENT).relative_to(ctx.root)),
+            "indexed": idx["indexed"],
+            "shadows_a_global_skill": name in {g.get("name") for g in _scan(GLOBAL_DIR, "global")}}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -359,6 +423,12 @@ def main(argv: list[str] | None = None) -> int:
     rt = sub.add_parser("retarget", help="Rewrite stale path citations to this layout")
     rt.add_argument("--dry-run", action="store_true")
     sub.add_parser("stale", help="Skills citing paths this install does not have")
+    nw = sub.add_parser("new", help="Write a project skill the owner approved")
+    nw.add_argument("path", help="<category>/<name>, e.g. testing/sign-in-headless")
+    nw.add_argument("--description", required=True, help="one line: what it does and when to load it")
+    nw.add_argument("--approved-by", default="", help="the owner, who said yes")
+    nw.add_argument("--load-class", default="reference", choices=LOAD_CLASSES)
+    nw.add_argument("--proposed-by", default="")
     args = ap.parse_args(argv)
 
     ctx = _ctx.resolve(args.project or None)
@@ -382,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
         out = retarget(ctx, write=not args.dry_run)
     elif args.cmd == "stale":
         out = {"stale": stale_paths(ctx)}
+    elif args.cmd == "new":
+        out = new(ctx, args.path, args.description, args.approved_by, args.load_class, args.proposed_by)
     else:
         out = listing(ctx, args.category, args.load_class, args.always_on, args.query)
     print(json.dumps(out, indent=2))

@@ -246,6 +246,26 @@ def to_sprints(ctx: _ctx.Context) -> list[str]:
     return out
 
 
+def archive_shadowed_skills(ctx: _ctx.Context) -> list[str]:
+    """A project's copy of a skill Anthill now ships hides the shipped one, and
+    the copies came from before it shipped -- one was still the Peregrine-era
+    skill-creator. They go to `_archive/`, which no listing reads; nothing is lost."""
+    from anthill import skills
+    shipped = {g.get("name") for g in skills._scan(skills.GLOBAL_DIR, "global")}
+    out = []
+    root = skills.skills_dir(ctx)
+    for r in skills._scan(root, "local"):
+        if r.get("name") not in shipped:
+            continue
+        src = root / r["_path"]
+        dest = root / "_archive" / "replaced-by-anthill" / r["_path"]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not dest.exists():
+            shutil.move(str(src), str(dest))
+            out.append(f"skill {r['_path']} -> skills/_archive/replaced-by-anthill/ (Anthill ships it)")
+    return out
+
+
 def apply(ctx: _ctx.Context, now: bool = False) -> dict:
     p = plan(ctx)
     if ctx.layout == "v2":
@@ -274,6 +294,7 @@ def apply(ctx: _ctx.Context, now: bool = False) -> dict:
         build.rmdir()
     board_files = _rewrite_board_paths(ctx)
     sprints = to_sprints(ctx)
+    skills_archived = archive_shadowed_skills(ctx)
 
     # The rules files, hooks, locks and ignore lists all name paths; the new
     # code re-renders them, in its own process, from the moved settings.
@@ -281,6 +302,7 @@ def apply(ctx: _ctx.Context, now: bool = False) -> dict:
     r = subprocess.run([str(tool), "install", "--force", "--name", name], cwd=ctx.root,
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
     return {"migrated": True, "moved": moved, "refused": refused, "sprints": sprints,
+            "skills_archived": skills_archived,
             "board_records_rewritten": board_files,
             "reinstalled": r.returncode == 0,
             "install_output": (r.stdout + r.stderr).strip()[-600:] if r.returncode else "",
