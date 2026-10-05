@@ -167,6 +167,8 @@ class _Handler(BaseHTTPRequestHandler):
                                      body.get("answer", ""))
             elif self.path == "/api/sign":
                 out = actions.sign(self.ctx, body.get("page", ""), by)
+            elif self.path == "/api/close":
+                out = actions.close_sprint(self.ctx, body.get("sprint", ""), body.get("because", ""), by)
             elif self.path == "/api/ack":
                 from anthill import goal
                 try:

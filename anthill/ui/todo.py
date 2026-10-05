@@ -53,7 +53,14 @@ def is_noise(raw: str) -> bool:
     # question with a status remark after it still counts
     if re.search(r"\bnow built\b|\balready (built|done|merged)\b|\bnot waiting on the owner\b", first):
         return True
-    return False
+    # Not a question at all: a settled matter, a standing decision, "nothing for
+    # the next step". Agents filed these under "Waiting on the owner", and the
+    # owner's page showed finished work as held up by them.
+    asks = ("?" in t or "recommend" in low or re.match(
+        r"(which|should|shall|do|does|did|can|could|would|will|is|are|what|when|how|who|where|whether"
+        r"|review|check|spot-check|look|read|sign|decide|confirm|approve|choose|pick|answer|try|say|tell)\b",
+        low))
+    return not asks
 
 
 def _options_from(question: str) -> list[str]:

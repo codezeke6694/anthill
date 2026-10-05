@@ -108,6 +108,14 @@ def sign(ctx: _ctx.Context, rel: str, by: str) -> dict[str, Any]:
     return {"signed": rel_out, "by": by}
 
 
+def close_sprint(ctx: _ctx.Context, sprint: str, because: str, by: str) -> dict[str, Any]:
+    from anthill.sprint import page as _sprint
+    try:
+        return _sprint.close(ctx, sprint, by=_one_line(by)[:80] or "owner", because=_one_line(because))
+    except (ValueError, LookupError) as exc:
+        raise Refused(str(exc))
+
+
 def reopen(ctx: _ctx.Context, unit: str, reason: str, by: str, tool: str) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", unit or ""):
         raise Refused("no such unit")

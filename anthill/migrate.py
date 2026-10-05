@@ -233,6 +233,11 @@ def to_sprints(ctx: _ctx.Context) -> list[str]:
             sid = f"goal-{sid}"[:60]
         g["id"] = sid
         g.setdefault("kind", "short")
+        if g.get("status") == "stopped":
+            # The owner or an agent stopped it on purpose; it is not open work.
+            g["status"] = "done"
+            g["result"] = {**(g.get("result") or {}), "closed_by": "migrate",
+                           "because": "stopped as a goal before sprints existed"}
         g["driving"] = g.get("status") in ("active", "blocked")
         # Saved through the sprint code, on a context that now reads v2 paths.
         sp.save(_ctx.resolve(ctx.root), g)

@@ -456,6 +456,7 @@
       if (d.behind) c.append(el("div", "warn", "Its page may be out of date: " + d.behind.length + " change(s) since it was last checked."));
       const rel = String(r.page || "").split(".anthill/").slice(1).join(".anthill/");
       if (!r.confirmed_by_owner && KEY && rel) { const a = el("div", "act"); a.append(el("span", "small", "Is this page right?"), twice("sign:" + rel, "Sign it as correct", () => press("/api/sign", { page: rel }))); c.append(a); }
+      if (KEY && r.kind) { const a = el("div", "act"); a.append(el("span", "small", "Finished?"), twice("close:" + r.id, "Close it", () => press("/api/close", { sprint: r.id, because: "the owner closed it from their page" }))); c.append(a); }
       return c;
     }), "No work in progress.");
     fill("editing", (w.uncommitted || []).map((u) => { const c = el("div", "card"); c.append(el("div", "path", u.file)); if (u.work && u.work.length) c.append(el("div", "from", "part of: " + u.work.join(", "))); return c; }),

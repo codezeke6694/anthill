@@ -144,3 +144,19 @@ def test_a_locked_check_cannot_be_moved_by_the_agent(project):
     # the owner looks, and locks again
     run(project.root, "sprint", "lock", "placement", "--file", "answers.txt", "--by", "owner")
     assert run(project.root, "sprint", "done").returncode == 0
+
+
+def test_settled_notes_are_not_questions_and_the_owner_closes_finished_work(project):
+    run(project.root, "sprint", "start", "Refunds")
+    p = page.find(project, "refunds")
+    p.write_text(p.read_text().replace("## Waiting on the owner\n", "## Waiting on the owner\n\n"
+                 "- Settled 5 Oct: refunds show as a negative line.\n"
+                 "- Nothing for the next step.\n"
+                 "- Show refunds on the receipt? I recommend yes.\n"))
+    row = [r for r in work.where(project)["work"] if r["id"] == "refunds"][0]
+    assert row["waiting_on_owner"] == ["Show refunds on the receipt? I recommend yes."]
+    assert run(project.root, "sprint", "close", "refunds", ok=False).returncode == 2   # owner's only
+    run(project.root, "sprint", "close", "refunds", "--by", "owner", "--because", "merged")
+    w = work.where(project)
+    assert "refunds" in [f["id"] for f in w["finished"]] and not w["closed_without_check"]
+    assert "closed by owner: merged" in page.find(project, "refunds").read_text()

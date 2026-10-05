@@ -671,7 +671,12 @@ code right now; touching it would collide with them.
      question, in the form the owner's page turns into buttons --
      `- **<the question, one line>** Why: <one line> Recommend: <your pick> Options: <A> / <B>`.
      Never put there a pointer to another page, a status ("now built"), or a
-     question the owner has already answered or decided: move those out.
+     question the owner has already answered or decided: move those out --
+     an answer to Owner's answers, a decision to `decisions/`. A line there
+     that asks nothing is shown to nobody.
+   - **a sprint whose work is finished** (merged, nothing left but the owner's
+     merge or push) and that has no check: say so in your report; the owner
+     closes it from their page. Never set `state: done` yourself.
    - **work, a branch no page describes**: write `{knowledge}/work/<id>.md`
      from its log, in the same shape as the others (What, Where, How,
      Waiting on the owner, Traps, History), `state: in-progress`.

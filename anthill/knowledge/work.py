@@ -62,6 +62,8 @@ def sections(text: str) -> dict[str, str]:
 def _bullets(body: str) -> list[str]:
     items, cur = [], ""
     for line in body.splitlines():
+        if line.strip().startswith("<!--"):
+            continue                        # a generated block's marker, never content
         if re.match(r"^\s*[-*]\s+", line):
             if cur:
                 items.append(cur.strip())
@@ -285,6 +287,15 @@ def uncommitted(root: Path, active: list[dict[str, Any]], pages_: list[dict[str,
     return out
 
 
+def _questions(lines: list[str]) -> list[str]:
+    """Only what actually asks the owner something; settled notes are not."""
+    try:
+        from anthill.ui import todo
+    except Exception:                       # noqa: BLE001
+        return lines
+    return [q for q in lines if not todo.is_noise(q)]
+
+
 def _page_answers(ctx: Any) -> list[tuple[str, str]]:
     """(work id, answer text) for every answer the owner gave on their page.
 
@@ -311,7 +322,10 @@ def _closed_without_check(path: Path) -> bool:
         g = json.loads(sp.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return not ((g.get("result") or {}).get("passed")) and bool(g.get("done_when"))
+    res = g.get("result") or {}
+    if res.get("closed_by"):
+        return False                        # the owner closed it, knowingly
+    return not res.get("passed") and bool(g.get("done_when"))
 
 
 def where(ctx: Any) -> dict[str, Any]:
@@ -333,7 +347,7 @@ def where(ctx: Any) -> dict[str, Any]:
             "branch": fm.get("branch", ""),
             "next": fm.get("next", ""),
             "updated": str(fm.get("updated", "")),
-            "waiting_on_owner": _bullets(s.get("waiting on the owner", "")),
+            "waiting_on_owner": _questions(_bullets(s.get("waiting on the owner", ""))),
             "owner_answers": _bullets(s.get("owner's answers", "")),
             "page_answer_texts": [t for w_, t in from_page if w_ == (fm.get("id") or p["path"].stem)],
             "traps": _bullets(s.get("traps", "")),
@@ -393,7 +407,7 @@ def where(ctx: Any) -> dict[str, Any]:
 
 
 OWNER_ONLY = (("config", "set"), ("onboard", "--force"), ("roles", "assign"),
-              ("work", "reopen"), ("update", "--latest"), ("sprint lock", "--by"))
+              ("work", "reopen"), ("update", "--latest"), ("sprint lock", "--by"), ("sprint close", "--by"))
 
 
 def alarms(ctx: Any, days: int = 7) -> list[str]:

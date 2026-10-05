@@ -345,6 +345,29 @@ def lock_broken(ctx: _ctx.Context, g: dict[str, Any]) -> list[str]:
     return out
 
 
+def close(ctx: _ctx.Context, sid: str, by: str, because: str = "") -> dict[str, Any]:
+    """The owner closes a sprint that is finished. A sprint with a check closes
+    when the check passes (`sprint done`); one without -- most pages written
+    before sprints had checks -- has nothing to prove it, so closing it is the
+    owner's call, recorded with their reason."""
+    from anthill import trail
+    if not by.strip():
+        raise ValueError("closing a sprint by hand is the owner's: --by <owner>")
+    g = load(ctx, sid)
+    g["status"] = "done"
+    g["driving"] = False
+    g["result"] = {"t": _now(), "passed": None, "closed_by": by.strip(),
+                   "because": because.strip() or "the owner closed it"}
+    save(ctx, g)
+    page = find(ctx, sid)
+    text = page.read_text(encoding="utf-8")
+    line = f"- {_now()[:10]} closed by {by.strip()}" + (f": {because.strip()}" if because.strip() else "")
+    page.write_text(text.rstrip("\n") + "\n" + line + "\n" if "## History" in text
+                    else text.rstrip("\n") + "\n\n## History\n\n" + line + "\n", encoding="utf-8")
+    trail.record("sprint", ctx, sprint=sid, action="closed", by=by.strip(), text=because.strip()[:200])
+    return {"closed": sid, "by": by.strip()}
+
+
 # ------------------------------------------------------- closing a sprint
 
 LEARNED = re.compile(r"^\s*[-*]\s+(Warning|Decision|Rule)\s*:\s*(.+)$", re.I)
@@ -402,6 +425,7 @@ anthill sprint block "<the question only the owner can answer, with your recomme
 anthill sprint done  [--sprint <id>]               runs the check; only a pass closes it and files what it learned
 anthill sprint stop "<why>"  [--sprint <id>]       pause it
 anthill sprint lock [<id>] --file <answer key or test> ... --by <owner>   the owner locks the check
+anthill sprint close <id> --by <owner> --because "<why it is finished>"     the owner closes finished work
 anthill sprint list [--all] [--json]   |   anthill sprint show <id>
 A planned sprint with independent pieces, run by one lead chat and its helpers (skill: parallel-sprint):
   anthill sprint piece add <id> "<title>" --owns "<glob>" --check "<cmd>" [--after <piece>]
@@ -410,7 +434,7 @@ Any chat, in any tool, may work any sprint. Without --sprint, the one this chat
 drives is meant, else the only open sprint on this branch.
 """
 
-VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock",
+VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close",
          "piece", "waves", "brief", "referee", "ask"}
 PARALLEL = {"piece", "waves", "brief", "referee", "ask"}
 
@@ -463,6 +487,12 @@ def main(argv: list[str]) -> int:
                 g["status"] = "active"
             G.save(ctx, g)
             trail.record("sprint", ctx, sprint=g["id"], action="go", text=g["title"])
+        elif verb == "close":
+            words = [w for i, w in enumerate(rest) if not w.startswith("--")
+                     and not (i and rest[i - 1] in ("--by", "--because"))]
+            out = close(ctx, words[0] if words else gid, G._opt(rest, "--by"), G._opt(rest, "--because"))
+            print(f"closed: {out['closed']} (by {out['by']})")
+            return 0
         elif verb == "lock":
             words = [w for i, w in enumerate(rest) if not w.startswith("--")
                      and not (i and rest[i - 1] in ("--file", "--by", "--sprint"))]
