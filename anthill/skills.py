@@ -46,7 +46,7 @@ CONTENT = "content.md"
 
 
 def skills_dir(ctx: _ctx.Context) -> Path:
-    return ctx.state / "skills"
+    return ctx.skills_dir
 
 
 def _parse_manifest(text: str) -> dict:

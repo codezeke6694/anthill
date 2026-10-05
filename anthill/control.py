@@ -60,7 +60,7 @@ def controlled_files(ctx: _ctx.Context) -> list[Path]:
 
 
 def fingerprint_path(ctx: _ctx.Context) -> Path:
-    return ctx.state / FINGERPRINT_FILE
+    return ctx.control_fingerprints_path
 
 
 def record(ctx: _ctx.Context, note: str = "install") -> dict:
@@ -88,7 +88,7 @@ def _fresh_render(ctx: _ctx.Context) -> dict[str, str]:
     from anthill import install as inst, roles as roles_mod
     name = (ctx.config.get("project") or {}).get("name") or ctx.root.name
     values = inst.render_values(ctx, name)
-    protected_block = "\n".join(f"- `{p}`" for p in inst.PROTECTED_PATHS)
+    protected_block = "\n".join(f"- `{p}`" for p in inst.protected_paths(ctx))
     cmd = inst.invocation(ctx)
     out: dict[str, str] = {}
 
@@ -98,13 +98,14 @@ def _fresh_render(ctx: _ctx.Context) -> dict[str, str]:
         agents_values = dict(values, ROLE_TABLE=roles_mod.table(ctx),
                              PROTECTED_BLOCK=protected_block, ANTHILL=cmd)
         out["AGENTS.md"] = inst._render(
-            inst.TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values)
+            inst.TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values, ctx)
     except OSError:
         pass
     for role in (ctx.config.get("roles") or []):
         tmpl = inst.TEMPLATE_DIR / "roles" / f"{role}.md.tmpl"
         if tmpl.exists():
-            out[f".anthill/roles/{role}.md"] = inst._render(tmpl, values)
+            rel = (ctx.roles_dir / f"{role}.md").relative_to(ctx.root).as_posix()
+            out[rel] = inst._render(tmpl, values, ctx)
     return out
 
 
@@ -153,7 +154,7 @@ def check(ctx: _ctx.Context) -> dict:
         # The constitution is meant to be filled in by a human, so an edit there
         # is expected rather than suspicious -- it is protected against agents,
         # not frozen against owners.
-        if rel == "CONSTITUTION.md" and state == "EDITED":
+        if rel == ctx.constitution.relative_to(ctx.root).as_posix() and state == "EDITED":
             state = "edited (expected — human-owned)"
         rows.append({"file": rel, "state": state,
                      "recorded": was, "live": d})

@@ -53,7 +53,7 @@ def changed_since(root: Path, since: str) -> set[str]:
 
 
 def _nodes(ctx: _ctx.Context) -> list[dict[str, Any]]:
-    path = ctx.state / "build" / "maps" / "codebase.json"
+    path = ctx.gen_maps_dir / "codebase.json"
     try:
         return json.loads(path.read_text(encoding="utf-8")).get("nodes") or []
     except (OSError, json.JSONDecodeError):
@@ -201,7 +201,7 @@ def check(ctx: _ctx.Context, files: set[str]) -> list[dict[str, str]]:
 
 
 def _record_path(ctx: _ctx.Context) -> Path:
-    return ctx.state / "build" / RECORD
+    return ctx.local_dir / RECORD
 
 
 def load(ctx: _ctx.Context) -> dict[str, Any]:

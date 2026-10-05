@@ -121,7 +121,7 @@ def show(ctx: _ctx.Context) -> dict:
     return {
         "roles": [{"role": r, "purpose": PURPOSE.get(r, ""),
                    "assigned_to": data["assigned"].get(r) or None,
-                   "definition": f".anthill/roles/{r}.md"}
+                   "definition": (ctx.roles_dir / f"{r}.md").relative_to(ctx.root).as_posix()}
                   for r in roles],
         "unassigned": [r for r in roles if not data["assigned"].get(r)],
         **independence(ctx, data),
@@ -143,7 +143,7 @@ def table(ctx: _ctx.Context) -> str:
     for r in list(ctx.config.get("roles") or PURPOSE.keys()):
         what, owns_desc = ROLE_SUMMARY.get(r, ("see its role file", "see its unit brief"))
         who = data["assigned"].get(r) or "_unassigned_"
-        rows.append(f"| **{r}** — `.anthill/roles/{r}.md` | {who} | {what} | {owns_desc} |")
+        rows.append(f"| **{r}** — `{(ctx.roles_dir / f'{r}.md').relative_to(ctx.root).as_posix()}` | {who} | {what} | {owns_desc} |")
     return "\n".join(rows)
 
 

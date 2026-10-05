@@ -50,6 +50,21 @@ PROTECTED_PATHS = [
     ".claude/**",
 ]
 
+# The same locks for a v2 project: everything the owner alone changes is under
+# `owner/`, and the board's contracts moved under `local/board/`.
+PROTECTED_PATHS_V2 = [
+    ".anthill/owner/**",
+    ".anthill/local/board/contracts/**",
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    ".claude/**",
+]
+
+
+def protected_paths(ctx: _ctx.Context) -> list[str]:
+    return list(PROTECTED_PATHS_V2 if ctx.v2 else PROTECTED_PATHS)
+
 
 # ---------------------------------------------------------------- local mode
 #
@@ -112,6 +127,19 @@ def write_exclude(ctx: _ctx.Context, paths: list[str]) -> str | None:
 
 STATE_SUBDIRS = ("contracts", "units", "audits", "sprints", "log",
                  "roles", "maps", "knowledge", "build")
+
+# v2: four folders that travel with the project's git, one that never does.
+STATE_SUBDIRS_V2 = ("owner", "owner/roles", "owner/history", "sprints",
+                    "knowledge", "skills", "local")
+
+# What the project's git must never see, inside `.anthill/`. Written as
+# `.anthill/.gitignore` so it holds for a shared install and for every clone.
+GITIGNORE_V2 = ("# written by anthill install: these stay on one laptop\n"
+                "local/\nknowledge/_map/\nknowledge/.obsidian/\n*.tmp\n")
+
+
+def state_subdirs(ctx: _ctx.Context) -> tuple[str, ...]:
+    return STATE_SUBDIRS_V2 if ctx.v2 else STATE_SUBDIRS
 
 # The planner is installed alongside builder/auditor because it is the role a
 # human actually talks to. Leaving it out shipped a dead template and left
@@ -426,14 +454,16 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "project"
 
 
-def _render(template: Path, values: dict[str, str]) -> str:
+def _render(template: Path, values: dict[str, str], ctx: _ctx.Context | None = None) -> str:
     text = template.read_text(encoding="utf-8")
     for key, val in values.items():
         text = text.replace("{{" + key + "}}", val)
     # Any placeholder left unfilled becomes an honest TODO rather than shipping
     # `{{STACK}}` into a document a human is expected to trust.
-    return re.sub(r"\{\{([A-Z_]+)\}\}",
+    text = re.sub(r"\{\{([A-Z_]+)\}\}",
                   lambda m: f"_TODO: {m.group(1).lower().replace('_', ' ')}_", text)
+    # The templates name the old layout's paths; a v2 project reads its own.
+    return _ctx.layout_text(ctx, text) if ctx is not None else text
 
 
 def deny_rules(paths: list[str]) -> list[str]:
@@ -719,6 +749,7 @@ def render_claude_md(ctx: _ctx.Context, name: str, protected_block: str) -> str:
                             blueprint_rule=rules.map_build_rule(ctx),
                             escalation_rule=rules.escalation_rule(ctx),
                             audit_note=rules.audit_note(ctx))
+    text = _ctx.layout_text(ctx, text)
     if cmd == "anthill":
         return text
     bindir = cmd.rsplit("/bin/", 1)[0] + "/bin"
@@ -768,7 +799,7 @@ def plan(ctx: _ctx.Context, project_name: str = "",
         "mode": "brownfield" if brownfield else "greenfield",
         "discovered_source_dirs": include,
         "discovered_toplevel": toplevel,
-        "will_create": [str(ctx.state / d) for d in STATE_SUBDIRS],
+        "will_create": [str(ctx.state / d) for d in state_subdirs(ctx)],
         "will_write": [
             str(ctx.config_path),
             str(ctx.constitution),
@@ -777,7 +808,7 @@ def plan(ctx: _ctx.Context, project_name: str = "",
             str(ctx.root / ".claude" / ("settings.local.json" if is_local(ctx) else "settings.json")),
         ],
         "local": is_local(ctx),
-        "protected_paths": PROTECTED_PATHS,
+        "protected_paths": protected_paths(ctx),
         "first_move": (
             "the install has already surveyed the code (see `survey`): the map "
             "is drawn, and the largest code no page explains is the keeper's "
@@ -894,7 +925,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     cfg["source"]["exclude_parts"] = sorted(exclude_parts)
     cfg["knowledge"]["areas"] = list(areas or [])
     cfg["roles"] = roles
-    cfg["protected_paths"] = PROTECTED_PATHS
+    cfg["protected_paths"] = protected_paths(ctx)
     cfg["installed_mode"] = result["mode"]
     local = is_local(ctx)
     cfg["install"] = {"local": local,
@@ -918,7 +949,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         result["dry_run"] = True
         return result
 
-    for sub in STATE_SUBDIRS:
+    for sub in state_subdirs(ctx):
         (ctx.state / sub).mkdir(parents=True, exist_ok=True)
 
     ctx.config = cfg
@@ -931,7 +962,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     # even under --force: that is exactly the file a human will have edited.
     if not ctx.constitution.exists():
         ctx.constitution.write_text(
-            _render(TEMPLATE_DIR / "CONSTITUTION.md.tmpl", values), encoding="utf-8")
+            _render(TEMPLATE_DIR / "CONSTITUTION.md.tmpl", values, ctx), encoding="utf-8")
         written.append(str(ctx.constitution))
     else:
         result["kept_existing"] = [str(ctx.constitution)]
@@ -941,10 +972,10 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         if not tmpl.exists():
             continue
         dest = ctx.roles_dir / f"{role}.md"
-        dest.write_text(_render(tmpl, values), encoding="utf-8")
+        dest.write_text(_render(tmpl, values, ctx), encoding="utf-8")
         written.append(str(dest))
 
-    protected_block = "\n".join(f"- `{p}`" for p in PROTECTED_PATHS)
+    protected_block = "\n".join(f"- `{p}`" for p in protected_paths(ctx))
     cmd = invocation(ctx)
 
     # AGENTS.md was listed in PROTECTED_PATHS and rendered into the deny rules
@@ -960,7 +991,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
                                     "tools that read only AGENTS.md will not see Anthill's rules")
     else:
         (ctx.root / "AGENTS.md").write_text(
-            _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values), encoding="utf-8")
+            _render(TEMPLATE_DIR / "AGENTS.md.tmpl", agents_values, ctx), encoding="utf-8")
         written.append(str(ctx.root / "AGENTS.md"))
     rules = ctx.root / rules_file(ctx)
     rules.write_text(render_claude_md(ctx, name, protected_block), encoding="utf-8")
@@ -982,7 +1013,7 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
             settings = {}
     perms = settings.setdefault("permissions", {})
     deny = perms.setdefault("deny", [])
-    added = [r for r in deny_rules(PROTECTED_PATHS) if r not in deny]
+    added = [r for r in deny_rules(protected_paths(ctx)) if r not in deny]
     deny.extend(added)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
@@ -1045,17 +1076,26 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         result["control_note"] = f"fingerprints not recorded: {exc}"
 
     gitignore = ctx.state / ".gitignore"
-    if not gitignore.exists():
+    if ctx.v2:
+        if not gitignore.exists() or gitignore.read_text(encoding="utf-8") != GITIGNORE_V2:
+            gitignore.write_text(GITIGNORE_V2, encoding="utf-8")
+            written.append(str(gitignore))
+    elif not gitignore.exists():
         gitignore.write_text("build/\nunits/\n", encoding="utf-8")
         written.append(str(gitignore))
 
     if local:
         tool = cfg["install"]["tool"]
-        paths = [f"/{tool}/", "/.anthill/", "/CLAUDE.local.md", "/.claude/settings.local.json",
+        # v2: the shared folders -- owner/, sprints/, knowledge/, skills/ --
+        # are the project's to commit, so only what stays on this laptop is
+        # hidden here. v1 hid the whole state directory.
+        state_paths = ["/.anthill/local/", "/.anthill/knowledge/_map/",
+                       "/.anthill/knowledge/.obsidian/"] if ctx.v2 else ["/.anthill/"]
+        paths = [f"/{tool}/", *state_paths, "/CLAUDE.local.md", "/.claude/settings.local.json",
                  "/.claude/agents/anthill-keeper.md"]
         if not _tracked(ctx, "AGENTS.md"):
             paths.append("/AGENTS.md")
-        if not _tracked(ctx, "CONSTITUTION.md"):
+        if not ctx.v2 and not _tracked(ctx, "CONSTITUTION.md"):
             paths.append("/CONSTITUTION.md")
         result["excluded_in"] = write_exclude(ctx, paths)
         result["local"] = True

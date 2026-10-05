@@ -55,7 +55,7 @@ def test_agents_md_carries_the_same_git_rules(project):
 def test_control_sees_a_fresh_install_as_unchanged(project):
     out = control.check(project)
     states = {r["file"]: r["state"] for r in out["files"]}
-    for f in ("CLAUDE.md", "AGENTS.md", ".anthill/roles/builder.md"):
+    for f in ("CLAUDE.md", "AGENTS.md", ".anthill/owner/roles/builder.md"):
         assert states[f] == "unchanged", states
 
 

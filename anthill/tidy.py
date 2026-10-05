@@ -45,6 +45,21 @@ DESTINATIONS: list[tuple[str, str, str]] = [
     ("active-skills.yaml", "active-skills.yaml", "session skill policy"),
 ]
 
+# The same homes in the v2 layout: documents a person wrote travel with the
+# project under knowledge/, board state stays on this laptop.
+V2_HOME = {
+    "idea.md": "knowledge/plans/idea.md",
+    "plans/": "knowledge/plans/",
+    "prd/": "knowledge/plans/prd/",
+    "sprints/": "local/board/sprints/",
+    "log/": "knowledge/log/",
+    "active-skills.yaml": "skills/active-skills.yaml",
+}
+
+
+def _plans(ctx: _ctx.Context) -> str:
+    return ".anthill/knowledge/plans" if ctx.v2 else ".anthill/plans"
+
 # Root entries that legitimately belong at the root and must never be moved.
 # Tool caches. Reported as stray documents until listed, which is noise that
 # makes the real finding harder to see.
@@ -78,6 +93,8 @@ def _destination(ctx: _ctx.Context, name: str,
     for pattern, dest, why in DESTINATIONS:
         if name.lower() != pattern.lower():
             continue
+        if ctx.v2:
+            dest = V2_HOME.get(dest, dest)
         if not dest.endswith("/"):
             return ctx.state / dest, why           # a named single file
         target = ctx.state / dest.rstrip("/")
@@ -105,11 +122,11 @@ def scan(ctx: _ctx.Context) -> dict:
                           "why": why})
         elif child.is_file() and child.suffix.lower() in DOC_SUFFIXES:
             unknown.append({"name": name,
-                            "suggestion": f".anthill/plans/{name}",
+                            "suggestion": f"{_plans(ctx)}/{name}",
                             "why": "an agent-authored document with no declared home"})
         elif child.is_dir() and not any(child.rglob("*.py")):
             unknown.append({"name": name,
-                            "suggestion": f".anthill/plans/{name}",
+                            "suggestion": f"{_plans(ctx)}/{name}",
                             "why": "a directory of documents, not source"})
 
     return {

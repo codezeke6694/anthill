@@ -101,7 +101,7 @@ def set_value(ctx: _ctx.Context, key: str, raw: str, by: str,
     entry = {"at": _now(), "key": key, "from": before, "to": value, "by": by.strip()}
     if write:
         ctx.save_config()
-        hp = ctx.state / HISTORY_FILE
+        hp = ctx.history_dir / HISTORY_FILE
         hist: list = []
         if hp.exists():
             try:
@@ -129,7 +129,7 @@ def show(ctx: _ctx.Context) -> dict[str, Any]:
 
 
 def history(ctx: _ctx.Context) -> list:
-    hp = ctx.state / HISTORY_FILE
+    hp = ctx.history_dir / HISTORY_FILE
     if not hp.exists():
         return []
     try:

@@ -37,7 +37,7 @@ def _safe(name: str) -> str:
 
 
 def _load_map(ctx: _ctx.Context) -> dict[str, Any]:
-    p = ctx.state / "build" / "maps" / "codebase.json"
+    p = ctx.gen_maps_dir / "codebase.json"
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"nodes": []}
 
 

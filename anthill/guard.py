@@ -195,7 +195,7 @@ def in_scope(rel: str, include: list[str], toplevel: list[str],
 def active_units(ctx: _ctx.Context) -> tuple[list[dict], list[str]]:
     """Units currently claimed, and every unit id the contract declares."""
     contract_path = ctx.contracts_dir / "contract.json"
-    work_root = ctx.state / "build" / "work"
+    work_root = ctx.work_root
     # The orchestrator keeps its own copy of the contract per run directory;
     # prefer that, since it is the one the board is actually executing.
     for cand in sorted(work_root.glob("*/contract.json")) + [contract_path]:

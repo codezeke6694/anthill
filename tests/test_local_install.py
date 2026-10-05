@@ -1,4 +1,9 @@
-"""Anthill pulled into the project it serves: nothing of it reaches that project's git."""
+"""Anthill pulled into the project it serves.
+
+The tool and everything that stays on one laptop are invisible to the
+project's git; what the team shares -- owner/, sprints/, knowledge/, skills/
+under .anthill/ -- is ordinary project files (owner, 5 Oct).
+"""
 import json
 import shutil
 import subprocess
@@ -13,7 +18,22 @@ def git(repo, *args):
     return r.stdout
 
 
-def test_a_copy_inside_the_project_changes_nothing_git_can_see(tmp_path):
+SHARED = ("owner/", "sprints/", "knowledge/", "skills/", ".gitignore")
+
+
+def shared_only(proj):
+    """What git can see is .anthill's shared folders, and nothing else."""
+    seen = [line[3:] for line in git(proj, "status", "--porcelain", "-uall").splitlines()]
+    assert seen, "the shared folders should be visible to git"
+    for path in seen:
+        assert path.startswith(".anthill/"), path
+        rest = path[len(".anthill/"):]
+        assert rest.startswith(SHARED), path
+        assert not rest.startswith(("knowledge/_map/", "knowledge/.obsidian/")), path
+    return seen
+
+
+def test_a_copy_inside_the_project_shares_only_what_the_team_shares(tmp_path):
     proj = tmp_path / "shop"
     (proj / "shop").mkdir(parents=True)
     (proj / "shop" / "__init__.py").write_text("")
@@ -29,7 +49,8 @@ def test_a_copy_inside_the_project_changes_nothing_git_can_see(tmp_path):
                        cwd=proj, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stderr + r.stdout
 
-    assert git(proj, "status", "--porcelain").strip() == ""          # teammates see nothing
+    seen = shared_only(proj)                                          # teammates see the notebook, not the tool
+    assert ".anthill/owner/settings.json" in seen and ".anthill/owner/charter.md" in seen
     assert (proj / ".gitignore").read_text() == "*.pyc\n"             # the shared ignore file is untouched
     assert (proj / "CLAUDE.local.md").exists() and not (proj / "CLAUDE.md").exists()
     assert not (proj / ".claude" / "settings.json").exists()
@@ -38,7 +59,7 @@ def test_a_copy_inside_the_project_changes_nothing_git_can_see(tmp_path):
     assert "$CLAUDE_PROJECT_DIR/anthill/bin/anthill" in local["hooks"]["Stop"][0]["hooks"][0]["command"]
     rules = (proj / "CLAUDE.local.md").read_text()
     assert "./anthill/bin/anthill" in rules and "$(git rev-parse --show-toplevel)/anthill/bin" in rules
-    cfg = json.loads((proj / ".anthill" / "anthill.config.json").read_text())
+    cfg = json.loads((proj / ".anthill" / "owner" / "settings.json").read_text())
     assert cfg["install"] == {"local": True, "tool": "anthill"}
     assert "anthill" in cfg["source"]["exclude_parts"]                # the map is of the shop, not the tool
 
@@ -46,9 +67,9 @@ def test_a_copy_inside_the_project_changes_nothing_git_can_see(tmp_path):
     git(proj, "switch", "-q", "-c", "work/x")
     (proj / "shop" / "cart.py").write_text('"""The cart."""\ndef total(xs):\n    return sum(xs) or 0\n')
     git(proj, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "tidy")
-    trail = (proj / ".anthill" / "trail.jsonl").read_text()
+    trail = (proj / ".anthill" / "local" / "log.jsonl").read_text()
     assert '"kind": "commit"' in trail and "tidy" in trail
-    assert git(proj, "status", "--porcelain").strip() == ""
+    shared_only(proj)                                                 # the log and the map stayed local
 
     # a second install replaces its ignore block rather than adding another
     subprocess.run([str(proj / "anthill" / "bin" / "anthill"), "install", "--force", "--name", "Shop"],
@@ -70,4 +91,4 @@ def test_a_project_that_tracks_its_own_agents_file_keeps_it(tmp_path):
     r = subprocess.run([str(proj / "anthill" / "bin" / "anthill"), "install", "--name", "P"],
                        cwd=proj, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert (proj / "AGENTS.md").read_text() == "# Our own agent rules\n"
-    assert git(proj, "status", "--porcelain").strip() == ""
+    shared_only(proj)

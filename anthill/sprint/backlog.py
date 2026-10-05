@@ -528,7 +528,7 @@ def compile_contract(ctx: _ctx.Context, out: Path | None = None,
 
 def _brief(ctx: _ctx.Context, unit: dict, sprint: dict) -> str:
     lines = [f"Role: {unit.get('role', 'builder')}. "
-             f"Read .anthill/roles/{unit.get('role', 'builder')}.md before anything else.",
+             f"Read {(ctx.roles_dir / (unit.get('role', 'builder') + '.md')).relative_to(ctx.root).as_posix()} before anything else.",
              f"Sprint: {sprint['name']} — {sprint['goal']}",
              f"Unit: {unit['title']}"]
     if unit.get("contract"):
@@ -612,7 +612,7 @@ def board_states(ctx: _ctx.Context) -> dict[str, str]:
     yet, and the board still knows whether it is blocked or ready.
     """
     from anthill.orchestrate import orchestrator as work
-    root = ctx.state / "build" / "work" / re.sub(r"[^A-Za-z0-9._-]+", "-", ctx.root.name)
+    root = ctx.work_root / re.sub(r"[^A-Za-z0-9._-]+", "-", ctx.root.name)
     if not (root / "contract.json").exists():
         return {}
     store = work.Store(ctx.root, root=root)

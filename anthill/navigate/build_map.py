@@ -40,7 +40,7 @@ _conf = _ctx.current()
 REPO_ROOT = _conf.root
 # Generated output belongs to the project's state dir, never inside the
 # installed tool: two projects sharing one install must not share one map.
-OUT_PATH = _conf.state / "build" / "maps" / "codebase.json"
+OUT_PATH = _conf.gen_maps_dir / "codebase.json"
 
 # The active source set comes from the installation's config, or from first-run
 # discovery when it is empty. Hardcoding one project's directory names is what

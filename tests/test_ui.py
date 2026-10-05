@@ -35,7 +35,7 @@ def test_start_twice_starts_once_and_stop_frees_the_port(project):
         out = ui(project.root, "stop")
     assert "is free" in out
     assert "not running" in ui(project.root, "status")
-    assert not (project.state / "build" / "ui.json").exists()
+    assert not (project.page_dir / "ui.json").exists()
 
 
 def test_it_ends_when_its_parent_ends(project):
@@ -54,7 +54,7 @@ def test_it_ends_when_its_parent_ends(project):
 
 
 def test_a_stale_record_cleans_itself_up(project):
-    rec = project.state / "build" / "ui.json"
+    rec = project.page_dir / "ui.json"
     rec.parent.mkdir(parents=True, exist_ok=True)
     rec.write_text(json.dumps({"pid": 999999, "port": 7098, "url": "x"}))
     assert server.running(project) is None and not rec.exists()
@@ -110,6 +110,6 @@ def test_a_page_started_from_a_terminal_prints_its_key_once(project):
         text = out.decode()
         assert "#key=" in text, text
         key = text.split("#key=", 1)[1].split()[0]
-        assert key not in (project.state / "build" / "ui.json").read_text()
+        assert key not in (project.page_dir / "ui.json").read_text()
     finally:
         ui(project.root, "stop")

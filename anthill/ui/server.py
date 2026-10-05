@@ -54,7 +54,7 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
     from anthill import upkeep
     from anthill.knowledge import work
     w = work.where(ctx)
-    mp = ctx.state / "build" / "maps" / "codebase.json"
+    mp = ctx.gen_maps_dir / "codebase.json"
     try:
         m = json.loads(mp.read_text(encoding="utf-8"))
         map_info = {"nodes": len(m.get("nodes") or []), "built_at": str(m.get("built_at_commit", ""))[:7],
@@ -206,7 +206,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def _record_path(ctx: _ctx.Context) -> Path:
-    return ctx.state / "build" / "ui.json"
+    return ctx.page_dir / "ui.json"
 
 
 def _alive(pid: int) -> bool:
@@ -322,7 +322,7 @@ def start(ctx: _ctx.Context, port: int = 0, parent: int = 0, detach: bool = Fals
         print(f"anthill ui: {url}  (Ctrl-C to stop)", file=sys.stderr)
         serve(ctx, port, parent, key)
         return {"stopped": True}
-    log = ctx.state / "build" / "ui.log"
+    log = ctx.page_dir / "ui.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     tool = str(REPO_ROOT / "bin" / "anthill")
     args = [tool, "ui", "serve", "--port", str(port), "--key-on-stdin"] + (["--with-parent", str(parent)] if parent else [])

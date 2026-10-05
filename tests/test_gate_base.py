@@ -15,7 +15,7 @@ CONTRACT = {
 
 
 def test_gate_hands_the_unit_base_to_its_steps(project):
-    root = project.state / "build" / "work" / "proj"
+    root = project.work_root / "proj"
     st = work.Store(project.root, root=root)
     st.init_dirs()
     work.write_json_atomic(st.contract_path, CONTRACT)

@@ -27,7 +27,10 @@ from pathlib import Path
 from typing import Any
 
 STATE_DIRNAME = ".anthill"
-CONFIG_FILE = "anthill.config.json"
+CONFIG_FILE = "anthill.config.json"          # v1: the settings, at the state root
+OWNER_DIR = "owner"                          # v2: what only the owner changes
+SETTINGS_FILE = "settings.json"              # v2: the settings, under owner/
+LOCAL_DIR = "local"                          # v2: what stays on this laptop
 
 # Kept out of the code that scans a tree, because "which directories are source"
 # is a per-project fact and hardcoding it is what made the ported map builder
@@ -101,13 +104,59 @@ class Context:
     config: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------ locations
+    #
+    # Every path Anthill keeps is named here and nowhere else, for both layouts.
+    # The owner, 5 Oct: one project has one Anthill, and every file it makes
+    # either travels with the project's git (owner/, sprints/, knowledge/,
+    # skills/) or stays on one laptop (local/). The folder decides; nobody
+    # decides file by file. A project installed before that keeps the old
+    # layout, unchanged, until `anthill migrate` moves it.
     @property
     def state(self) -> Path:
         return self.root / STATE_DIRNAME
 
     @property
+    def layout(self) -> str:
+        """`v2` (owner/ sprints/ knowledge/ skills/ local/) or `v1` (the old one).
+
+        A project that has neither is about to be installed, and gets v2.
+        """
+        if (self.state / OWNER_DIR / SETTINGS_FILE).exists():
+            return "v2"
+        if (self.state / CONFIG_FILE).exists():
+            return "v1"
+        return "v2"
+
+    @property
+    def v2(self) -> bool:
+        return self.layout == "v2"
+
+    # -- travels: the owner's ------------------------------------------------
+    @property
+    def owner_dir(self) -> Path:
+        return self.state / OWNER_DIR if self.v2 else self.state
+
+    @property
     def config_path(self) -> Path:
-        return self.state / CONFIG_FILE
+        return self.owner_dir / SETTINGS_FILE if self.v2 else self.state / CONFIG_FILE
+
+    @property
+    def constitution(self) -> Path:
+        return self.owner_dir / "charter.md" if self.v2 else self.root / "CONSTITUTION.md"
+
+    @property
+    def roles_dir(self) -> Path:
+        return self.owner_dir / "roles" if self.v2 else self.state / "roles"
+
+    @property
+    def history_dir(self) -> Path:
+        """Who changed a setting or the charter, when, and why."""
+        return self.owner_dir / "history" if self.v2 else self.state
+
+    # -- travels: the work and what is known ---------------------------------
+    @property
+    def sprint_pages_dir(self) -> Path:
+        return self.state / "sprints"
 
     @property
     def knowledge_dir(self) -> Path:
@@ -115,36 +164,75 @@ class Context:
         return self.state / rel
 
     @property
+    def log_dir(self) -> Path:
+        """Lessons by area and the record of the owner's pivots."""
+        return self.knowledge_dir / "log" if self.v2 else self.state / "log"
+
+    @property
     def maps_dir(self) -> Path:
-        return self.state / "maps"
+        """Authored, curated maps -- the generated map is `gen_maps_dir`."""
+        return self.knowledge_dir / "maps" if self.v2 else self.state / "maps"
+
+    @property
+    def skills_dir(self) -> Path:
+        return self.state / "skills"
+
+    # -- stays on this laptop ------------------------------------------------
+    @property
+    def local_dir(self) -> Path:
+        """Everything generated or personal. Never in git."""
+        return self.state / LOCAL_DIR if self.v2 else self.state / "build"
+
+    @property
+    def gen_maps_dir(self) -> Path:
+        return self.local_dir / "map" if self.v2 else self.state / "build" / "maps"
+
+    @property
+    def catalogue_dir(self) -> Path:
+        return self.local_dir / "catalogue"
+
+    @property
+    def page_dir(self) -> Path:
+        """The owner's page: its record and its log."""
+        return self.local_dir / "page" if self.v2 else self.state / "build"
+
+    @property
+    def trail_path(self) -> Path:
+        return self.local_dir / "log.jsonl" if self.v2 else self.state / "trail.jsonl"
+
+    @property
+    def goals_dir(self) -> Path:
+        return self.local_dir / "goals" if self.v2 else self.state / "goals"
+
+    @property
+    def control_fingerprints_path(self) -> Path:
+        return (self.local_dir if self.v2 else self.state) / "control-fingerprints.json"
+
+    @property
+    def board_dir(self) -> Path:
+        """Claims, contracts, audits and project copies: one machine only."""
+        return self.local_dir / "board" if self.v2 else self.state
 
     @property
     def contracts_dir(self) -> Path:
-        return self.state / "contracts"
+        return self.board_dir / "contracts"
 
     @property
     def units_dir(self) -> Path:
-        return self.state / "units"
+        return self.board_dir / "units"
 
     @property
     def audits_dir(self) -> Path:
-        return self.state / "audits"
+        return self.board_dir / "audits"
 
     @property
     def sprints_dir(self) -> Path:
-        return self.state / "sprints"
+        """Planned-sprint plans for the board -- not the sprint pages."""
+        return self.board_dir / "sprints"
 
     @property
-    def log_dir(self) -> Path:
-        return self.state / "log"
-
-    @property
-    def roles_dir(self) -> Path:
-        return self.state / "roles"
-
-    @property
-    def constitution(self) -> Path:
-        return self.root / "CONSTITUTION.md"
+    def work_root(self) -> Path:
+        return self.board_dir / "work" if self.v2 else self.state / "build" / "work"
 
     @property
     def installed(self) -> bool:
@@ -202,10 +290,55 @@ class Context:
         return env
 
     def save_config(self) -> None:
-        self.state.mkdir(parents=True, exist_ok=True)
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.config_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(self.config, indent=2) + "\n", encoding="utf-8")
         tmp.replace(self.config_path)
+
+
+# What each old path is called in the new layout, longest first so a longer
+# path is never half-rewritten by a shorter one. Used to rewrite the generated
+# rule files and templates, which name paths in prose, and by `anthill migrate`
+# to say where a file went.
+V1_TO_V2 = [
+    (".anthill/anthill.config.json", ".anthill/owner/settings.json"),
+    (".anthill/config-history.json", ".anthill/owner/history/config-history.json"),
+    (".anthill/charter-history.json", ".anthill/owner/history/charter-history.json"),
+    (".anthill/control-fingerprints.json", ".anthill/local/control-fingerprints.json"),
+    (".anthill/build/maps/", ".anthill/local/map/"),
+    (".anthill/build/work/", ".anthill/local/board/work/"),
+    (".anthill/build/upkeep.json", ".anthill/local/upkeep.json"),
+    (".anthill/build/ui.json", ".anthill/local/page/ui.json"),
+    (".anthill/build/ui.log", ".anthill/local/page/ui.log"),
+    (".anthill/build/catalogue/", ".anthill/local/catalogue/"),
+    (".anthill/build/", ".anthill/local/"),
+    (".anthill/trail.jsonl", ".anthill/local/log.jsonl"),
+    (".anthill/goals/", ".anthill/local/goals/"),
+    (".anthill/roles/", ".anthill/owner/roles/"),
+    (".anthill/contracts/", ".anthill/local/board/contracts/"),
+    (".anthill/units/", ".anthill/local/board/units/"),
+    (".anthill/audits/", ".anthill/local/board/audits/"),
+    (".anthill/sprints/", ".anthill/local/board/sprints/"),
+    (".anthill/log/", ".anthill/knowledge/log/"),
+    (".anthill/maps/", ".anthill/knowledge/maps/"),
+    ("CONSTITUTION.md", ".anthill/owner/charter.md"),
+]
+
+
+def layout_text(ctx: "Context", text: str) -> str:
+    """Generated prose names v1 paths; rewrite them for a v2 project.
+
+    One pass, with placeholders, so a path already rewritten is never matched
+    again by a later, shorter entry.
+    """
+    if not ctx.v2:
+        return text
+    for i, (old, _new) in enumerate(V1_TO_V2):
+        text = text.replace(old, f"\x00{i}\x00")
+    for i, (_old, new) in enumerate(V1_TO_V2):
+        text = text.replace(f"\x00{i}\x00", new)
+    # An ignore-list entry `/CONSTITUTION.md` would otherwise come out `//.anthill/...`.
+    return text.replace("//.anthill/", "/.anthill/")
 
 
 VENV_NAMES = (".venv", "venv", ".virtualenv", "env")
@@ -300,7 +433,7 @@ def resolve(project: str | Path | None = None) -> Context:
         root, origin = Path.cwd().resolve(), "cwd (no git repository found)"
 
     ctx = Context(root=root, origin=origin, config=dict(DEFAULT_CONFIG))
-    cfg = root / STATE_DIRNAME / CONFIG_FILE
+    cfg = ctx.config_path
     if cfg.exists():
         try:
             loaded = json.loads(cfg.read_text(encoding="utf-8"))

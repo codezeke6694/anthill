@@ -47,7 +47,7 @@ ARGS_MAX = 160
 
 
 def path(ctx: _ctx.Context) -> Path:
-    return ctx.state / FILE
+    return ctx.trail_path
 
 
 def who() -> dict[str, str]:

@@ -92,7 +92,7 @@ def unit_base(ctx: _ctx.Context, unit: str) -> str:
         return ""
     import re as _re
     safe = _re.sub(r"[^A-Za-z0-9._-]", "_", unit)
-    for p in sorted((ctx.state / "build" / "work").glob(f"*/state/{safe}.json")):
+    for p in sorted(ctx.work_root.glob(f"*/state/{safe}.json")):
         try:
             return str(json.loads(p.read_text(encoding="utf-8")).get("base_commit") or "")
         except (OSError, json.JSONDecodeError):

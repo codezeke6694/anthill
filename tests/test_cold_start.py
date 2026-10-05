@@ -40,7 +40,7 @@ def frontend(repo: Path) -> None:
 
 def built(repo: Path) -> dict:
     anthill(repo, "map", "build")
-    return json.loads((repo / ".anthill/build/maps/codebase.json").read_text())
+    return json.loads((repo / ".anthill/local/map/codebase.json").read_text())
 
 
 # --- the frontend reader ------------------------------------------------------

@@ -120,7 +120,7 @@ def test_status_reads_the_board(project):
     out = backlog.compile_contract(project)
     before = backlog.status(project)
     assert before["source"].startswith("sprint file")
-    st = work.Store(project.root, root=project.state / "build" / "work" / project.root.name)
+    st = work.Store(project.root, root=project.work_root / project.root.name)
     st.init_dirs()
     work.load_board(st, project.contracts_dir / "contract.json")
     work.claim(st, "solo", "core.spec", isolate=False)

@@ -51,7 +51,7 @@ def _now() -> str:
 
 
 def goals_dir(ctx: _ctx.Context) -> Path:
-    return ctx.state / "goals"
+    return ctx.goals_dir
 
 
 def _path(ctx: _ctx.Context, gid: str) -> Path:

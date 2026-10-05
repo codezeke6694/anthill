@@ -41,6 +41,7 @@ DELEGATED = [
     ("correction", "Record that a page said something wrong: --page, --was, --now, --why"),
     ("obsidian", "Draw the anthill as linked notes for an Obsidian vault"),
     ("update", "Pull the newest Anthill into its folder and re-render this project's rules"),
+    ("migrate", "Move this project to the new layout: what travels, what stays local"),
     ("goal", "Work to a goal end to end: set, step, decided, block, done"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
     ("work", "Claim, gate, close and escalate units (the execution loop)"),
@@ -229,6 +230,9 @@ def _dispatch(argv: list[str]) -> int:
         out = inst.update(ctx)
         print(out.get("pulled") or "", out.get("install") or out.get("why") or "", sep="\n")
         return 0 if out.get("updated") else 1
+    if argv and argv[0] == "migrate":
+        from anthill import migrate
+        return migrate.main(argv[1:])
     if argv and argv[0] == "goal":
         from anthill import goal
         return goal.main(argv[1:])

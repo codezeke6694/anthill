@@ -49,10 +49,10 @@ _C = _ctx.current()
 STATE_DIR = _C.state                            # <project>/.anthill
 KNOWLEDGE_DIR = _C.knowledge_dir                # authored intent
 MAPS_DIR = _C.maps_dir                          # authored / curated maps
-BUILD_DIR = STATE_DIR / "build"                 # everything generated
-GEN_MAPS_DIR = BUILD_DIR / "maps"               # generated maps
-CATALOGUE_DIR = BUILD_DIR / "catalogue"         # generated knowledge catalogue
-WORK_ROOT = BUILD_DIR / "work"                  # orchestrator state, per target repo
+BUILD_DIR = _C.local_dir                        # everything generated
+GEN_MAPS_DIR = _C.gen_maps_dir                  # generated maps
+CATALOGUE_DIR = _C.catalogue_dir                # generated knowledge catalogue
+WORK_ROOT = _C.work_root                        # orchestrator state, per target repo
 
 
 def map_dirs() -> list[Path]:

@@ -123,7 +123,7 @@ def test_no_instruction_puts_anything_before_where(project):
         assert "before anything else, find out whether a unit" not in text
         assert "after `anthill where`" in text
     status = json.loads(anthill(project.root, "work", "status", "--repo", ".")) \
-        if (project.root / ".anthill/build/work").exists() else None
+        if project.work_root.exists() else None
     from anthill.navigate import router
     assert router.NEW_HERE["first"].startswith("anthill where")
 
@@ -172,6 +172,6 @@ def test_install_surveys_the_code_before_it_finishes(tmp_path, monkeypatch):
     _ctx.current.cache_clear()
     out = inst.install(_ctx.resolve(repo), project_name="Shop", stack="Python", write=True)
     assert out["survey"]["map"]["nodes"] >= 1
-    assert (repo / ".anthill/build/maps/codebase.json").exists()
+    assert (repo / ".anthill/local/map/codebase.json").exists()
     assert "What Anthill knows already" in inst.render_survey(out["survey"])
     assert "places in the code" in anthill(repo, "survey")

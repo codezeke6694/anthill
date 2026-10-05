@@ -12,7 +12,7 @@ CONTRACT = {
 
 
 def _store(ctx) -> work.Store:
-    root = ctx.state / "build" / "work" / "proj"
+    root = ctx.work_root / "proj"
     st = work.Store(ctx.root, root=root)
     st.init_dirs()
     work.write_json_atomic(st.contract_path, CONTRACT)
