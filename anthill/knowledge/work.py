@@ -385,10 +385,50 @@ def where(ctx: Any) -> dict[str, Any]:
         "traps": [{"work": r["id"], "trap": t} for r in active for t in r["traps"]]
                  + [{"work": "everywhere", "trap": t} for t in _shared_traps(kd)],
         "upkeep_unattended": _unattended(ctx),
+        "alarms": alarms(ctx),
         "anthill_version": _version(ctx),
         "howto": [{"title": h["frontmatter"].get("title", ""),
                    "page": str(h["path"].relative_to(root))} for h in load(kd, "howto")],
     }
+
+
+OWNER_ONLY = (("config", "set"), ("onboard", "--force"), ("roles", "assign"),
+              ("work", "reopen"), ("update", "--latest"), ("sprint lock", "--by"))
+
+
+def alarms(ctx: Any, days: int = 7) -> list[str]:
+    """What Anthill cannot stop on one laptop, said out loud (D1-D3).
+
+    An agent and the owner run the same programs, so a skipped check, an
+    owner-only command or an edited rule file cannot be refused here. They can
+    be shown, every time anyone asks where things stand.
+    """
+    out: list[str] = []
+    try:
+        from anthill import trail
+        cutoff = (datetime.now().astimezone() - timedelta(days=days)).isoformat(timespec="seconds")
+        for e in trail.read(ctx, 3000):
+            if e.get("t", "") < cutoff:
+                continue
+            who = (e.get("tool") or "?") + (f" {e['session'][:8]}" if e.get("session") else "")
+            if e.get("kind") == "hook-skipped":
+                out.append(f"{e.get('text', 'a commit skipped the save check')} ({who}, {e['t'][:16]}): "
+                           "the checks before a commit were skipped (`--no-verify`)")
+            elif e.get("kind") == "command" and e.get("tool") not in ("terminal", None) and e.get("session"):
+                args = str(e.get("args") or "")
+                if any(args.startswith(v) and flag in args for v, flag in OWNER_ONLY):
+                    out.append(f"`anthill {args[:90]}` was run from an agent's chat ({who}, {e['t'][:16]}) — "
+                               "an owner-only command; fine if the owner asked for it")
+    except Exception:                       # noqa: BLE001 -- an alarm never breaks `where`
+        pass
+    try:
+        from anthill import control
+        for r in control.check(ctx).get("files") or []:
+            if r.get("state") == "EDITED":
+                out.append(f"`{r['file']}` was edited outside Anthill (it is generated, or the owner's)")
+    except Exception:                       # noqa: BLE001
+        pass
+    return out[-8:]
 
 
 def _version(ctx: Any) -> dict[str, Any]:
@@ -450,6 +490,10 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
               "working on them this minute: do not edit them without asking the owner.", ""]
         for u in w["uncommitted"]:
             L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
+    if w.get("alarms"):
+        L += ["", "## ⚠ Not stopped, so shown", "",
+              "Anthill cannot refuse these on one laptop. Say so to the owner if you did not expect them.", ""]
+        L += [f"- {a}" for a in w["alarms"]]
     v = w.get("anthill_version") or {}
     if v.get("team") and v.get("here") and not v.get("same"):
         L += ["", f"⚠ This laptop runs Anthill `{v['here']}`; the team uses `{v['team']}`. "

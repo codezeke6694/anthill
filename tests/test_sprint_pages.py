@@ -128,3 +128,19 @@ def test_a_sprint_closed_by_hand_shows_red(project):
     w = work.where(project)
     assert [c["id"] for c in w["closed_without_check"]] == ["refunds"]
     assert "its check never passed" in work.render(w)
+
+
+def test_a_locked_check_cannot_be_moved_by_the_agent(project):
+    (project.root / "answers.txt").write_text("kerala -> india\n")
+    run(project.root, "sprint", "start", "Placement", "--check", "grep -q india answers.txt")
+    run(project.root, "sprint", "lock", "placement", "--file", "answers.txt", "--by", "owner")
+    # the agent "fixes" the answer key instead of the code
+    (project.root / "answers.txt").write_text("kerala -> finland, india\n")
+    r = run(project.root, "sprint", "done", ok=False)
+    assert r.returncode == 1 and "answers.txt" in r.stderr and "locked" in r.stderr
+    assert page.find(project, "placement").parent.name == "active"
+    # nor can it swap the check for an easier one
+    assert run(project.root, "sprint", "go", "placement", "--check", "true", ok=False).returncode == 2
+    # the owner looks, and locks again
+    run(project.root, "sprint", "lock", "placement", "--file", "answers.txt", "--by", "owner")
+    assert run(project.root, "sprint", "done").returncode == 0

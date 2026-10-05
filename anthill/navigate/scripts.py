@@ -194,5 +194,60 @@ def locate(path: Path, name: str) -> dict[str, Any] | None:
         return None
     line = text.count("\n", 0, m.start()) + 1
     decl = re.sub(r"\s+", " ", m.group(0)).strip()
-    return {"line_start": line, "line_end": line,
-            "sig": hashlib.sha256(decl.encode()).hexdigest()[:16]}
+    end = _body_end(text, m.start())
+    body = text[m.start():end]
+    out = {"line_start": line, "line_end": text.count("\n", 0, end) + 1,
+           "sig": hashlib.sha256(decl.encode()).hexdigest()[:16]}
+    calls = callees(body, name)
+    if calls:
+        # What it calls, as for Python (C7): a TypeScript function that starts
+        # doing different work is now caught, not only one that disappears.
+        out["callees"] = hashlib.sha256("|".join(calls).encode()).hexdigest()[:16]
+    return out
+
+
+_NOT_CALLS = {"if", "for", "while", "switch", "return", "function", "catch", "typeof", "new",
+              "await", "super", "import", "require", "console", "log", "debug", "info", "warn", "error"}
+
+
+def callees(body: str, own: str = "") -> list[str]:
+    """Names a declaration calls, by a plain read of its text."""
+    clean = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
+    clean = re.sub(r"(['\"`])(?:\\.|(?!\1).)*\1", "''", clean, flags=re.S)
+    names = set(re.findall(r"(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(", clean))
+    names |= set(re.findall(r"\.([A-Za-z_$][\w$]*)\s*\(", clean))
+    return sorted(n for n in names if n not in _NOT_CALLS and n != own)
+
+
+def _body_end(text: str, start: int) -> int:
+    """Where a declaration ends: its braces closed, or its statement over."""
+    depth, opened, i, n = 0, False, start, len(text)
+    in_str = ""
+    while i < n:
+        c = text[i]
+        if in_str:
+            if c == "\\":
+                i += 2
+                continue
+            if c == in_str:
+                in_str = ""
+        elif c in "'\"`":
+            in_str = c
+        elif c == "{":
+            depth, opened = depth + 1, True
+        elif c == "}":
+            depth -= 1
+            if opened and depth == 0:
+                return i + 1
+        elif c == ";" and depth == 0:
+            return i + 1
+        elif c == "\n" and depth == 0:
+            # No semicolon: the statement ends where the next line starts a new
+            # one -- a blank line, or anything at the left margin that does not
+            # continue an expression.
+            nxt = text[i + 1:i + 2]
+            if nxt in ("", "\n") or (nxt not in (" ", "\t", ".", "?", ":", "|", "&", ")", "]", "}")
+                                     and not text[start:i].rstrip().endswith(("=", "=>", "(", ",", "{"))):
+                return i
+        i += 1
+    return n

@@ -207,3 +207,47 @@ def test_card_shows_where_a_constants_values_are_spelled_out_elsewhere(project):
     line = c["if_you_change_this"]["by_line"][0]
     assert line["symbol"] == "INSTRUMENTS"
     assert line["same_values_elsewhere"] == [{"file": "pkg/tiles.py", "values": ["rain-gauge"]}]
+
+
+def test_a_rule_quoting_a_number_is_held_to_it(project):
+    write(project.root, "pkg/gate.py", '"""Where signals are gated."""\n\nGATE_KM = 650.0\n')
+    sha = commit_all(project.root, "gate")
+    write(project.root, ".anthill/knowledge/modules/gate.md",
+          f"---\nid: gate\ntype: module\nverified_against: proj@{sha}\n---\n\n"
+          "- **BR-PROJ-gate:** News further than 650 km from a route never reaches the model "
+          "(sg: pkg/gate.py::GATE_KM).\n")
+    def verdict():
+        out = json.loads(anthill(project.root, "verify", "--only", "intent", "--all"))
+        return next(c for c in out["claims"] if c["claim_id"] == "BR-PROJ-gate")
+    assert verdict()["severity"] == 0
+    write(project.root, "pkg/gate.py", '"""Where signals are gated."""\n\nGATE_KM = 325.0\n')
+    v = verdict()
+    assert v["drift"] == "value_changed" and v["severity"] == 2
+    assert "the rule quotes 650; GATE_KM is now 325" in v["detail"]
+
+
+def test_a_log_line_does_not_rewire_a_function():
+    import ast
+    from anthill.navigate import structure
+    before = ast.parse("def f(x):\n    return g(x)\n").body[0]
+    after = ast.parse("def f(x):\n    logger.info('x=%s', x)\n    print(x)\n    return g(x)\n").body[0]
+    assert structure.callee_names(before) == structure.callee_names(after) == ["g"]
+    real = ast.parse("def f(x):\n    return g(x) or h(x)\n").body[0]
+    assert structure.callee_names(real) == ["g", "h"]
+
+
+def test_typescript_can_be_read_searched_and_caught_rewired(project):
+    from anthill.navigate import scripts
+    write(project.root, "web/src/cart.ts",
+          "/** The cart. */\nexport function total(items: number[]): number {\n"
+          "  return round(items.reduce(add, 0));\n}\n\nexport const LIMIT = 10;\n")
+    commit_all(project.root, "cart")
+    anthill(project.root, "map", "build")
+    sl = json.loads(anthill(project.root, "read-slice", "web/src/cart.ts::total"))
+    assert sl.get("line_start") == 2 and sl.get("line_end") == 4, sl
+    before = scripts.locate(project.root / "web/src/cart.ts", "total")
+    write(project.root, "web/src/cart.ts",
+          "/** The cart. */\nexport function total(items: number[]): number {\n"
+          "  return round(items.reduce(add, 0)) + tax(items);\n}\n\nexport const LIMIT = 10;\n")
+    after = scripts.locate(project.root / "web/src/cart.ts", "total")
+    assert before["sig"] == after["sig"] and before["callees"] != after["callees"]

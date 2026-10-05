@@ -421,6 +421,15 @@ def _find_symbol_span(symbol_id: str) -> dict[str, Any]:
     file_path, symbol_name = _split_symbol_id(symbol_id)
     if not file_path.exists():
         return {"exists": False, "reason": f"file not found: {file_path}"}
+    from anthill.navigate import scripts
+    if file_path.suffix in scripts.SUFFIXES:
+        # TypeScript and JavaScript: read by the frontend reader, not by
+        # Python's parser, which failed on every one of them (C7).
+        hit = scripts.locate(file_path, symbol_name)
+        if hit is None:
+            return {"exists": False, "reason": f"symbol not found: {symbol_id}"}
+        return {"exists": True, "file": str(file_path.relative_to(REPO_ROOT)), "symbol": symbol_name,
+                "kind": "script", "line_start": hit["line_start"], "line_end": hit["line_end"]}
     try:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
@@ -903,11 +912,13 @@ def _search(pattern: str, scope_paths: list[str], max_results: int = 60) -> tupl
         if p.is_file():
             files = [p]
         elif p.is_dir():
-            files = sorted(p.rglob("*.py"))
+            from anthill.navigate import scripts
+            files = sorted(f for f in p.rglob("*") if f.is_file()
+                           and (f.suffix == ".py" or f.suffix in scripts.SUFFIXES))
         else:
             continue
         for f in files:
-            if {"__pycache__", "archive", "_archive", "venv", ".venv"} & set(f.relative_to(REPO_ROOT).parts):
+            if {"__pycache__", "archive", "_archive", "venv", ".venv", "node_modules", "dist"} & set(f.relative_to(REPO_ROOT).parts):
                 continue
             try:
                 lines = f.read_text(encoding="utf-8").splitlines()

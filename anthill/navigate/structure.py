@@ -166,13 +166,29 @@ def normalized_signature(node: ast.AST) -> str:
     return f"{prefix} {node.name}({_arg_spec(node.args)})->{returns}[{','.join(decorators)}]"
 
 
+# Calls that say something rather than do something. Adding a log line to a
+# function changed what it calls, graded it "rewired" and blocked the page
+# about it (C4); a log line changes nothing a rule could be about.
+_LOG_METHODS = {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
+
+
+def _is_logging(func: ast.AST) -> bool:
+    if isinstance(func, ast.Name):
+        return func.id == "print"
+    if isinstance(func, ast.Attribute) and func.attr in _LOG_METHODS:
+        recv = func.value
+        name = recv.id if isinstance(recv, ast.Name) else getattr(recv, "attr", "")
+        return "log" in str(name).lower()
+    return False
+
+
 def callee_names(node: ast.AST) -> list[str]:
     """Sorted set of names this symbol calls. The *set*, never the body text."""
     if isinstance(node, _Constant):
         node = node.node
     names: set[str] = set()
     for child in ast.walk(node):
-        if not isinstance(child, ast.Call):
+        if not isinstance(child, ast.Call) or _is_logging(child.func):
             continue
         func = child.func
         if isinstance(func, ast.Name):
@@ -275,6 +291,28 @@ def _script_fingerprint(file_part: str, symbol_name: str) -> dict[str, Any]:
 def is_script(file_part: str) -> bool:
     from anthill.navigate import scripts
     return Path(file_part).suffix in scripts.SUFFIXES
+
+
+def constant_value(symbol_id: str) -> Any:
+    """The literal value of a module-level constant, or None if it is not one.
+
+    The fingerprint leaves a constant's value out on purpose -- changing a
+    threshold is a content change, not a structural one -- so a rule quoting
+    the number ("the gate is 650 km") is checked against it separately (C3).
+    """
+    file_part, symbol_name = split_symbol_id(symbol_id)
+    if is_script(file_part):
+        return None
+    node, _ = _locate(file_part, symbol_name)
+    if not isinstance(node, _Constant):
+        return None
+    value = getattr(node.node, "value", None)
+    if value is None:
+        return None
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError, TypeError):
+        return None
 
 
 def fingerprint(symbol_id: str, with_callers: bool = True) -> dict[str, Any]:

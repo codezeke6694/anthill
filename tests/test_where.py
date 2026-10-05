@@ -203,3 +203,26 @@ def test_a_sprint_whose_branch_is_gone_shows_as_paused(project):
     out = anthill(project.root, "where")
     assert "- **Old work** — paused (its branch is gone)" in out
     assert "state: in-progress" in (project.sprint_pages_dir / "active" / "old.md").read_text()  # not rewritten
+
+
+def test_what_cannot_be_stopped_is_shown(project, monkeypatch):
+    # a commit that skipped the save check
+    (project.root / "pkg/extra.py").write_text("x = 1\n")
+    subprocess.run(["git", "add", "pkg/extra.py"], cwd=project.root, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "sneaky",
+                    "--no-verify"], cwd=project.root, check=True)
+    # an owner-only command from an agent's chat
+    import os
+    env = {**os.environ, "CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "agentchat"}
+    subprocess.run([str(TOOL), "config", "set", "execution.guard_hygiene", "true", "--by", "owner"],
+                   cwd=project.root, env=env, capture_output=True)
+    out = anthill(project.root, "where")
+    assert "Not stopped, so shown" in out
+    assert "without the save check" in out and "--no-verify" in out
+    assert "`anthill config set execution.guard_hygiene" in out and "agent's chat" in out
+
+
+def test_a_normal_commit_raises_no_alarm(project):
+    (project.root / "pkg/extra.py").write_text("x = 1\n")
+    commit_all(project.root, "ordinary")
+    assert "Not stopped, so shown" not in anthill(project.root, "where")

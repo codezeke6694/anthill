@@ -306,6 +306,45 @@ def new(ctx: _ctx.Context, title: str, kind: str = "short", check: str = "",
     return g
 
 
+# ---------------------------------------------------- the locked check
+#
+# The one idea worth keeping from the old test/code split (E2): the agent that
+# builds the work must not be able to change what proves it. The owner locks a
+# sprint's check -- the command and the files it relies on, an answer key, a
+# test set -- and from then on `sprint done` refuses if any of them changed,
+# until the owner has looked and locked it again.
+
+def _digest(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16] if path.is_file() else "missing"
+
+
+def lock_check(ctx: _ctx.Context, sid: str, files: list[str], by: str) -> dict[str, Any]:
+    from anthill import trail
+    if not by.strip():
+        raise ValueError("locking a check is the owner's: --by <owner>")
+    g = load(ctx, sid)
+    if not g.get("done_when"):
+        raise ValueError("this sprint has no check to lock")
+    g["lock"] = {"check": g["done_when"], "by": by.strip(), "at": _now(),
+                 "files": {f: _digest(ctx.root / f) for f in files}}
+    save(ctx, g)
+    trail.record("sprint", ctx, sprint=sid, action="lock", by=by.strip(), files=files[:20])
+    return g["lock"]
+
+
+def lock_broken(ctx: _ctx.Context, g: dict[str, Any]) -> list[str]:
+    """What changed under a locked check; empty if nothing did, or it is not locked."""
+    lock = g.get("lock") or {}
+    if not lock:
+        return []
+    out = []
+    if g.get("done_when") != lock.get("check"):
+        out.append(f"the check itself (was `{lock.get('check')}`)")
+    out += [f for f, d in (lock.get("files") or {}).items() if _digest(ctx.root / f) != d]
+    return out
+
+
 # ------------------------------------------------------- closing a sprint
 
 LEARNED = re.compile(r"^\s*[-*]\s+(Warning|Decision|Rule)\s*:\s*(.+)$", re.I)
@@ -362,6 +401,7 @@ anthill sprint decided "<what you decided for the owner>" --because "<the decisi
 anthill sprint block "<the question only the owner can answer, with your recommendation>"  [--sprint <id>]
 anthill sprint done  [--sprint <id>]               runs the check; only a pass closes it and files what it learned
 anthill sprint stop "<why>"  [--sprint <id>]       pause it
+anthill sprint lock [<id>] --file <answer key or test> ... --by <owner>   the owner locks the check
 anthill sprint list [--all] [--json]   |   anthill sprint show <id>
 A planned sprint with independent pieces, run by one lead chat and its helpers (skill: parallel-sprint):
   anthill sprint piece add <id> "<title>" --owns "<glob>" --check "<cmd>" [--after <piece>]
@@ -370,7 +410,7 @@ Any chat, in any tool, may work any sprint. Without --sprint, the one this chat
 drives is meant, else the only open sprint on this branch.
 """
 
-VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help",
+VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock",
          "piece", "waves", "brief", "referee", "ask"}
 PARALLEL = {"piece", "waves", "brief", "referee", "ask"}
 
@@ -411,6 +451,8 @@ def main(argv: list[str]) -> int:
             words = [w for w in rest if not w.startswith("--")]
             g = load(ctx, words[0]) if words and not gid else G._open(ctx, gid)
             if G._opt(rest, "--check"):
+                if g.get("lock") and G._opt(rest, "--check") != g["lock"].get("check"):
+                    raise LookupError("this sprint's check is locked by the owner; it cannot be changed here")
                 g["done_when"] = G._opt(rest, "--check")
             if not g.get("done_when"):
                 raise LookupError("driving a sprint end to end needs a check that proves it done: --check \"<command>\"")
@@ -421,6 +463,13 @@ def main(argv: list[str]) -> int:
                 g["status"] = "active"
             G.save(ctx, g)
             trail.record("sprint", ctx, sprint=g["id"], action="go", text=g["title"])
+        elif verb == "lock":
+            words = [w for i, w in enumerate(rest) if not w.startswith("--")
+                     and not (i and rest[i - 1] in ("--file", "--by", "--sprint"))]
+            sid = words[0] if words else (gid or G._open(ctx).get("id"))
+            out = lock_check(ctx, sid, G._all(rest, "--file"), G._opt(rest, "--by"))
+            print(f"locked: `{out['check']}`" + (f" and {len(out['files'])} file(s)" if out["files"] else ""))
+            return 0
         elif verb in ("step", "decided", "block", "done", "stop"):
             return G.main([verb, *rest])
         elif verb == "show":

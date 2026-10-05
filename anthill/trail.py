@@ -25,7 +25,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -154,6 +154,25 @@ def _on_commit(ctx: _ctx.Context) -> int:
         return 0
     record("commit", ctx, sha=sha, subject=subject[:ARGS_MAX], files=len(files),
            paths=files[:20])
+    # Git runs post-commit even when the checks before a commit were skipped
+    # with --no-verify, so this is where a skipped check can still be seen
+    # (D1). The pre-commit guard leaves a line on the trail every time it runs.
+    try:
+        hook = Path(git("rev-parse", "--git-path", "hooks/pre-commit"))
+        hook = hook if hook.is_absolute() else ctx.root / hook
+        ours = hook.exists() and "anthill-pre-commit-guard" in hook.read_text(errors="ignore")
+        merging = bool(git("rev-parse", "-q", "--verify", "MERGE_HEAD")) or len(
+            git("rev-list", "--parents", "-n", "1", "HEAD").split()) > 2
+        if ours and not merging:
+            since = (datetime.now().astimezone() - timedelta(seconds=120)).isoformat(timespec="seconds")
+            guarded = any(e.get("kind") == "command" and e.get("verb") == "guard" and e.get("t", "") >= since
+                          for e in read(ctx, 60))
+            if not guarded:
+                branch = git("rev-parse", "--abbrev-ref", "HEAD")
+                record("hook-skipped", ctx, sha=sha, branch_committed=branch, subject=subject[:ARGS_MAX],
+                       text=f"commit {sha} on {branch} was made without the save check")
+    except (OSError, subprocess.SubprocessError):
+        pass
     return 0
 
 

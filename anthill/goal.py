@@ -204,6 +204,18 @@ def finish(ctx: _ctx.Context, gid: str = "") -> dict[str, Any]:
     """Done only if the done-when command passes. The agent does not get to say so."""
     g = _open(ctx, gid)
     cmd = g.get("done_when") or ""
+    if ctx.v2:
+        from anthill.sprint import page
+        broken = page.lock_broken(ctx, g)
+        if broken:
+            g["result"] = {"t": _now(), "passed": False,
+                           "output": "the owner locked this check, and since then these changed: "
+                                     + ", ".join(broken) + ". The owner looks, then locks it again "
+                                     "(`anthill sprint lock --by <owner>`)."}
+            save(ctx, g)
+            trail.record("goal", ctx, session=_actor(g), goal=g["id"], action="lock-broken",
+                         text=", ".join(broken)[:160])
+            return g
     if not cmd:
         raise LookupError("this goal has no done-when check; add one with anthill goal set --done-when")
     try:

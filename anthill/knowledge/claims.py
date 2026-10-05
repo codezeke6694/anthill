@@ -276,6 +276,29 @@ def _verify_file_citation(claim: dict[str, Any]) -> dict[str, Any]:
             "detail": f"cited file is gone: {rel}", "relocation": []}
 
 
+_NUMBER = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?![\w.])")
+
+
+def _check_quoted_number(claim: dict[str, Any], verdict: dict[str, Any]) -> dict[str, Any]:
+    """A rule that cites a constant and quotes a number must quote its value.
+
+    Measured: a page said the gate was 650 km; the fingerprint, which ignores
+    values by design, would have passed it at 325.
+    """
+    numbers = {float(n.replace(",", "")) for n in _NUMBER.findall(claim.get("text") or "")}
+    if not numbers:
+        return verdict
+    value = s.constant_value(claim["symbol_id"])
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return verdict
+    if float(value) in numbers:
+        return verdict
+    name = claim["symbol_id"].split("::", 1)[-1]
+    quoted = ", ".join(f"{n:g}" for n in sorted(numbers))
+    return {"drift": "value_changed", "severity": 2,
+            "detail": f"the rule quotes {quoted}; {name} is now {value:g}", "relocation": []}
+
+
 def verify(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Check every claim against the live tree, attributing drift per claim."""
     results: list[dict[str, Any]] = []
@@ -316,6 +339,8 @@ def verify(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
                 symbol = claim["symbol_id"].split("::", 1)[1] if "::" in claim["symbol_id"] else ""
                 recorded = {"file": file_part, "symbol": symbol}
             verdict = s.compare(recorded, live)
+            if claim["kind"] == KIND_RULE and verdict.get("severity", 0) < 2 and live.get("exists"):
+                verdict = _check_quoted_number(claim, verdict)
         results.append({**claim, **verdict,
                         "live_line": live.get("line_start"),
                         "live_file": live.get("file")})
