@@ -372,22 +372,42 @@ correct any rule your change made untrue, add a History line.
 """
 
 
-def update(ctx: _ctx.Context) -> dict[str, Any]:
-    """Pull the newest Anthill into its folder, then re-render this project's rules.
+def update(ctx: _ctx.Context, latest: bool = False, by: str = "") -> dict[str, Any]:
+    """Bring this laptop's Anthill to the team's version, then re-render the rules.
+
+    The team's version is the commit in the project's shared settings, so every
+    laptop that pulls the project and runs this ends on the same Anthill.
+    `latest` is the owner moving the team forward: the newest Anthill, recorded
+    as the team's version. Without a recorded version (an older install), it
+    pulls the newest, as it always did.
 
     The install is re-run by the *new* code, in its own process: the running
     one has the old modules loaded. The owner's settings, charter and notes
     are kept -- a re-install carries them over.
     """
     import subprocess
+    from anthill import version
     root = tool_root()
-    r = subprocess.run(["git", "-C", str(root), "pull", "--ff-only"], capture_output=True, text=True)
-    if r.returncode != 0:
-        return {"updated": False, "why": (r.stderr or r.stdout).strip()[-400:]}
+    if latest and not by.strip():
+        return {"updated": False, "why": "moving the team to the newest Anthill is the owner's "
+                "decision: `anthill update --latest --by <owner>`"}
+    if latest or version.pinned(ctx):
+        moved = version.go_to(ctx, latest=latest)
+        if not moved.get("moved"):
+            return {"updated": False, "why": moved.get("why", "")}
+        pulled = f"Anthill is now at {moved['now']}" + (" (the newest)" if latest else " (the team's version)")
+        if latest:
+            from anthill import configure
+            configure.set_value(ctx, "anthill.version", moved["now"], by=by)
+    else:
+        r = subprocess.run(["git", "-C", str(root), "pull", "--ff-only"], capture_output=True, text=True)
+        if r.returncode != 0:
+            return {"updated": False, "why": (r.stderr or r.stdout).strip()[-400:]}
+        pulled = r.stdout.strip()[-400:]
     name = (ctx.config.get("project") or {}).get("name") or ctx.root.name
     re_run = subprocess.run([str(root / "bin" / "anthill"), "install", "--force", "--name", name],
-                            cwd=ctx.root, capture_output=True, text=True)
-    return {"updated": re_run.returncode == 0, "pulled": r.stdout.strip()[-400:],
+                            cwd=ctx.root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    return {"updated": re_run.returncode == 0, "pulled": pulled,
             "install": (re_run.stdout + re_run.stderr).strip()[-600:]}
 
 
@@ -981,10 +1001,17 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     # are protected, whether a push needs them, where the venv is, whether units
     # run isolated. The one command an owner is told to run to stay current was
     # the command that undid their configuration.
-    for block in ("execution", "audit", "blueprint", "gates"):
+    for block in ("execution", "audit", "blueprint", "gates", "anthill"):
         existing = ctx.config.get(block)
         if isinstance(existing, dict) and existing:
             cfg[block] = {**cfg.get(block, {}), **existing}
+
+    # The Anthill version the team uses, recorded on a project's first install so
+    # every teammate's `anthill update` lands on the same one.
+    if ctx.v2 and not (cfg.get("anthill") or {}).get("version"):
+        from anthill import version
+        if version.here():
+            cfg["anthill"] = {**(cfg.get("anthill") or {}), "version": version.here()}
 
     written: list[str] = []
     if not write:

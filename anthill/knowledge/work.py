@@ -385,9 +385,18 @@ def where(ctx: Any) -> dict[str, Any]:
         "traps": [{"work": r["id"], "trap": t} for r in active for t in r["traps"]]
                  + [{"work": "everywhere", "trap": t} for t in _shared_traps(kd)],
         "upkeep_unattended": _unattended(ctx),
+        "anthill_version": _version(ctx),
         "howto": [{"title": h["frontmatter"].get("title", ""),
                    "page": str(h["path"].relative_to(root))} for h in load(kd, "howto")],
     }
+
+
+def _version(ctx: Any) -> dict[str, Any]:
+    try:
+        from anthill import version
+        return version.status(ctx)
+    except Exception:                       # noqa: BLE001
+        return {}
 
 
 def _unattended(ctx: Any) -> dict[str, Any] | None:
@@ -441,6 +450,10 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
               "working on them this minute: do not edit them without asking the owner.", ""]
         for u in w["uncommitted"]:
             L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
+    v = w.get("anthill_version") or {}
+    if v.get("team") and v.get("here") and not v.get("same"):
+        L += ["", f"⚠ This laptop runs Anthill `{v['here']}`; the team uses `{v['team']}`. "
+              "Run `anthill update` before working, or this chat follows different rules."]
     u = w.get("upkeep_unattended")
     if u:
         L += ["", f"⚠ The save at `{u['since']}` left {u['count']} thing(s) out of date and nobody "

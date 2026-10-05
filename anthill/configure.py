@@ -47,6 +47,8 @@ ALLOWED: dict[str, tuple[str, str]] = {
     "audit.escalate_verdicts": ("list", "verdicts that escalate to a human"),
     "blueprint.require_page": ("bool", "every gate also requires a knowledge page"),
     "blueprint.min_coverage": ("int", "gate refuses below this share of files with a page"),
+    "anthill.version": ("str", "the Anthill commit this project uses; `anthill update` "
+                               "brings every laptop to it"),
 }
 
 

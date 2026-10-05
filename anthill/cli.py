@@ -40,7 +40,7 @@ DELEGATED = [
     ("resume", "Pick up where this branch left off: work, next step, notes, commits"),
     ("correction", "Record that a page said something wrong: --page, --was, --now, --why"),
     ("obsidian", "Draw the anthill as linked notes for an Obsidian vault"),
-    ("update", "Pull the newest Anthill into its folder and re-render this project's rules"),
+    ("update", "Bring Anthill to the team's version (--latest --by <owner>: move the team forward)"),
     ("migrate", "Move this project to the new layout: what travels, what stays local"),
     ("goal", "Work to a goal end to end: set, step, decided, block, done (on the new layout, a sprint)"),
     ("score", "The scorecard: time to first change, messages per commit, what gets used"),
@@ -230,7 +230,9 @@ def _dispatch(argv: list[str]) -> int:
         if not ctx.installed:
             print(f"anthill: not installed in {ctx.root}", file=sys.stderr)
             return 2
-        out = inst.update(ctx)
+        rest = argv[1:]
+        by = rest[rest.index("--by") + 1] if "--by" in rest and rest.index("--by") + 1 < len(rest) else ""
+        out = inst.update(ctx, latest="--latest" in rest, by=by)
         print(out.get("pulled") or "", out.get("install") or out.get("why") or "", sep="\n")
         return 0 if out.get("updated") else 1
     if argv and argv[0] == "sprint" and (len(argv) == 1 or argv[1] in _SPRINT_VERBS):
