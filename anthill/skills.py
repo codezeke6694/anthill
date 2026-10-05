@@ -87,6 +87,11 @@ def load_all(ctx: _ctx.Context) -> list[dict]:
         return []
     found: list[dict] = []
     for manifest in sorted(root.rglob(MANIFEST)):
+        # A retired or template skill is not installed. Only the index skipped
+        # them, so `skill list --always-on` still told every chat to load 13
+        # archived skills and the blank template.
+        if manifest.relative_to(root).parts[0] in TEMPLATE_DIRS:
+            continue
         try:
             meta = _parse_manifest(manifest.read_text(encoding="utf-8"))
         except OSError:

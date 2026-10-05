@@ -1,0 +1,16 @@
+name: git-playbook
+category: development
+version: '1.0'
+description: How to work in a shared git repository — the perfect commit, branch naming,
+  pull requests with evidence, resolving a conflict properly, merge vs rebase, catching
+  up with main, recovering lost work, and two people on two features at once. Look it
+  up before a conflict, a rebase, a PR, or any history surgery.
+tags:
+- git
+- collaboration
+- merge
+- rebase
+- pull-request
+load_class: reference
+always_on: false
+author: anthill

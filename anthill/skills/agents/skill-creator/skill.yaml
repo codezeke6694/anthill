@@ -1,0 +1,12 @@
+name: skill-creator
+category: agents
+version: '2.0'
+description: Spotted something worth reusing? Propose it to the owner as a skill first;
+  on a yes, write it here. Covers when to propose, local vs global, the files, and
+  the index.
+tags:
+- skills
+- authoring
+load_class: conditional
+always_on: false
+author: anthill

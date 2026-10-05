@@ -1,0 +1,12 @@
+name: find-your-way
+category: agents
+version: '1.0'
+description: New to this codebase, or to a part of it? Run `anthill orient` for the whole
+  picture, then `anthill start "<task>"` for where a task lives, the line to read, what a
+  change reaches, and the tests that prove it. Both only read.
+tags:
+- navigation
+- cold-start
+load_class: bootstrap
+always_on: true
+author: anthill

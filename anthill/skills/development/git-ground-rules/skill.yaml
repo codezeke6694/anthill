@@ -1,0 +1,14 @@
+name: git-ground-rules
+category: development
+version: '1.0'
+description: The eight git rules no shared repository survives without — commit before
+  you pull, branch never main, resolved means tests pass, never rewrite shared history,
+  no secrets, no junk, never bypass a hook, the owner pushes. Short on purpose; the
+  detail is in git-playbook.
+tags:
+- git
+- collaboration
+- safety
+load_class: bootstrap
+always_on: true
+author: anthill
