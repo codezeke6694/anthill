@@ -115,17 +115,20 @@ true_at: <commit the page was last true at>
 - **Goals** become a sprint's steps and finishing check. A goal stops belonging to one chat: any chat, in any tool, can tick a step on any active sprint.
 - **The old sprint, board and unit machinery** becomes the planned kind. It is optional, and only a planned sprint can opt in. Its one idea worth keeping everywhere is the **locked finishing check**: the agent building the work cannot edit the check it must pass.
 
-### Parallel pieces (planned sprints only)
+### Parallel pieces: one lead chat, many helpers
 
-Some planned sprints hold many pieces that don't depend on each other, for example tests for six screens. Today the owner opens several chats and tells each one which piece to take. This makes that safe:
+For a big sprint with many independent parts. The owner talks to **one** chat and says "work on this sprint". That chat becomes the **lead**. Anthill tells it how to split the work and hand the independent parts to **helpers** it starts itself (Claude Code sub-agents). The owner never opens extra chats.
 
-1. **Plan the pieces.** Each piece names its files and its check. Planning refuses two pieces that share a file.
-2. **Each chat takes the next piece.** Level 1: the owner opens the chats and types "take the next piece" in each. Level 2: Anthill starts the agents itself.
-3. **Each piece gets its own copy of the project,** so chats can't collide.
-4. **Each piece closes only on its own check.** Finished pieces merge into one holding branch, and a clash between two pieces is stopped and shown.
-5. **The owner reviews the holding branch** and merges it into main.
+*Example:* "tests for six screens, plus a new export button." Anthill shows the lead that the six test pieces share no files, and that the export button touches the same screen as one of them, so it waits. The lead starts six helpers, each in its own copy of the project. Their work is merged onto one holding branch, and then the lead does the button.
 
-Claims and copies live in `local/board` and only exist on one laptop. Parallel pieces are a one-laptop feature.
+1. **Anthill finds what can run at once.** Pieces that share no files and don't wait on each other form a *wave*. Planning refuses two pieces in one wave that share a file.
+2. **Anthill writes each helper's brief:** the piece, its files, its check, and only the warnings and decisions that touch those files, so each helper starts light.
+3. **The lead starts one helper per piece,** each in its own copy of the project (worktree), so helpers can't collide.
+4. **Anthill referees.** A piece closes only if it stayed inside its files and its check passed. It then merges onto the holding branch. A clash between two pieces is stopped and shown.
+5. **Questions go through the lead.** A helper that needs an owner decision stops and says so. The lead collects the questions and puts them on the owner's page in one batch.
+6. **The next wave** starts once the pieces it waits on are done. The owner reviews the holding branch and merges it.
+
+Limits: each helper reads its own context, so the cost grows with the number of helpers (worth it for big sprints only). Helpers are the same model as the lead and share its blind spots. A tool that can't start helpers runs the waves one piece at a time. Claims and copies live in `local/board`, so this is a one-laptop feature.
 
 ### Closing a sprint
 
@@ -232,7 +235,7 @@ Deleting needs the owner's yes at the time it happens.
 4. **Skills**: global and local, plus the agent's proposal question.
 5. **Regroup the tool's code by job.**
 6. **Ship it**: put the version pin in settings and have `anthill update` follow it.
-7. **Parallel pieces**: level 1 first (the owner opens the chats), then level 2 (Anthill starts the agents), each with tests.
+7. **Parallel pieces**: waves, helper briefs, the referee and the holding branch, with tests; the lead-chat rules for Claude Code, and the one-at-a-time fallback for other tools.
 
 ---
 
@@ -262,5 +265,5 @@ Each issue is a question we can't yet answer with evidence. The current readings
 - 5 Oct 2026, owner: skills are global (shipped) plus local (agent-proposed, owner-approved).
 - 5 Oct 2026, owner: Anthill is its own repo, pulled into each project. One project has one Anthill.
 - 5 Oct 2026, owner: the file structure is split into what travels and what stays local. Locked.
-- 5 Oct 2026, owner: running several agents at once stays, for long sprints with a lot of independent work.
+- 5 Oct 2026, owner: running several agents at once stays, for big sprints with a lot of independent work. It works as one lead chat that Anthill guides to start helper agents, not as the owner opening several chats.
 - 5 Oct 2026, owner: the Obsidian picture stays (the owner uses it); it is a picture, regenerated, and lives with the local files.

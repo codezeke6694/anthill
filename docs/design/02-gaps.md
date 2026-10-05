@@ -72,7 +72,7 @@ On one machine, the owner and an agent run the same git and the same files. Anth
 
 | # | What | Why |
 |---|---|---|
-| E1 | Pool mode (several agents run by Anthill) | **keep, and make it real** (owner, 5 Oct: needed for long sprints with lots of independent work). Becomes *parallel pieces* in a planned sprint: level 1, the owner opens the chats and each says "take the next piece"; level 2, Anthill starts the agents itself. Needs tests, a planning check that no two pieces share a file, and a visible holding branch. See `01-structure.md` §3 |
+| E1 | Pool mode (several agents run by Anthill) | **keep, and make it real** (owner, 5 Oct: needed for long sprints with lots of independent work). Becomes *parallel pieces*: the owner tells one lead chat to work on the sprint, and Anthill guides it to start helper agents for the independent parts, wave by wave. Needs tests, a planning check that no two pieces in a wave share a file, short helper briefs, and a visible holding branch. See `01-structure.md` §3 |
 | E2 | The test/code split and the auditor | both leak (the builder can edit the tester's files; the auditor isn't read-only). Replace them with the **locked finishing check**: the agent can't edit the check it must pass |
 | E3 | The 30-minute automatic release of a claim | silently frees a piece a slow chat still holds. Replace it with a heartbeat each chat sends, and show a "possibly abandoned" piece on the owner's page before anything is released |
 | E4 | `tidy`, Obsidian picture, `impact`, `card`, `control` as separate commands | barely used. Fold them into `where` and `start`, or remove them (M8) |
