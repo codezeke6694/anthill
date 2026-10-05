@@ -183,7 +183,7 @@ def test_install_surveys_the_code_before_it_finishes(tmp_path, monkeypatch):
 def test_where_has_a_budget_and_all_shows_everything(project):
     for i in range(6):
         page(project.root, f"work/job{i}.md",
-             f"---\nid: job{i}\ntitle: Job {i}\nstate: in-progress\nbranch: work/other{i}\n"
+             f"---\nid: job{i}\ntitle: Job {i}\nstate: in-progress\n"
              f"updated: 2026-10-0{i + 1}\nnext: step {i}\n---\n\n## Traps\n\n- trap of job {i}\n")
     out = anthill(project.root, "where")
     assert "**Job 5** — in progress" in out and "**Job 4** — in progress" in out   # the latest two, in full
@@ -192,3 +192,14 @@ def test_where_has_a_budget_and_all_shows_everything(project):
     assert "and 4 more on the other sprints" in out
     full = anthill(project.root, "where", "--all")
     assert "trap of job 0" in full and "Also open" not in full
+
+
+def test_a_sprint_whose_branch_is_gone_shows_as_paused(project):
+    page(project.root, "work/old.md", "---\nid: old\ntitle: Old work\nstate: in-progress\n"
+         "branch: work/deleted-long-ago\nupdated: 2026-10-09\n---\n")
+    row = [r for r in __import__("anthill.knowledge.work", fromlist=["x"]).where(project)["work"]
+           if r["id"] == "old"][0]
+    assert row["state"] == "paused" and row["branch_gone"]
+    out = anthill(project.root, "where")
+    assert "- **Old work** — paused (its branch is gone)" in out
+    assert "state: in-progress" in (project.sprint_pages_dir / "active" / "old.md").read_text()  # not rewritten

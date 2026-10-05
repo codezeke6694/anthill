@@ -40,6 +40,30 @@ REQUIRED_FIELDS = (
 # Module and architecture pages additionally require a review date.
 REVIEW_REQUIRED_TYPES = ("module", "architecture")
 
+# The fields above describe a page about code: who owns it, how critical it is,
+# the commit it was checked against. A decision, a work page or a how-to is a
+# different thing, and holding it to a code page's form failed 22 of 24 pages
+# on one project -- every decision and work page "blocked" (B5). Each kind is
+# checked for what it is.
+CODE_TYPES = ("module", "architecture", "incident", "concept", "integration")
+KIND_FIELDS = {
+    "decision": ("id", "title"),
+    "work": ("id", "title", "state"),
+    "howto": ("title",),
+}
+
+
+def page_kind(page: dict[str, Any]) -> str:
+    """`code`, `decision`, `work`, `howto` or `note`, from the type, else the folder."""
+    t = str(page["frontmatter"].get("type", "")).strip().lower()
+    if t in CODE_TYPES:
+        return "code"
+    if t in KIND_FIELDS:
+        return t
+    top = str(page.get("path", "")).replace("\\", "/").split("/", 1)[0]
+    return {"modules": "code", "architecture": "code", "incidents": "code",
+            "decisions": "decision", "work": "work", "howto": "howto"}.get(top, "note")
+
 # `verified_against: <prefix>@<7-to-40-hex>` -- the same grammar claims.py pins on.
 _PIN_GRAMMAR = re.compile(r"^[a-z0-9][a-z0-9._-]*@[0-9a-f]{7,40}$")
 # The honest placeholder the Kit blesses while a page is still a draft.
@@ -248,6 +272,17 @@ def validate(pages: list[dict[str, Any]], source_root: Path | None = None) -> li
 
     for page in pages:
         fm = page["frontmatter"]
+        kind = page_kind(page)
+        if kind != "code":
+            for field in KIND_FIELDS.get(kind, ()):
+                if not str(fm.get(field, "")).strip():
+                    add(page, "error", "missing_field",
+                        f"a {kind} page needs `{field}`")
+            for rule in page["rules"]:
+                if not rule["cites"]:
+                    add(page, "info", "uncited_rule",
+                        f"{rule['rule_id']} cites no symbol, so nothing can falsify it")
+            continue
         for field in REQUIRED_FIELDS:
             if field not in fm or (fm[field] == "" and field not in ("aliases", "related")):
                 add(page, "error", "missing_field", f"required frontmatter `{field}` is absent or blank")

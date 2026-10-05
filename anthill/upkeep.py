@@ -223,19 +223,71 @@ def run(ctx: _ctx.Context, since: str = "HEAD~1", record: bool = False) -> dict[
             files.add(subj[5:])
         elif "@" in subj and "::" in subj:
             files.add(subj.rsplit("@", 1)[1].split("::", 1)[0])
-    now = check(ctx, files)
+    saved = load(ctx)
+    suggested = saved.get("suggested") or {}
+    # A test the keeper has already described to the owner is closed here: the
+    # keeper can only suggest a test, so the item could never clear (C6).
+    now = [it for it in check(ctx, files) if it["subject"] not in suggested]
     head = _git(["rev-parse", "--short", "HEAD"], ctx.root).strip()
     first_seen = {it["subject"]: it.get("since", "") for it in prior}
     for it in now:
         it["since"] = first_seen.get(it["subject"]) or head
     cleared = sorted(set(first_seen) - {it["subject"] for it in now})
     out = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "head": head,
-           "open": now, "cleared": cleared}
+           "open": now, "cleared": cleared, "suggested": suggested,
+           # Did anyone pick this list up? Set when the keeper reads it (C5).
+           "picked_up": saved.get("picked_up") if not now else None}
     if record:
         p = _record_path(ctx)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     return out
+
+
+TESTS_WANTED = "tests-wanted.md"
+
+
+def _save(ctx: _ctx.Context, data: dict[str, Any]) -> None:
+    p = _record_path(ctx)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def picked_up(ctx: _ctx.Context) -> None:
+    """The keeper (or anyone) read the list: the save was not left alone."""
+    data = load(ctx)
+    if data.get("open"):
+        data["picked_up"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _save(ctx, data)
+
+
+def suggest(ctx: _ctx.Context, subject: str, test: str) -> dict[str, Any]:
+    """Close a no-test item by writing what its test should check where the owner sees it."""
+    data = load(ctx)
+    item = next((it for it in data.get("open") or [] if it.get("subject") == subject), None)
+    if item is None:
+        raise LookupError(f"no open upkeep item {subject!r}")
+    page = ctx.knowledge_dir / TESTS_WANTED
+    text = page.read_text(encoding="utf-8") if page.exists() else (
+        "# Tests wanted\n\nCode that changed with no test. Each line says what a test would "
+        "check; the owner turns one into a bug or short sprint, or deletes the line.\n\n")
+    day = datetime.now().astimezone().date().isoformat()
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(text.rstrip("\n") + f"\n- **{item.get('detail', subject)}** — {test.strip()} ({day})\n",
+                    encoding="utf-8")
+    data.setdefault("suggested", {})[subject] = {"test": test.strip(), "at": day}
+    data["open"] = [it for it in data["open"] if it.get("subject") != subject]
+    data["picked_up"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _save(ctx, data)
+    return {"suggested": subject, "page": str(page.relative_to(ctx.root))}
+
+
+def unattended(ctx: _ctx.Context) -> dict[str, Any] | None:
+    """Items a save left that nobody has picked up, for `where` to say out loud."""
+    data = load(ctx)
+    if data.get("open") and not data.get("picked_up"):
+        return {"count": len(data["open"]), "since": data.get("head", "")}
+    return None
 
 
 HANDOFF = ("Hand this to the anthill-keeper helper in the background and carry on "
@@ -264,10 +316,25 @@ def main(argv: list[str] | None = None) -> int:
                     help="save the open list (the post-commit hook does this)")
     ap.add_argument("--open", action="store_true", help="print the saved open list only")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--suggest", default="", metavar="SUBJECT",
+                    help="close a no-test item: write what its test should check (with --test)")
+    ap.add_argument("--test", default="", help="what a test for --suggest should check")
     args = ap.parse_args(argv)
     ctx = _ctx.resolve(None)
     if not ctx.installed:
         return 0
+    if args.suggest:
+        if not args.test.strip():
+            print("anthill upkeep --suggest needs --test \"<what a test should check>\"", file=sys.stderr)
+            return 2
+        try:
+            print(json.dumps(suggest(ctx, args.suggest, args.test)))
+        except LookupError as exc:
+            print(f"anthill upkeep: {exc}", file=sys.stderr)
+            return 2
+        return 0
+    if args.open:
+        picked_up(ctx)
     out = load(ctx) if args.open else run(ctx, args.since, args.record)
     out.setdefault("cleared", [])
     print(json.dumps(out, indent=2) if args.json else render(out), end="" if not args.json else "\n")

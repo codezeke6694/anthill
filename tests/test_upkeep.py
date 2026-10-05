@@ -157,3 +157,24 @@ def test_the_keeper_is_told_to_write_only_what_it_can_show(project):
     assert "## Before you write a fact" in text
     assert "quote their words" in text and "suspected:" in text
     assert "correction --page" in text
+
+
+def test_a_test_suggestion_closes_the_item_and_reaches_the_owner(project):
+    write(project.root, "pkg/extra.py", '"""Extra."""\ndef more(x):\n    return x + 1\n')
+    commit_all(project.root, "extra")
+    out = upkeep(project.root, "--record")
+    item = next(i for i in out["open"] if i["kind"] == "tests")
+    anthill(project.root, "upkeep", "--suggest", item["subject"], "--test", "more(1) is 2")
+    wanted = (project.knowledge_dir / "tests-wanted.md").read_text()
+    assert "more(1) is 2" in wanted
+    again = upkeep(project.root, "--record")                     # the next save keeps it closed
+    assert item["subject"] not in {i["subject"] for i in again["open"]}
+
+
+def test_where_says_when_nobody_picked_up_a_save(project):
+    write(project.root, "pkg/extra.py", '"""Extra."""\ndef more(x):\n    return x + 1\n')
+    commit_all(project.root, "extra")
+    upkeep(project.root, "--record")
+    assert "nobody picked them up" in anthill(project.root, "where")
+    anthill(project.root, "upkeep", "--open")                    # the keeper's first step
+    assert "nobody picked them up" not in anthill(project.root, "where")

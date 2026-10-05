@@ -106,3 +106,25 @@ def test_a_next_step_that_wraps_is_read_whole():
                                  "  fixes from the 30 Sep run\nstate: paused\n---\n")
     assert fm["next"] == "Reply pending from the owner on three fixes from the 30 Sep run"
     assert fm["state"] == "paused"
+
+
+def test_where_says_where_an_answer_came_from(project):
+    from anthill.ui import actions
+    run(project.root, "sprint", "start", "Refunds", "--check", "true")
+    p = page.find(project, "refunds")
+    p.write_text(p.read_text().replace("## Owner's answers\n",
+                 "## Owner's answers\n\n- 5 Oct — on “Show refunds?”: **No** (said in chat)\n"))
+    actions.answer(project, "refunds", "Round half up?", "Yes, half up")
+    out = work.render(work.where(project))
+    assert "Recorded by an agent as the owner's answer (not from their page): 5 Oct" in out
+    assert "The owner answered, on their page:" in out and "Yes, half up" in out
+
+
+def test_a_sprint_closed_by_hand_shows_red(project):
+    run(project.root, "sprint", "start", "Refunds", "--check", "false")
+    g = page.load(project, "refunds")
+    g["status"] = "done"                                  # no passing check: closed by hand
+    page.save(project, g)
+    w = work.where(project)
+    assert [c["id"] for c in w["closed_without_check"]] == ["refunds"]
+    assert "its check never passed" in work.render(w)

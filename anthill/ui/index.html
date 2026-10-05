@@ -517,7 +517,12 @@
 
     // decisions & traps
     $("dec-n").textContent = (w.decisions || []).length || "";
-    fill("decisions", (w.decisions || []).map((d) => { const x = el("div", ""); x.style.padding = "6px 0"; x.append(el("div", "", d.title), el("div", "small", d.decided || "")); return x; }), "None recorded.");
+    fill("decisions", (w.decisions || []).map((d) => {
+      const x = el("div", ""); x.style.padding = "6px 0";
+      x.append(el("div", "", d.title), el("div", "small", (d.decided || "") + (d.from_sprint && !d.signed ? " · recorded from " + d.from_sprint + ", not yet signed" : "")));
+      const rel = String(d.page || "").split(".anthill/").slice(1).join(".anthill/");
+      if (d.from_sprint && !d.signed && KEY && rel) { const a = el("div", "act"); a.append(twice("sign:" + rel, "Sign it as what I decided", () => press("/api/sign", { page: rel }))); x.append(a); }
+      return x; }), "None recorded.");
     const byWork = {};
     (w.traps || []).forEach((t) => (byWork[t.work] = byWork[t.work] || []).push(t.trap));
     fill("traps", Object.keys(byWork).sort((a, b) => (a === "everywhere" ? -1 : b === "everywhere" ? 1 : a.localeCompare(b))).map((k) => {

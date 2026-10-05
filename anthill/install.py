@@ -625,7 +625,9 @@ code right now; touching it would collide with them.
      citation. If the code now does something else, rewrite the rule to say
      what it does and add a History line saying what changed and when.
    - **tests, changed code no test imports**: do not write the test. Say in one
-     line what a test for it would need to check.
+     line what a test for it would need to check, and record it:
+     `{cmd} upkeep --suggest "<the item's subject>" --test "<what it should check>"`.
+     That puts it on the owner's tests-wanted page and closes the item.
    - **work, a page is behind its branch**: read `git log <true_at>..<branch>`
      and the diffs, then bring the page's What, Where, Next, Waiting on the
      owner and History up to date. Cite every file your statements depend on

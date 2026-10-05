@@ -285,9 +285,39 @@ def uncommitted(root: Path, active: list[dict[str, Any]], pages_: list[dict[str,
     return out
 
 
+def _page_answers(ctx: Any) -> list[tuple[str, str]]:
+    """(work id, answer text) for every answer the owner gave on their page.
+
+    An answer on a page with no such entry was written by someone else: an
+    agent recording what the owner said in chat (legitimate, and common) or
+    an agent putting words in their mouth. `where` says which is which (D4).
+    """
+    try:
+        from anthill import trail
+        events = trail.read(ctx)
+    except Exception:                       # noqa: BLE001
+        return []
+    return [(str(e.get("work") or e.get("goal") or ""), str(e.get("text") or ""))
+            for e in events if e.get("kind") == "answer" and e.get("via") == "owner page"]
+
+
+def _closed_without_check(path: Path) -> bool:
+    """A sprint filed as done whose own record has no passing check (D5)."""
+    sp = path.with_suffix(".json")
+    if not sp.exists():
+        return False                        # a page from before sprints: nothing to check
+    try:
+        import json
+        g = json.loads(sp.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return not ((g.get("result") or {}).get("passed")) and bool(g.get("done_when"))
+
+
 def where(ctx: Any) -> dict[str, Any]:
     kd, root = ctx.knowledge_dir, ctx.root
     work = load_work(ctx)
+    from_page = _page_answers(ctx)
     decisions = load(kd, DECISIONS_DIR)
     active, finished = [], []
     for p in work:
@@ -305,6 +335,7 @@ def where(ctx: Any) -> dict[str, Any]:
             "updated": str(fm.get("updated", "")),
             "waiting_on_owner": _bullets(s.get("waiting on the owner", "")),
             "owner_answers": _bullets(s.get("owner's answers", "")),
+            "page_answer_texts": [t for w_, t in from_page if w_ == (fm.get("id") or p["path"].stem)],
             "traps": _bullets(s.get("traps", "")),
             "page": str(p["path"].relative_to(root)),
             "drift": drift(root, p),
@@ -312,6 +343,14 @@ def where(ctx: Any) -> dict[str, Any]:
             "confirmed_by_owner": bool(str(fm.get("intent_attested_by") or "").strip()),
             "units": [u.strip() for u in re.split(r"[,\s]+", str(fm.get("units") or fm.get("unit") or "").strip("[]")) if u.strip()],
         }
+        texts = row.pop("page_answer_texts")
+        row["answers_from_page"] = [any(t and t[:60] in a for t in texts) for a in row["owner_answers"]]
+        if str(row["state"]) == "done" and _closed_without_check(p["path"]):
+            row["closed_without_check"] = True
+        if row["state"] in ACTIVE and row["drift"].get("branch_missing"):
+            # Its branch was deleted, so whatever the page says, nobody is on it
+            # (B6). Shown as paused, never rewritten here: `where` only reads.
+            row["state"], row["branch_gone"] = "paused", True
         (active if row["state"] in ACTIVE else finished).append(row)
     order = {"waiting-on-owner": 0, "in-progress": 1, "paused": 2}
     active.sort(key=lambda r: (order.get(r["state"], 3), r["updated"]), reverse=False)
@@ -331,17 +370,32 @@ def where(ctx: Any) -> dict[str, Any]:
         "unpushed_commits": unpushed,
         "work": active,
         "finished": [{"id": r["id"], "title": r["title"]} for r in finished],
+        "closed_without_check": [{"id": r["id"], "title": r["title"], "page": r["page"]}
+                                 for r in finished if r.get("closed_without_check")],
         "untracked": untracked(root, tracked, base=base_branch(
             root, str((getattr(ctx, "config", {}) or {}).get("execution", {}).get("base_branch") or ""))),
         "decisions": [{"id": d["frontmatter"].get("id") or d["path"].stem,
                        "title": d["frontmatter"].get("title", ""),
                        "decided": str(d["frontmatter"].get("decided", "")),
+                       # A decision filed when a sprint closed is the agent's
+                       # account of it until the owner signs it (C10).
+                       "signed": bool(str(d["frontmatter"].get("intent_attested_by") or "").strip()),
+                       "from_sprint": str(d["frontmatter"].get("source") or ""),
                        "page": str(d["path"].relative_to(root))} for d in decisions],
         "traps": [{"work": r["id"], "trap": t} for r in active for t in r["traps"]]
                  + [{"work": "everywhere", "trap": t} for t in _shared_traps(kd)],
+        "upkeep_unattended": _unattended(ctx),
         "howto": [{"title": h["frontmatter"].get("title", ""),
                    "page": str(h["path"].relative_to(root))} for h in load(kd, "howto")],
     }
+
+
+def _unattended(ctx: Any) -> dict[str, Any] | None:
+    try:
+        from anthill import upkeep
+        return upkeep.unattended(ctx)
+    except Exception:                       # noqa: BLE001 -- a check never breaks `where`
+        return None
 
 
 def _shared_traps(knowledge_dir: Path) -> list[str]:
@@ -363,7 +417,7 @@ def _cut(text: str, n: int) -> str:
 def focus(w: dict[str, Any]) -> set[str]:
     """Sprints worth reading in full: this branch's, and the latest few others."""
     here = {r["id"] for r in w["work"] if r["branch"] and r["branch"] == w["branch"]}
-    others = sorted((r for r in w["work"] if r["id"] not in here),
+    others = sorted((r for r in w["work"] if r["id"] not in here and not r.get("branch_gone")),
                     key=lambda r: r["updated"], reverse=True)[:FOCUS_OTHERS]
     return here | {r["id"] for r in others}
 
@@ -387,6 +441,10 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
               "working on them this minute: do not edit them without asking the owner.", ""]
         for u in w["uncommitted"]:
             L.append(f"- `{u['file']}`" + (f" — {', '.join(u['work'])}" if u["work"] else ""))
+    u = w.get("upkeep_unattended")
+    if u:
+        L += ["", f"⚠ The save at `{u['since']}` left {u['count']} thing(s) out of date and nobody "
+              "picked them up: `anthill upkeep --open`, then hand them to the keeper."]
     asks = [(r, q) for r in w["work"] for q in r["waiting_on_owner"]]
     if asks:
         L += ["", "## Waiting on the owner", ""]
@@ -401,6 +459,7 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
         kind = f"{r['kind']} sprint · " if r.get("kind") else ""
         st = r.get("steps") or {}
         head = (f"**{r['title']}** — {kind}{r['state'].replace('-', ' ')}"
+                + (" (its branch is gone)" if r.get("branch_gone") else "")
                 + (f" · {st['done']}/{st['total']} steps" if st else ""))
         if r["id"] not in shown:
             brief.append(f"- {head}" + (f" — next: {_cut(r['next'], 110)}" if r["next"] else "")
@@ -410,9 +469,11 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
                  + (f" · updated {r['updated']}" if r["updated"] else ""))
         if r["next"]:
             L.append(f"  - Next: {_cut(r['next'], 400) if not full else r['next']}")
-        answers = r.get("owner_answers") or []
-        for a in (answers if full else answers[-3:]):
-            L.append(f"  - The owner answered: {_cut(a, 240) if not full else a}")
+        answers = list(zip(r.get("owner_answers") or [], r.get("answers_from_page") or []))
+        for a, on_page in (answers if full else answers[-3:]):
+            said = "The owner answered, on their page" if on_page else \
+                "Recorded by an agent as the owner's answer (not from their page)"
+            L.append(f"  - {said}: {_cut(a, 240) if not full else a}")
         d = r["drift"]
         if d.get("behind"):
             L.append(f"  - ⚠ This page may be behind: {len(d['behind'])} commit(s) on its "
@@ -431,6 +492,9 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
         L.append(f"  - Read: `{r['page']}`")
     if brief:
         L += ["", "Also open:" if len(brief) < len(w["work"]) else "", *brief]
+    for c in w.get("closed_without_check") or []:
+        L += ["", f"⚠ **{c['title']}** is marked done but its check never passed — it was closed "
+              f"by hand. Reopen it or run its check: `{c['page']}`"]
     if not w["work"] and w.get("recent"):
         L += ["", "## What has been happening (from git, no pages yet)", ""]
         L += [f"- {r}" for r in w["recent"]]
@@ -443,7 +507,9 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
     if w["decisions"]:
         L += ["", "## What the owner has decided", ""]
         for d in w["decisions"]:
-            L.append(f"- {d['title']}" + (f" ({d['decided']})" if d["decided"] else ""))
+            L.append(f"- {d['title']}" + (f" ({d['decided']})" if d["decided"] else "")
+                     + (f" — recorded from {d['from_sprint']}, not yet signed by the owner"
+                        if d.get("from_sprint") and not d.get("signed") else ""))
     traps = [t for t in w["traps"] if t["work"] == "everywhere" or t["work"] in shown]
     hidden = len(w["traps"]) - len(traps)
     if traps or hidden:
