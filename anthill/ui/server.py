@@ -87,7 +87,11 @@ def _todo(where: dict[str, Any], ctx: _ctx.Context) -> dict[str, Any]:
 def _goals(ctx: _ctx.Context) -> list[dict[str, Any]]:
     from anthill import goal
     try:
-        return [{**g, "next": goal.next_step(g)} for g in goal.all_goals(ctx)[:12]]
+        gs = goal.all_goals(ctx)
+        if ctx.v2:
+            # Every piece of work is a sprint now; a goal is one with a check, still open.
+            gs = [g for g in gs if g.get("done_when") and g.get("status") != "done"]
+        return [{**g, "next": goal.next_step(g)} for g in gs[:12]]
     except Exception:                         # noqa: BLE001
         return []
 
