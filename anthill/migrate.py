@@ -282,6 +282,15 @@ def apply(ctx: _ctx.Context, now: bool = False) -> dict:
                 "you know it has stopped.", "last": p["blocked_by"]["another_chat_active"]}
 
     name = (ctx.config.get("project") or {}).get("name") or ctx.root.name
+    # A project that keeps Anthill's rules files in its own git was set up for
+    # the whole team to share them. Keep it that way: the re-install rewrites
+    # those files with the new rules, instead of writing CLAUDE.local.md beside
+    # a committed CLAUDE.md that still says the old ones.
+    shared_rules = _tracked(ctx, "CLAUDE.md") and "Anthill" in (ctx.root / "CLAUDE.md").read_text(
+        encoding="utf-8", errors="replace")[:2000]
+    if shared_rules and "local" not in (ctx.config.get("install") or {}):
+        ctx.config.setdefault("install", {})["local"] = False
+        ctx.save_config()
     refused: list[str] = []
     moved = []
     for old, new in MOVES:

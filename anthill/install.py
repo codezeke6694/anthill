@@ -571,8 +571,17 @@ def merge_claude_hooks(settings: dict[str, Any], cmd: str) -> list[str]:
     for event, verb in CLAUDE_HOOKS.items():
         groups = hooks.setdefault(event, [])
         line = f'"{cmd}" {verb}'
-        if any(verb in h.get("command", "") and "anthill" in h.get("command", "")
-               for g in groups for h in (g.get("hooks") or [])):
+        ours = [h for g in groups for h in (g.get("hooks") or [])
+                if verb in h.get("command", "") and "anthill" in h.get("command", "")]
+        if ours:
+            # Ours, but pointing at another copy of Anthill -- one installed from
+            # outside the project, before it moved in. Left alone, every chat kept
+            # running the old copy's hooks against the new layout, which found
+            # nothing installed and stayed silent.
+            for h in ours:
+                if h.get("command") != line:
+                    h["command"] = line
+                    added.append(f"{event} (repointed)")
             continue
         groups.append({"hooks": [{"type": "command", "command": line, "timeout": 20}]})
         added.append(event)
@@ -1082,6 +1091,10 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
             settings = {}
     perms = settings.setdefault("permissions", {})
     deny = perms.setdefault("deny", [])
+    if ctx.v2:
+        # The old layout's locks name paths that no longer exist here.
+        stale = set(deny_rules(PROTECTED_PATHS)) - set(deny_rules(protected_paths(ctx)))
+        deny[:] = [r for r in deny if r not in stale]
     added = [r for r in deny_rules(protected_paths(ctx)) if r not in deny]
     deny.extend(added)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
