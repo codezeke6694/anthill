@@ -11,7 +11,7 @@ Every gap falls into one of five groups:
 | **B · Bugs** | small, clear fixes | 8 |
 | **C · Improvements** | real work, but clear what to build | 10 |
 | **D · Can't be fully stopped, so make it visible** | on one machine, an agent and the owner run the same programs | 6 |
-| **E · Remove or park** | unused, and costly to keep | 4 |
+| **E · Remove, or rebuild to be real** | unused or broken today | 4 |
 
 **The rule for group D:** *if Anthill can't stop it, it has to show it.* Every write that didn't come through the sanctioned path shows up red on the owner's page and in `where`. A determined agent can still do it, but it can't do it quietly.
 
@@ -72,9 +72,9 @@ On one machine, the owner and an agent run the same git and the same files. Anth
 
 | # | What | Why |
 |---|---|---|
-| E1 | Pool mode (several agents run by Anthill) | built, never run, no tests. Park it behind a switch with a "not tested" label, or remove it |
+| E1 | Pool mode (several agents run by Anthill) | **keep, and make it real** (owner, 5 Oct: needed for long sprints with lots of independent work). Becomes *parallel pieces* in a planned sprint: level 1, the owner opens the chats and each says "take the next piece"; level 2, Anthill starts the agents itself. Needs tests, a planning check that no two pieces share a file, and a visible holding branch. See `01-structure.md` §3 |
 | E2 | The test/code split and the auditor | both leak (the builder can edit the tester's files; the auditor isn't read-only). Replace them with the **locked finishing check**: the agent can't edit the check it must pass |
-| E3 | The 30-minute automatic release of a claim | only matters with the board; goes with E1 |
+| E3 | The 30-minute automatic release of a claim | silently frees a piece a slow chat still holds. Replace it with a heartbeat each chat sends, and show a "possibly abandoned" piece on the owner's page before anything is released |
 | E4 | `tidy`, Obsidian picture, `impact`, `card`, `control` as separate commands | barely used. Fold them into `where` and `start`, or remove them (M8) |
 
 ---
@@ -83,12 +83,13 @@ On one machine, the owner and an agent run the same git and the same files. Anth
 
 | Build step (from `01-structure.md`) | Gaps closed along the way |
 |---|---|
-| 1. Clean out | A4, A5, E1, E3 |
+| 1. Clean out | A4, A5 |
 | 2. New layout | A1, B8 |
 | 3. Sprint pages | A2, A3, B1, B5, B6, C1, C2, C5, C6, C10, D4, D5, E2 |
 | 4. Skills | A5 |
 | 5. Regroup the code | B2, B3, B4, B7, E4 |
 | 6. Ship | C9 |
+| 7. Parallel pieces | E1, E3 |
 | then | C3, C4, C7, C8 (the map); D1, D2, D3, D6 (visibility) |
 
 What can't be closed, only measured: whether Anthill makes the owner faster (M1), and whether agents keep the rules that are only asked (M7).

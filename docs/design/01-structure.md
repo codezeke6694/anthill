@@ -115,6 +115,18 @@ true_at: <commit the page was last true at>
 - **Goals** become a sprint's steps and finishing check. A goal stops belonging to one chat: any chat, in any tool, can tick a step on any active sprint.
 - **The old sprint, board and unit machinery** becomes the planned kind. It is optional, and only a planned sprint can opt in. Its one idea worth keeping everywhere is the **locked finishing check**: the agent building the work cannot edit the check it must pass.
 
+### Parallel pieces (planned sprints only)
+
+Some planned sprints hold many pieces that don't depend on each other, for example tests for six screens. Today the owner opens several chats and tells each one which piece to take. This makes that safe:
+
+1. **Plan the pieces.** Each piece names its files and its check. Planning refuses two pieces that share a file.
+2. **Each chat takes the next piece.** Level 1: the owner opens the chats and types "take the next piece" in each. Level 2: Anthill starts the agents itself.
+3. **Each piece gets its own copy of the project,** so chats can't collide.
+4. **Each piece closes only on its own check.** Finished pieces merge into one holding branch, and a clash between two pieces is stopped and shown.
+5. **The owner reviews the holding branch** and merges it into main.
+
+Claims and copies live in `local/board` and only exist on one laptop. Parallel pieces are a one-laptop feature.
+
 ### Closing a sprint
 
 1. The finishing check runs. Only a pass closes the sprint.
@@ -220,6 +232,7 @@ Deleting needs the owner's yes at the time it happens.
 4. **Skills**: global and local, plus the agent's proposal question.
 5. **Regroup the tool's code by job.**
 6. **Ship it**: put the version pin in settings and have `anthill update` follow it.
+7. **Parallel pieces**: level 1 first (the owner opens the chats), then level 2 (Anthill starts the agents), each with tests.
 
 ---
 
@@ -249,3 +262,5 @@ Each issue is a question we can't yet answer with evidence. The current readings
 - 5 Oct 2026, owner: skills are global (shipped) plus local (agent-proposed, owner-approved).
 - 5 Oct 2026, owner: Anthill is its own repo, pulled into each project. One project has one Anthill.
 - 5 Oct 2026, owner: the file structure is split into what travels and what stays local. Locked.
+- 5 Oct 2026, owner: running several agents at once stays, for long sprints with a lot of independent work.
+- 5 Oct 2026, owner: the Obsidian picture stays (the owner uses it); it is a picture, regenerated, and lives with the local files.
