@@ -15,6 +15,20 @@ Every gap falls into one of five groups:
 
 **The rule for group D:** *if Anthill can't stop it, it has to show it.* Every write that didn't come through the sanctioned path shows up red on the owner's page and in `where`. A determined agent can still do it, but it can't do it quietly.
 
+## Where this stands (5 Oct 2026, branch `work/structure`)
+
+**Closed, with tests:** A1–A5, B1–B7, C1–C7, C9, C10, D1–D5, E1 (rebuilt as parallel
+pieces), E2 (the locked check), E3 (goes with the board: parallel pieces have no
+silent release).
+
+**Still open:**
+- **B8** — git hooks still name an absolute path when Anthill is installed from
+  outside a project; installed inside it (the default), they are relative.
+- **C8** — the map's accuracy is unchanged (first project: 52% / 65% / 78% on 168
+  past commits, old and new code alike). Improving it is a measuring job (M3).
+- **D6** — a system prompt (Touch ID) for owner-only actions: not explored yet.
+- **E4** — folding the barely-used commands: part of the tidy (build step 5).
+
 ---
 
 ## A · Solved by the new structure

@@ -229,6 +229,9 @@ Deleting needs the owner's yes at the time it happens.
 
 ## 9. Build order
 
+Done on `work/structure`, 5 Oct 2026: 1, 2, 3, 4, 6, 7. The owner moved step 5, the
+code regroup, to the end ("first we build what we have to, then we can tidy").
+
 1. **Clean out the dead weight**, so what is left is only what is in use.
 2. **Make the new layout**, with the old paths still readable during the switch so no sprint breaks mid-way.
 3. **Sprint pages**: three kinds, goals folded in, any chat can continue any sprint.
