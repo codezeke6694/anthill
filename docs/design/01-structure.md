@@ -127,7 +127,7 @@ true_at: <commit the page was last true at>
 
 The shelf holds what stays true after a sprint ends. A sprint page links to the decisions and warnings it used, and the shelf never links back to a single sprint.
 
-**Why it is separate.** A chat in the placement sprint learns that restarting the server with auto-reload stops news collection. Next month, a bug sprint about missing news must still see that warning. If the warning were filed under the placement sprint, it would never see it.
+**Why it is separate.** During a short sprint on the search screen, a chat learns that restarting the server with auto-reload on silently stops the background jobs. Next month, a bug sprint about missing data must still see that warning. If the warning were filed under the search sprint, it would never see it.
 
 Who writes what:
 
