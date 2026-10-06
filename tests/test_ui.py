@@ -82,7 +82,7 @@ def test_a_page_started_by_an_agent_has_no_working_buttons(project):
 def test_agents_are_told_how_to_run_it_with_the_app(project):
     for doc in ("CLAUDE.md", "AGENTS.md"):
         text = (project.root / doc).read_text()
-        assert "anthill ui start --detach --with-parent $$" in text and "never ask for" in text
+        assert "anthill ui wire" in text and "never ask for" in text
     assert "--with-parent $$" in rules.owner_view_rule(project)
 
 
@@ -114,3 +114,36 @@ def test_a_page_started_from_a_terminal_prints_its_key_once(project):
         assert key not in (project.page_dir / "ui.json").read_text()
     finally:
         ui(project.root, "stop")
+
+
+def test_the_page_is_wired_into_the_apps_start_command(tmp_path, monkeypatch):
+    import json as _json
+    from anthill.ui import wire
+    from conftest import git, commit_all
+    from anthill import context as _c, install as inst
+    repo = tmp_path / "app"
+    repo.mkdir()
+    (repo / "package.json").write_text(_json.dumps({"scripts": {"dev": "tsx watch server/index.ts"}}, indent=2) + "\n")
+    (repo / "server").mkdir()
+    (repo / "server" / "index.ts").write_text("export const x = 1;\n")
+    git(repo, "init", "-q", "-b", "main")
+    commit_all(repo, "start")
+    monkeypatch.chdir(repo)
+    _c.current.cache_clear()
+    ctx = _c.resolve(repo)
+    out = inst.install(ctx, project_name="App", write=True, run_survey=False)
+    assert out["owner_page"]["changed"]
+    dev = _json.loads((repo / "package.json").read_text())["scripts"]["dev"]
+    assert "ui start --detach --with-parent $$" in dev and dev.endswith("tsx watch server/index.ts")
+    assert wire.wire(_c.resolve(repo))["changed"] is False          # once only
+    _c.current.cache_clear()
+
+
+def test_a_run_script_gets_the_line_after_its_header(tmp_path):
+    from anthill.ui import wire
+    from anthill import context as _c
+    (tmp_path / "run.sh").write_text("#!/usr/bin/env bash\nset -euo pipefail\nnpm run dev\n")
+    out = wire.wire(_c.Context(root=tmp_path, origin="test"))
+    text = (tmp_path / "run.sh").read_text().splitlines()
+    assert out["changed"] and text[0].startswith("#!") and text[1].startswith("set -")
+    assert "ui start --detach --with-parent $$" in text[4] and text[-1] == "npm run dev"

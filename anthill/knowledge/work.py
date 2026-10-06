@@ -400,6 +400,7 @@ def where(ctx: Any) -> dict[str, Any]:
                  + [{"work": "everywhere", "trap": t} for t in _shared_traps(kd)],
         "upkeep_unattended": _unattended(ctx),
         "alarms": alarms(ctx),
+        "owner_page": _page_wired(ctx),
         "anthill_version": _version(ctx),
         "howto": [{"title": h["frontmatter"].get("title", ""),
                    "page": str(h["path"].relative_to(root))} for h in load(kd, "howto")],
@@ -443,6 +444,14 @@ def alarms(ctx: Any, days: int = 7) -> list[str]:
     except Exception:                       # noqa: BLE001
         pass
     return out[-8:]
+
+
+def _page_wired(ctx: Any) -> dict[str, Any]:
+    try:
+        from anthill.ui import wire
+        return wire.detect(ctx)
+    except Exception:                       # noqa: BLE001
+        return {}
 
 
 def _version(ctx: Any) -> dict[str, Any]:
@@ -512,6 +521,11 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
     if v.get("team") and v.get("here") and not v.get("same"):
         L += ["", f"⚠ This laptop runs Anthill `{v['here']}`; the team uses `{v['team']}`. "
               "Run `anthill update` before working, or this chat follows different rules."]
+    op = w.get("owner_page") or {}
+    if op.get("kind") and not op.get("wired"):
+        L += ["", f"⚠ The owner's page does not start with the app ({op['file']}). Run "
+              "`anthill ui wire` once: it adds one line, and the owner sees their page the next time "
+              "they start the app."]
     u = w.get("upkeep_unattended")
     if u:
         L += ["", f"⚠ The save at `{u['since']}` left {u['count']} thing(s) out of date and nobody "

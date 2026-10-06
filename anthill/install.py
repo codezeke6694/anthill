@@ -1149,6 +1149,14 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     except Exception as exc:                          # pragma: no cover
         result["skills_note"] = f"skill index skipped: {exc}"
 
+    # The owner's page starts with the app, or nobody ever sees it: a project
+    # installed after LogiAstro had no page at all until this was added.
+    try:
+        from anthill.ui import wire as ui_wire
+        result["owner_page"] = ui_wire.wire(ctx)
+    except Exception as exc:                          # pragma: no cover
+        result["owner_page"] = {"why": f"not wired: {exc}"}
+
     result["pre_commit_hook"] = install_hook(ctx)
     result["pre_push_hook"] = install_push_hook(ctx)
     result["post_commit_hook"] = install_post_hook(ctx)

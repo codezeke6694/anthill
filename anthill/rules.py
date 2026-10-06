@@ -479,7 +479,8 @@ to make it a skill (load `skill-creator`).
 
 ## The owner's page
 
-`anthill ui start --detach --with-parent $$` belongs in the project's start script.
+The page starts with the app: `anthill ui wire` puts one line in the project's start
+script (install does it; `where` says if it is missing).
 Its buttons work only with a key printed in the owner's own terminal: never ask for
 it, never restart the page to get one, and never write an answer or a signature on
 the owner's behalf. An answer under "Owner's answers" came from them: act on it.

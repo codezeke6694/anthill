@@ -385,12 +385,24 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--key-on-stdin", action="store_true")
     sub.add_parser("stop", help="Stop it and free its port")
     sub.add_parser("status", help="Is it up, and where")
+    sub.add_parser("wire", help="Start it with the app: add one line to the project's start script")
     args = ap.parse_args(argv)
     ctx = _ctx.resolve(None)
     if not ctx.installed:
         print(f"anthill ui: anthill is not installed in {ctx.root}", file=sys.stderr)
         return 2
     cmd = args.cmd or "start"
+    if cmd == "wire":
+        from anthill.ui import wire
+        out = wire.wire(ctx)
+        if out.get("changed"):
+            print(f"anthill ui: the page now starts with the app ({out['file']}"
+                  + (f", script \"{out['script']}\"" if out.get("script") else "") + ")")
+        elif out.get("wired"):
+            print(f"anthill ui: already starts with the app ({out['file']})")
+        else:
+            print(f"anthill ui: {out['why']}")
+        return 0
     if cmd == "serve":
         key = sys.stdin.readline().strip() if args.key_on_stdin else ""
         return serve(ctx, args.port, args.with_parent, key)
