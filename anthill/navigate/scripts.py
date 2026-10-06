@@ -40,6 +40,9 @@ _IMPORT = re.compile(r"""(?:^|\n)\s*(?:import|export)\b[^'"]*?from\s*['"](\.[^'"
 
 
 _NOT_SOURCE = _NEVER | {".anthill", "anthill", ".git", "_archive", "archive", ".venv", "venv"}
+# Top-level folders of a JavaScript project that hold no code an agent works in.
+_NOT_CODE = {"public", "static", "assets", "docs", "logs", "test", "tests", "__tests__", "e2e",
+             "dist-ssr", "out", "tmp"}
 
 
 def discover(root: Path, configured: list[str] | None = None) -> list[str]:
@@ -56,6 +59,17 @@ def discover(root: Path, configured: list[str] | None = None) -> list[str]:
     if configured:
         return [d for d in configured if (root / d).is_dir()]
     found: list[str] = []
+    if (root / "package.json").exists() or (root / "tsconfig.json").exists():
+        # The project itself is the JavaScript or TypeScript one, its folders
+        # at the top: src/ for the screens, server/ for the API. Only folders
+        # below the top were looked at, so such a project -- 160 files in its
+        # src/ and server/ -- reached the map as nothing at all.
+        for d in sorted(p for p in root.iterdir() if p.is_dir()):
+            if d.name.startswith(".") or d.name in _NOT_SOURCE | _NOT_CODE:
+                continue
+            if any(f.suffix in SUFFIXES and not (_NEVER & set(f.relative_to(root).parts))
+                   for f in d.rglob("*") if f.is_file()):
+                found.append(d.name)
     for marker in ("package.json", "tsconfig.json"):
         for depth in ("*", "*/*"):
             for m in root.glob(f"{depth}/{marker}"):

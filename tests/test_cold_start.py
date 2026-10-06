@@ -251,3 +251,15 @@ def test_typescript_can_be_read_searched_and_caught_rewired(project):
           "  return round(items.reduce(add, 0)) + tax(items);\n}\n\nexport const LIMIT = 10;\n")
     after = scripts.locate(project.root / "web/src/cart.ts", "total")
     assert before["sig"] == after["sig"] and before["callees"] != after["callees"]
+
+
+def test_a_typescript_project_at_the_top_level_is_mapped(tmp_path):
+    root = tmp_path / "app"
+    for rel, text in {"package.json": "{}", "src/pages/Home.tsx": "export function Home() {}\n",
+                      "server/routes/leads.ts": "export const leads = 1;\n",
+                      "public/logo.js": "x\n", "docs/notes.md": "x\n",
+                      "node_modules/x/index.js": "x\n"}.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    assert scripts.discover(root) == ["server", "src"]
