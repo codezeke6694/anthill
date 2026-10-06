@@ -345,6 +345,31 @@ def lock_broken(ctx: _ctx.Context, g: dict[str, Any]) -> list[str]:
     return out
 
 
+def propose_finished(ctx: _ctx.Context, sid: str, because: str) -> dict[str, Any]:
+    """An agent says a sprint looks finished; it shows on the owner's page to close.
+
+    The agent never closes work it cannot prove done; the owner does, with one
+    click, or says "not yet" and it goes back on the board.
+    """
+    from anthill import trail
+    if not because.strip():
+        raise ValueError("say why it looks finished: --because \"<merged, nothing left but ...>\"")
+    g = load(ctx, sid)
+    g["looks_finished"] = because.strip()
+    save(ctx, g)
+    trail.record("sprint", ctx, sprint=sid, action="finished", text=because.strip()[:200])
+    return {"proposed": sid}
+
+
+def not_yet(ctx: _ctx.Context, sid: str, by: str) -> dict[str, Any]:
+    from anthill import trail
+    g = load(ctx, sid)
+    g.pop("looks_finished", None)
+    save(ctx, g)
+    trail.record("sprint", ctx, sprint=sid, action="not-yet", by=by.strip() or "owner")
+    return {"kept_open": sid}
+
+
 def close(ctx: _ctx.Context, sid: str, by: str, because: str = "") -> dict[str, Any]:
     """The owner closes a sprint that is finished. A sprint with a check closes
     when the check passes (`sprint done`); one without -- most pages written
@@ -425,6 +450,7 @@ anthill sprint block "<the question only the owner can answer, with your recomme
 anthill sprint done  [--sprint <id>]               runs the check; only a pass closes it and files what it learned
 anthill sprint stop "<why>"  [--sprint <id>]       pause it
 anthill sprint lock [<id>] --file <answer key or test> ... --by <owner>   the owner locks the check
+anthill sprint finished <id> --because "<why>"   it looks finished: the owner closes it from their page
 anthill sprint close <id> --by <owner> --because "<why it is finished>"     the owner closes finished work
 anthill sprint list [--all] [--json]   |   anthill sprint show <id>
 A planned sprint with independent pieces, run by one lead chat and its helpers (skill: parallel-sprint):
@@ -434,7 +460,7 @@ Any chat, in any tool, may work any sprint. Without --sprint, the one this chat
 drives is meant, else the only open sprint on this branch.
 """
 
-VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close",
+VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close", "finished",
          "piece", "waves", "brief", "referee", "ask"}
 PARALLEL = {"piece", "waves", "brief", "referee", "ask"}
 
@@ -487,6 +513,12 @@ def main(argv: list[str]) -> int:
                 g["status"] = "active"
             G.save(ctx, g)
             trail.record("sprint", ctx, sprint=g["id"], action="go", text=g["title"])
+        elif verb == "finished":
+            words = [w for i, w in enumerate(rest) if not w.startswith("--")
+                     and not (i and rest[i - 1] == "--because")]
+            propose_finished(ctx, words[0] if words else (gid or G._open(ctx).get("id")), G._opt(rest, "--because"))
+            print("proposed: it shows on the owner's page to close")
+            return 0
         elif verb == "close":
             words = [w for i, w in enumerate(rest) if not w.startswith("--")
                      and not (i and rest[i - 1] in ("--by", "--because"))]

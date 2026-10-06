@@ -675,8 +675,9 @@ code right now; touching it would collide with them.
      an answer to Owner's answers, a decision to `decisions/`. A line there
      that asks nothing is shown to nobody.
    - **a sprint whose work is finished** (merged, nothing left but the owner's
-     merge or push) and that has no check: say so in your report; the owner
-     closes it from their page. Never set `state: done` yourself.
+     merge or push) and that has no check:
+     `{cmd} sprint finished <id> --because "<why>"`; the owner closes it from
+     their page. Never set `state: done` yourself.
    - **work, a branch no page describes**: write `{knowledge}/work/<id>.md`
      from its log, in the same shape as the others (What, Where, How,
      Waiting on the owner, Traps, History), `state: in-progress`.

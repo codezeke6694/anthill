@@ -72,7 +72,16 @@ def state(ctx: _ctx.Context) -> dict[str, Any]:
                                          key=lambda e: e.get("t", ""), default=None)},
             "score": _score(events),
             "goals": _goals(ctx),
-            "todo": _todo(w, ctx)}
+            "todo": (td := _todo(w, ctx)),
+            "status": _status(ctx, w, td, events)}
+
+
+def _status(ctx: _ctx.Context, w: dict[str, Any], td: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    from anthill.ui import status
+    try:
+        return status.build(ctx, w, td, events)
+    except Exception as exc:                  # noqa: BLE001 -- a bad note must not blank the page
+        return {"error": str(exc)}
 
 
 def _todo(where: dict[str, Any], ctx: _ctx.Context) -> dict[str, Any]:
@@ -169,6 +178,8 @@ class _Handler(BaseHTTPRequestHandler):
                 out = actions.sign(self.ctx, body.get("page", ""), by)
             elif self.path == "/api/close":
                 out = actions.close_sprint(self.ctx, body.get("sprint", ""), body.get("because", ""), by)
+            elif self.path == "/api/notyet":
+                out = actions.keep_open(self.ctx, body.get("sprint", ""), by)
             elif self.path == "/api/ack":
                 from anthill import goal
                 try:

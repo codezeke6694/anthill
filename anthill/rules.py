@@ -450,8 +450,8 @@ anthill sprint done                   # runs the check; only a pass closes it
 
 Work in progress with no sprint? Start one. Keep its page true: next step, traps,
 and under **Waiting on the owner** only questions still open — a settled one moves
-to Owner's answers or a decision. Finished, merged work with no check: ask the owner
-to close it (they press "Close it" on their page). Under **Learned**, a line starting
+to Owner's answers or a decision. Finished, merged work with no check:
+`anthill sprint finished <id> --because "<why>"` puts it on the owner's page to close. Under **Learned**, a line starting
 `Warning:`, `Decision:` or `Rule:` is filed on the shared shelf when the sprint closes.
 
 **"End to end"**: when the owner says so, `anthill sprint go` — then keep working
