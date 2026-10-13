@@ -15,7 +15,7 @@ Every gap falls into one of five groups:
 
 **The rule for group D:** *if Anthill can't stop it, it has to show it.* Every write that didn't come through the sanctioned path shows up red on the owner's page and in `where`. A determined agent can still do it, but it can't do it quietly.
 
-## Where this stands (5 Oct 2026, branch `work/structure`)
+## Where this stands (5 Oct 2026, updated 13 Oct; branch `work/structure`)
 
 **Closed, with tests:** A1–A5, B1–B7, C1–C7, C9, C10, D1–D5, E1 (rebuilt as parallel
 pieces), E2 (the locked check), E3 (goes with the board: parallel pieces have no
@@ -24,8 +24,10 @@ silent release).
 **Still open:**
 - **B8** — git hooks still name an absolute path when Anthill is installed from
   outside a project; installed inside it (the default), they are relative.
-- **C8** — the map's accuracy is unchanged (first project: 52% / 65% / 78% on 168
-  past commits, old and new code alike). Improving it is a measuring job (M3).
+- **C8** — the map's accuracy is unchanged (LogiAstro, 13 Oct: 52% / 67% / 79% on 168
+  past commits). Graphify was tested as a fix and does not help (`04-graphify-test.md`).
+  Next: sort the misses by cause, fix the biggest, re-measure (M3).
+- **B9, C11, C12, F1–F4** — added 13 Oct; see their rows.
 - **D6** — a system prompt (Touch ID) for owner-only actions: not explored yet.
 - **E4** — folding the barely-used commands: part of the tidy (build step 5).
 
@@ -53,6 +55,7 @@ silent release).
 | B6 | Pages for deleted branches stay "active" | mark them paused, with "branch gone", on the next `where` |
 | B7 | Coverage counts a folder glob as every file explained | count only files a rule or page actually names |
 | B8 | Hooks contain one laptop's full path to Anthill | hooks call `./anthill/bin/anthill` relative to the project |
+| B9 | The map lists test files inside `.worktrees/` (other chats' copies) as a file's tests, so a card can send a chat to another chat's copy (found 13 Oct on LogiAstro) | leave `.worktrees/` and other git worktrees out of the map |
 
 ## C · Improvements
 
@@ -65,9 +68,11 @@ silent release).
 | C5 | The keeper runs only if the agent remembers, and nothing checks | the log records whether the keeper ran after each save; `where` and the owner's page show "save X: notebook not updated" |
 | C6 | "This code has no test" items never close (19 open) | the item closes once the suggestion is passed to the owner; the owner turns it into a bug or short sprint, or dismisses it |
 | C7 | TypeScript: `grep` and `read-slice` don't work, the fingerprint is one line | make `grep` and `read-slice` language-neutral; make the TypeScript fingerprint include what a function calls |
-| C8 | The map points at the right file only about half the time | sprint pages and the glossary feed the search; re-measure with `eval-map` after each change (M3) |
+| C8 | The map points at the right file only about half the time | sort the misses by cause (huge files doing many jobs; task words that are not code words), fix the biggest cause, re-measure with `eval-map` after each change (M3). Not Graphify: tested 13 Oct, it lowers the first guess (52% → about 40%) and its links add nothing to "what a change reaches" (`04-graphify-test.md`) |
 | C9 | Full automation only in Claude Code | every automatic step also exists as one command, and the rules for other tools tell them when to run it; test with Codex and Cursor (M6) |
 | C10 | Almost nothing in the notebook is signed by the owner | closing a sprint asks the owner to confirm its "Learned" items in one click; the owner's page shows "N decisions unsigned" |
+| C11 | The map's score is measured only by hand, so it goes stale (the manual said 52% for a week after it changed) | score `eval-map` after every save (2 seconds), keep one line per save, show the number and its trend on the owner's page |
+| C12 | The map reads only Python and TypeScript/JavaScript | when a project needs another language (PHP for AutoDev first), read it with Graphify's extractor, kept optional so Anthill still needs no packages; `eval-map` on that project before and after (`04-graphify-test.md`) |
 
 ## D · Can't be fully stopped, so make it visible
 
@@ -90,6 +95,18 @@ On one machine, the owner and an agent run the same git and the same files. Anth
 | E2 | The test/code split and the auditor | both leak (the builder can edit the tester's files; the auditor isn't read-only). Replace them with the **locked finishing check**: the agent can't edit the check it must pass |
 | E3 | The 30-minute automatic release of a claim | silently frees a piece a slow chat still holds. Replace it with a heartbeat each chat sends, and show a "possibly abandoned" piece on the owner's page before anything is released |
 | E4 | `tidy`, Obsidian picture, `impact`, `card`, `control` as separate commands | barely used. Fold them into `where` and `start`, or remove them (M8) |
+| E5 | Function-level reach and trust labels on links, taken from Graphify | **dropped 13 Oct after a test**: on LogiAstro and Reach AI every file Graphify's function callers named was already among Anthill's pathways (`04-graphify-test.md`) |
+
+## F · Taken from AutoDev (proposed 13 Oct, waiting on the owner)
+
+From AutoDev 0.8.10's code; the reasons and AutoDev's own versions are in `03-from-autodev.md`. Build the idea, not its code.
+
+| # | Gap | What to build |
+|---|---|---|
+| F1 | Nothing stops a database change: on 8 Oct a saved file reloaded the dev server and changed the shared database before any test | a per-project list of risky paths and words in the owner's settings (LogiAstro: `migrations/versions/`); a chat about to change one asks on the owner's page first. No size of task skips it |
+| F2 | Writing outside a piece's files is caught only at the gate, after the work | a hook that refuses the edit as it happens and tells the chat to explain; keep the gate for shell edits and other tools |
+| F3 | A test already broken before a sprint fails its check, so chats learn to ignore red | record failing test names at `sprint start`; block only on new names; say which old ones the sprint fixed |
+| F4 | Anthill cannot say what a piece of work cost, or what Anthill itself costs | read token use from the chat records, attribute it to the sprint each chat worked on; a cost line per sprint and a total on the owner's page, Anthill's own share shown apart |
 
 ---
 
@@ -105,5 +122,6 @@ On one machine, the owner and an agent run the same git and the same files. Anth
 | 6. Ship | C9 |
 | 7. Parallel pieces | E1, E3 |
 | then | C3, C4, C7, C8 (the map); D1, D2, D3, D6 (visibility) |
+| added 13 Oct | B9; C8 misses, C11 (the map); F1–F3 together, then F4 (owner to choose); C12 when a project needs it |
 
 What can't be closed, only measured: whether Anthill makes the owner faster (M1), and whether agents keep the rules that are only asked (M7).
