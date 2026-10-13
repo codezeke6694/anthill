@@ -27,7 +27,7 @@ silent release).
 - **C8** — the map's accuracy is unchanged (LogiAstro, 13 Oct: 52% / 67% / 79% on 168
   past commits). Graphify was tested as a fix and does not help (`04-graphify-test.md`).
   Next: sort the misses by cause, fix the biggest, re-measure (M3).
-- **B9, C11, C12, F1–F4** — added 13 Oct; see their rows.
+- **B9, C11, C12, F1–F6** — added 13 Oct; see their rows.
 - **D6** — a system prompt (Touch ID) for owner-only actions: not explored yet.
 - **E4** — folding the barely-used commands: part of the tidy (build step 5).
 
@@ -107,6 +107,8 @@ From AutoDev 0.8.10's code; the reasons and AutoDev's own versions are in `03-fr
 | F2 | Writing outside a piece's files is caught only at the gate, after the work | a hook that refuses the edit as it happens and tells the chat to explain; keep the gate for shell edits and other tools |
 | F3 | A test already broken before a sprint fails its check, so chats learn to ignore red | record failing test names at `sprint start`; block only on new names; say which old ones the sprint fixed |
 | F4 | Anthill cannot say what a piece of work cost, or what Anthill itself costs | read token use from the chat records, attribute it to the sprint each chat worked on; a cost line per sprint and a total on the owner's page, Anthill's own share shown apart |
+| F5 | Nothing says how code should be written; each chat brings its own taste | a global `coding-standards` skill from AutoDev's starter rules (simplest solution, reuse, small functions, named constants, short comments, the tool's own errors, no personal paths, tests for behaviour, version bumps), merged with Ponytail; projects may tighten, not loosen (`03-from-autodev.md` §5) |
+| F6 | A new package, a personal path, a 60-line block or a wall of comments goes in unnoticed | four script checks after each commit, on the upkeep list; a new package stops and asks the owner, like F1 |
 
 ---
 
@@ -122,6 +124,6 @@ From AutoDev 0.8.10's code; the reasons and AutoDev's own versions are in `03-fr
 | 6. Ship | C9 |
 | 7. Parallel pieces | E1, E3 |
 | then | C3, C4, C7, C8 (the map); D1, D2, D3, D6 (visibility) |
-| added 13 Oct | B9; C8 misses, C11 (the map); F1–F3 together, then F4 (owner to choose); C12 when a project needs it |
+| added 13 Oct | B9; C8 misses, C11 (the map); F1–F3 together, then F4, F5–F6 (owner to choose); C12 when a project needs it |
 
 What can't be closed, only measured: whether Anthill makes the owner faster (M1), and whether agents keep the rules that are only asked (M7).

@@ -3,7 +3,7 @@
 13 Oct 2026. Read from AutoDev 0.8.10's code (marko-hq/autodev; a local copy
 with no GitHub link sits at `~/autodev-copy`), not only its readme. Status:
 **proposed, waiting on the owner** — build 1–3 together as one sprint with 4
-after, or the database guard alone first.
+after, or the database guard alone first. Item 5 added 13 Oct.
 
 Take the idea, not the code: AutoDev is shell scripts, and its versions are
 tied to one Laravel project. Each one is rebuilt in Anthill's way and set per
@@ -67,6 +67,46 @@ stage and per job escalate when exceeded.
 **For Anthill.** The same reading, attributed to the sprint each chat worked
 on: a cost line on the sprint page and a total on the owner's page, with
 Anthill's own share (keeper, `where`) shown apart. Budgets later, if at all.
+
+## 5. Coding standards, and cheap checks at save time
+
+**What is missing.** Anthill says how to work (sprints, git, the owner) but
+nothing about how code should be written. Each chat brings its own taste.
+
+**AutoDev.** 28 rules in `policy/`: a fixed floor of 9 (`pack/rules`: git,
+secrets, evidence) and a starter set of 19 coding standards a team edits
+(`starter-pack/rules`). Each rule names how it is checked: a registered script
+in `lib/checks/`, the reviewer, or both. A project may tighten a rule, never
+loosen it.
+
+**Already in Anthill:** the owner pushes (GIT-001/002), no secrets (SEC-001),
+agent and settings files off-limits (GIT-005), nothing done without a passing
+check (EVID-001).
+
+**Take, as standards a chat follows:** simplest solution, no speculative
+layers (CODE-SIMPLE, CODE-DUP, CODE-TERSE); small functions and files, split by
+job (CODE-SIZE); no magic literals, name them once (CODE-CONST — our 650 km
+problem); comments only for a non-obvious reason (CODE-COMMENT); surface the
+tool's own error (CODE-ERR); no personal paths, accounts or hosts (CODE-PORT —
+Anthill's own B8); behaviour changes come with tests (TEST-001); a changed data
+or API shape bumps its version (ARCH-COMPAT); follow the project's own
+conventions (ARCH-CONV).
+
+**Take, as checks at save time** (scripts, no tokens): a dependency manifest
+or lockfile changed → ask the owner (`lockfile-diff`, DEP-001; sits with item 1);
+personal path or hostname added (`portability-grep`); one added block over 60
+lines (`size-ceiling`); comment density (`comment-density`).
+
+**Leave out:** ARCH-OOP-001 (tuned to one Laravel codebase), REV-001 (Anthill
+has no separate reviewer), GIT-002's `autodev/**` branch namespace.
+
+**For Anthill.** Not in the rules file every chat reads (19 rules would about
+double it): a global skill, `coding-standards`, loaded when a chat writes code,
+merged with LogiAstro's local Ponytail skill, which covers the "simplest" side.
+A project adds stricter rules locally; it cannot loosen the shipped ones. The
+four checks run in the post-commit hook and land on the upkeep list; the
+dependency check stops and asks, like item 1. Credit AutoDev and tell its
+developer.
 
 ## Left out, and why
 
