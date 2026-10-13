@@ -21,7 +21,7 @@ at READY until a person runs `autodev approve` (`lib/engine.sh`
 trivial job skips the check entirely.
 
 **For Anthill.** A per-project list of risky paths and words in the owner's
-settings (LogiAstro: `alembic/versions/`, anything the dev server reloads).
+settings (LogiAstro: `migrations/versions/`, anything the dev server reloads).
 A chat about to change one stops and asks on the owner's page; the answer is
 the approval. No size of task skips it.
 
