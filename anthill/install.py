@@ -561,9 +561,10 @@ CLAUDE_HOOKS = {
     "UserPromptSubmit": "prompt --hook",
     "PreCompact": "checkpoint --hook",
     "Stop": "goal --hook",
-    # A risky edit is refused before it happens (owner, 13 Oct): the 8 Oct
-    # migration ran on the shared database the moment it was saved.
-    "PreToolUse": ("risky --hook", "Edit|Write|MultiEdit|NotebookEdit|Bash"),
+    # Refused before it happens (owner, 13 Oct): a database change -- the 8 Oct
+    # migration ran on the shared database the moment it was saved -- and a
+    # helper writing outside its piece's files.
+    "PreToolUse": ("edit --hook", "Edit|Write|MultiEdit|NotebookEdit|Bash"),
 }
 
 

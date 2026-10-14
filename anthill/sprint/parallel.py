@@ -159,7 +159,8 @@ def brief(ctx: _ctx.Context, sid: str, pid: str) -> str:
          "## What proves it done", "", f"```bash\n{p['check']}\n```", "",
          "## How", "",
          f"1. Work on a branch of your own: `git switch -c {branch}`.",
-         "2. Build the piece, inside the files above. Commit as you go.",
+         "2. Build the piece, inside the files above; in Claude Code an edit to any other "
+         "file is refused. Commit as you go.",
          "3. Run the check until it passes. Do not edit the check, or a test it runs that "
          "you do not own.",
          f"4. End your report with one line: `BRANCH: {branch}`.",

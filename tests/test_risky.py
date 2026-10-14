@@ -123,7 +123,7 @@ def test_install_adds_the_edit_hook_with_its_matcher(project):
     settings = {}
     install.merge_claude_hooks(settings, "anthill")
     pre = settings["hooks"]["PreToolUse"]
-    assert pre[0]["matcher"].startswith("Edit|Write") and "risky --hook" in pre[0]["hooks"][0]["command"]
+    assert pre[0]["matcher"].startswith("Edit|Write") and "edit --hook" in pre[0]["hooks"][0]["command"]
     assert install.merge_claude_hooks(settings, "anthill") == []      # twice changes nothing
 
 
