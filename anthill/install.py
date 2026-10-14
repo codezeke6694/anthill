@@ -547,6 +547,7 @@ if command -v "$ANTHILL" >/dev/null 2>&1 || [ -x "$ANTHILL" ]; then
   "$ANTHILL" trail commit >/dev/null 2>&1 || true
   "$ANTHILL" map build >/dev/null 2>&1 || true
   "$ANTHILL" upkeep --record 2>/dev/null | grep -v "nothing left undone" || true
+  "$ANTHILL" codecheck 2>/dev/null || true
   ( "$ANTHILL" blueprint --all >/dev/null 2>&1 & ) || true
 fi
 exit 0

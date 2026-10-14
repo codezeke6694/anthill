@@ -56,6 +56,58 @@ def _rel(ctx: _ctx.Context, path: str) -> str:
     return "" if rel in (".", "") else rel
 
 
+# A new package is the owner's call too (AutoDev's DEP-001): checked at the
+# commit, not the edit, because a manifest also holds scripts and settings.
+DEP_FILES = re.compile(r"(^|/)(package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|"
+                       r"composer\.(json|lock)|Gemfile(\.lock)?|go\.(mod|sum)|Cargo\.(toml|lock)|"
+                       r"requirements[^/]*\.txt|pyproject\.toml|poetry\.lock|uv\.lock|Pipfile(\.lock)?)$")
+_DEP_KEYS = {"package.json": ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")}
+
+
+def deps_need_owner(ctx: _ctx.Context) -> bool:
+    return bool((ctx.config.get("execution") or {}).get("dependencies_need_owner", True))
+
+
+def _deps_of(name: str, text: str) -> Any:
+    """The dependency part of a manifest that also holds other things; None when unreadable."""
+    try:
+        if name == "package.json":
+            data = json.loads(text or "{}")
+            return {k: data.get(k) for k in _DEP_KEYS[name]}
+        if name == "pyproject.toml":
+            import tomllib
+            data = tomllib.loads(text or "")
+            proj, poetry = data.get("project") or {}, ((data.get("tool") or {}).get("poetry") or {})
+            return [proj.get("dependencies"), proj.get("optional-dependencies"),
+                    data.get("dependency-groups"), poetry.get("dependencies"), poetry.get("group")]
+    except (ValueError, ImportError):
+        return None
+    return text
+
+
+def dependency_changes(ctx: _ctx.Context, cwd: Path, files: list[str]) -> list[str]:
+    """Staged manifests and lockfiles whose dependencies changed."""
+    import subprocess
+    if not deps_need_owner(ctx):
+        return []
+
+    def show(spec: str) -> str:
+        r = subprocess.run(["git", "show", spec], cwd=cwd, capture_output=True, text=True)
+        return r.stdout if r.returncode == 0 else ""
+
+    out = []
+    for f in files:
+        if not DEP_FILES.search(f):
+            continue
+        name = Path(f).name
+        if name in ("package.json", "pyproject.toml"):
+            before, after = _deps_of(name, show(f"HEAD:{f}")), _deps_of(name, show(f":{f}"))
+            if before is not None and before == after:
+                continue                    # scripts or settings changed, not what is installed
+        out.append(f)
+    return out
+
+
 def is_risky(ctx: _ctx.Context, path: str) -> bool:
     from anthill.orchestrate.orchestrator import matches_any
     rel = _rel(ctx, path)
@@ -107,16 +159,17 @@ def pending(ctx: _ctx.Context) -> list[dict[str, Any]]:
 
 
 def ask(ctx: _ctx.Context, files: list[str], why: str, sprint: str = "") -> dict[str, Any]:
-    rels = sorted({_rel(ctx, f) for f in files if is_risky(ctx, f)})
+    rels = sorted({_rel(ctx, f) for f in files if is_risky(ctx, f) or DEP_FILES.search(_rel(ctx, f))})
     if not rels:
-        return {"asked": False, "why": "none of these is under a risky path: "
-                f"{', '.join(patterns(ctx)) or '(none set)'}"}
+        return {"asked": False, "why": "none of these is a database change or a package list: "
+                f"{', '.join(patterns(ctx)) or '(no risky paths set)'}"}
+    kind = "package" if all(DEP_FILES.search(r) for r in rels) else "database"
     reqs = _load(ctx)
     for r in reqs:                       # the same files asked again: one question
         if r.get("status") == "asked" and r.get("files") == rels:
             return {"asked": True, "id": r["id"], "files": rels, "already": True}
     rid = f"r{len(reqs) + 1}"
-    reqs.append({"id": rid, "files": rels, "why": why.strip(), "sprint": sprint,
+    reqs.append({"id": rid, "kind": kind, "files": rels, "why": why.strip(), "sprint": sprint,
                  "status": "asked", "asked_at": _now().isoformat(timespec="seconds")})
     _save(ctx, reqs)
     from anthill import trail

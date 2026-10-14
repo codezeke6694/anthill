@@ -545,8 +545,8 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
     risky = w.get("risky_waiting") or []
     if asks or risky:
         L += ["", "## Waiting on the owner", ""]
-        L += [f"- Allow a database change to {', '.join(x['files'])}? {_cut(x['why'], 160)}  _(risky {x['id']})_"
-              for x in risky]
+        L += [f"- Allow {'a package change in' if x.get('kind') == 'package' else 'a database change to'} "
+              f"{', '.join(x['files'])}? {_cut(x['why'], 160)}  _(risky {x['id']})_" for x in risky]
         L += [f"- {_cut(q, 240)}  _({r['id']})_" for r, q in asks]
     L += ["", "## Work in progress", ""]
     if not w["work"]:

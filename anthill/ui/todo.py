@@ -165,7 +165,8 @@ def build(where: dict[str, Any], goals: list[dict[str, Any]]) -> dict[str, Any]:
                 items.append(item)
 
     for x in where.get("risky_waiting") or []:
-        items.append({"title": f"Allow a database change to {', '.join(x['files'])}?",
+        what = "a package change in" if x.get("kind") == "package" else "a database change to"
+        items.append({"title": f"Allow {what} {', '.join(x['files'])}?",
                       "recommend": "", "options": ["Allow", "Refuse"], "id": f"risky:{x['id']}",
                       "kind": "risky", "ref": x["id"], "from": clean(x.get("why", "")),
                       "holding_up": True,

@@ -179,14 +179,23 @@ def check_risky(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
     from anthill import risky
     if is_owner():
         return None
-    hit = risky.blocked(ctx, staged(cwd))
+    files = staged(cwd)
+    db = risky.blocked(ctx, files)
+    pkgs = [f for f in risky.dependency_changes(ctx, cwd, files) if not risky.allowed(ctx, f)]
+    hit = db + [f for f in pkgs if f not in db]
     if not hit:
         return None
+    why = []
+    if db:
+        why.append("database changes wait for the owner: on 8 Oct a saved migration ran "
+                   "on the shared database before any test")
+    if pkgs:
+        why.append("a new or changed package is the owner's call: what gets installed is "
+                   "a supply-chain decision")
     return ({
         "verdict": "refused",
         "risky": hit,
-        "why": ("these change the database, and database changes wait for the owner: "
-                "on 8 Oct a saved migration ran on the shared database before any test"),
+        "why": "; ".join(why),
         "next": (f"anthill risky ask {' '.join(hit)} --why \"<what it changes>\"\n"
                  "  then wait for the owner's answer on their page, and commit again."),
     }, REFUSE)
@@ -418,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {report['next']}\n", file=sys.stderr)
         return REFUSE
     if report.get("risky"):
-        print("\nanthill: commit refused — a database change waits for the owner.\n",
+        print("\nanthill: commit refused — this waits for the owner.\n",
               file=sys.stderr)
         for f in report["risky"]:
             print(f"  waits   {f}", file=sys.stderr)

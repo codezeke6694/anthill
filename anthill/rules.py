@@ -479,7 +479,8 @@ rediscover (a Learned line, with the file it is about)?
 ## Skills
 
 `anthill skill list --always-on` is what to load every session; `anthill skill get
-<name>` loads one. Load nothing else unless its trigger applies. Done the same thing
+<name>` loads one. Load nothing else unless its trigger applies; before you write or
+change code, that is `coding-standards`. Done the same thing
 about three times, or had the owner explain something twice? Ask the owner whether
 to make it a skill (load `skill-creator`).
 
