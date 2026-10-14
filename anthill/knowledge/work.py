@@ -328,6 +328,15 @@ def _closed_without_check(path: Path) -> bool:
     return not res.get("passed") and bool(g.get("done_when"))
 
 
+def _risky_waiting(ctx: Any) -> list[dict[str, Any]]:
+    """Database changes a chat asked the owner to allow (`anthill risky ask`)."""
+    try:
+        from anthill import risky
+        return risky.pending(ctx)
+    except Exception:                      # noqa: BLE001 -- never blank the page over this
+        return []
+
+
 def where(ctx: Any) -> dict[str, Any]:
     kd, root = ctx.knowledge_dir, ctx.root
     work = load_work(ctx)
@@ -402,13 +411,15 @@ def where(ctx: Any) -> dict[str, Any]:
         "alarms": alarms(ctx),
         "owner_page": _page_wired(ctx),
         "anthill_version": _version(ctx),
+        "risky_waiting": _risky_waiting(ctx),
         "howto": [{"title": h["frontmatter"].get("title", ""),
                    "page": str(h["path"].relative_to(root))} for h in load(kd, "howto")],
     }
 
 
 OWNER_ONLY = (("config", "set"), ("onboard", "--force"), ("roles", "assign"),
-              ("work", "reopen"), ("update", "--latest"), ("sprint lock", "--by"), ("sprint close", "--by"))
+              ("work", "reopen"), ("update", "--latest"), ("sprint lock", "--by"), ("sprint close", "--by"),
+              ("risky allow", "--by"), ("risky refuse", "--by"))
 
 
 def alarms(ctx: Any, days: int = 7) -> list[str]:
@@ -531,8 +542,11 @@ def render(w: dict[str, Any], _unused: Any = None, full: bool = False) -> str:
         L += ["", f"⚠ The save at `{u['since']}` left {u['count']} thing(s) out of date and nobody "
               "picked them up: `anthill upkeep --open`, then hand them to the keeper."]
     asks = [(r, q) for r in w["work"] for q in r["waiting_on_owner"]]
-    if asks:
+    risky = w.get("risky_waiting") or []
+    if asks or risky:
         L += ["", "## Waiting on the owner", ""]
+        L += [f"- Allow a database change to {', '.join(x['files'])}? {_cut(x['why'], 160)}  _(risky {x['id']})_"
+              for x in risky]
         L += [f"- {_cut(q, 240)}  _({r['id']})_" for r, q in asks]
     L += ["", "## Work in progress", ""]
     if not w["work"]:

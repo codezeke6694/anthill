@@ -386,6 +386,12 @@ def _git_short(ctx: _ctx.Context) -> str:
     if ex.get("guard_hygiene", False):
         lines.append("- No secrets (keys, tokens, `.env`) and no junk (`.DS_Store`, `__pycache__/`) "
                      "in a commit, and no force push; the hooks refuse them (`execution.guard_hygiene`).")
+    from anthill import risky
+    paths = risky.patterns(ctx)
+    if paths:
+        lines.append("- **Database changes wait for the owner** (" + ", ".join(f"`{p}`" for p in paths)
+                     + "): an edit there is refused until you run `anthill risky ask <file> --why \"...\"` "
+                     "and the owner allows it on their page.")
     lines.append("- **Never bypass a hook** (`--no-verify`). A refusal is information: read it, do "
                  "what it says, or say why you think it is wrong and stop.")
     return "\n".join(lines)

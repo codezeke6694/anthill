@@ -561,6 +561,9 @@ CLAUDE_HOOKS = {
     "UserPromptSubmit": "prompt --hook",
     "PreCompact": "checkpoint --hook",
     "Stop": "goal --hook",
+    # A risky edit is refused before it happens (owner, 13 Oct): the 8 Oct
+    # migration ran on the shared database the moment it was saved.
+    "PreToolUse": ("risky --hook", "Edit|Write|MultiEdit|NotebookEdit|Bash"),
 }
 
 
@@ -568,7 +571,8 @@ def merge_claude_hooks(settings: dict[str, Any], cmd: str) -> list[str]:
     """Add Anthill's hooks to Claude's settings, beside any the developer has."""
     hooks = settings.setdefault("hooks", {})
     added = []
-    for event, verb in CLAUDE_HOOKS.items():
+    for event, spec in CLAUDE_HOOKS.items():
+        verb, matcher = spec if isinstance(spec, tuple) else (spec, "")
         groups = hooks.setdefault(event, [])
         line = f'"{cmd}" {verb}'
         ours = [h for g in groups for h in (g.get("hooks") or [])
@@ -583,7 +587,10 @@ def merge_claude_hooks(settings: dict[str, Any], cmd: str) -> list[str]:
                     h["command"] = line
                     added.append(f"{event} (repointed)")
             continue
-        groups.append({"hooks": [{"type": "command", "command": line, "timeout": 20}]})
+        group: dict[str, Any] = {"hooks": [{"type": "command", "command": line, "timeout": 20}]}
+        if matcher:
+            group["matcher"] = matcher
+        groups.append(group)
         added.append(event)
     return added
 

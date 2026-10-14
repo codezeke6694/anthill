@@ -171,6 +171,27 @@ def check_force(ctx: _ctx.Context, cwd: Path,
     }, REFUSE)
 
 
+def check_risky(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int] | None:
+    """Risky files staged without the owner's approval (database changes first).
+
+    The edit hook stops Claude before a save; this catches what it cannot see:
+    a shell command, another tool, an edit made before the hook existed."""
+    from anthill import risky
+    if is_owner():
+        return None
+    hit = risky.blocked(ctx, staged(cwd))
+    if not hit:
+        return None
+    return ({
+        "verdict": "refused",
+        "risky": hit,
+        "why": ("these change the database, and database changes wait for the owner: "
+                "on 8 Oct a saved migration ran on the shared database before any test"),
+        "next": (f"anthill risky ask {' '.join(hit)} --why \"<what it changes>\"\n"
+                 "  then wait for the owner's answer on their page, and commit again."),
+    }, REFUSE)
+
+
 def staged(cwd: Path) -> list[str]:
     out = _git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
     return [f for f in out.splitlines() if f.strip()]
@@ -239,6 +260,10 @@ def check(ctx: _ctx.Context, cwd: Path) -> tuple[dict, int]:
     dirty = check_hygiene(ctx, cwd)
     if dirty is not None:
         return dirty
+
+    waits = check_risky(ctx, cwd)
+    if waits is not None:
+        return waits
 
     ex = ctx.config.get("execution") or {}
     if not ex.get("guard_ownership", False):
@@ -390,6 +415,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nanthill: commit refused — {report['branch']} is the owner's "
               f"branch.\n", file=sys.stderr)
         print(f"  {report['why']}\n", file=sys.stderr)
+        print(f"  {report['next']}\n", file=sys.stderr)
+        return REFUSE
+    if report.get("risky"):
+        print("\nanthill: commit refused — a database change waits for the owner.\n",
+              file=sys.stderr)
+        for f in report["risky"]:
+            print(f"  waits   {f}", file=sys.stderr)
+        print(f"\n  {report['why']}\n", file=sys.stderr)
         print(f"  {report['next']}\n", file=sys.stderr)
         return REFUSE
     if report.get("hygiene"):

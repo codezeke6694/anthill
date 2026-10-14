@@ -219,13 +219,16 @@ details.more{margin-top:8px} details.more summary{font-size:13px;color:var(--acc
     $("nav-needs").textContent = total || ""; $("nav-needs").className = "n" + (Q.length ? " hot" : "");
     $("needs-sum").textContent = [Q.length + (Q.length === 1 ? " question" : " questions"), R.length + " decisions to check", C.length + " to close"].join(" · ");
     $("q-n").textContent = Q.length || ""; $("r-n").textContent = R.length || ""; $("c-n").textContent = C.length || "";
-    const ask = (q, answer) => q.kind === "goal" ? press("/api/goal-answer", { goal: q.ref, answer }) : press("/api/answer", { work: q.ref, question: q.question_raw || q.title, answer });
+    const ask = (q, answer) => q.kind === "risky" ? press("/api/risky", { id: q.ref, allow: answer === "Allow" })
+      : q.kind === "goal" ? press("/api/goal-answer", { goal: q.ref, answer }) : press("/api/answer", { work: q.ref, question: q.question_raw || q.title, answer });
     fill("questions", Q.map((q, i) => {
       const it = el("div", "item"); it.append(el("span", "t", clean(q.title)));
       if (q.recommend) { const r = el("span", "r"); r.append(document.createTextNode("Recommended: "), el("b", "", clean(q.recommend))); it.append(r); }
       it.append(el("span", "s", "from: " + short(q.from, 80) + (q.holding_up ? " · holding up work" : "")));
       if (q.maybe_stale) it.append(el("span", "flag", "Its sprint looks finished; this may already be settled."));
-      if (KEY) {
+      if (KEY && q.kind === "risky") {
+        const bt = el("div", "btns"); bt.append(btn("Allow", "p", () => ask(q, "Allow")), btn("Refuse", "", () => ask(q, "Refuse"))); it.append(bt);
+      } else if (KEY) {
         const id = "q" + i + q.ref, box = writeBox(id, "Your answer, in your words…", (v) => ask(q, v)), bt = el("div", "btns");
         if (q.recommend) bt.append(btn("Yes, as recommended", "p", () => ask(q, "Go with the recommendation: " + q.recommend)));
         (q.options || []).forEach((o) => bt.append(btn(o, q.recommend ? "" : "p", () => ask(q, o))));

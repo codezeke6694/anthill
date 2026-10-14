@@ -199,6 +199,12 @@ class _Handler(BaseHTTPRequestHandler):
                 if self.path == "/api/goal-answer" and not str(body.get("answer", "")).strip():
                     raise actions.Refused("the answer is empty")
                 out = {"goal": g["id"], "status": g["status"]}
+            elif self.path == "/api/risky":
+                from anthill import risky
+                out = risky.decide(self.ctx, str(body.get("id", "")), bool(body.get("allow")), by,
+                                   via="owner page")
+                if not out.get("decided"):
+                    raise actions.Refused(out.get("why", "not decided"))
             elif self.path == "/api/reopen":
                 out = actions.reopen(self.ctx, body.get("unit", ""), body.get("reason", ""), by,
                                      str(REPO_ROOT / "bin" / "anthill"))

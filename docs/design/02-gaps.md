@@ -103,7 +103,7 @@ From AutoDev 0.8.10's code; the reasons and AutoDev's own versions are in `03-fr
 
 | # | Gap | What to build |
 |---|---|---|
-| F1 | Nothing stops a database change: on 8 Oct a saved file reloaded the dev server and changed the shared database before any test | a per-project list of risky paths and words in the owner's settings (LogiAstro: `migrations/versions/`); a chat about to change one asks on the owner's page first. No size of task skips it |
+| F1 | Nothing stops a database change: on 8 Oct a saved file reloaded the dev server and changed the shared database before any test | **built 14 Oct** (`anthill/risky.py`): a per-project list of risky paths and words in the owner's settings (LogiAstro: `migrations/versions/`); a chat about to change one asks on the owner's page first. No size of task skips it |
 | F2 | Writing outside a piece's files is caught only at the gate, after the work | a hook that refuses the edit as it happens and tells the chat to explain; keep the gate for shell edits and other tools |
 | F3 | A test already broken before a sprint fails its check, so chats learn to ignore red | record failing test names at `sprint start`; block only on new names; say which old ones the sprint fixed |
 | F4 | Anthill cannot say what a piece of work cost, or what Anthill itself costs | read token use from the chat records, attribute it to the sprint each chat worked on; a cost line per sprint and a total on the owner's page, Anthill's own share shown apart |

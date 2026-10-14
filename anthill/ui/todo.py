@@ -164,7 +164,13 @@ def build(where: dict[str, Any], goals: list[dict[str, Any]]) -> dict[str, Any]:
             else:
                 items.append(item)
 
-    items.sort(key=lambda x: (x["kind"] != "goal", not x["holding_up"]))
+    for x in where.get("risky_waiting") or []:
+        items.append({"title": f"Allow a database change to {', '.join(x['files'])}?",
+                      "recommend": "", "options": ["Allow", "Refuse"], "id": f"risky:{x['id']}",
+                      "kind": "risky", "ref": x["id"], "from": clean(x.get("why", "")),
+                      "holding_up": True,
+                      "after": "the chat may change these files for the next 12 hours, on this laptop"})
+    items.sort(key=lambda x: (x["kind"] not in ("goal", "risky"), not x["holding_up"]))
     review = []
     for g in goals:
         for i, d in enumerate(g.get("decided") or []):

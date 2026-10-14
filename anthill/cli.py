@@ -58,6 +58,7 @@ DELEGATED = [
     ("upkeep", "What a change left undone: glossary, knowledge pages, tests"),
     ("survey", "Draw the map and report what Anthill knows (install runs it)"),
     ("ui", "The owner's view on a local page: start | stop | status"),
+    ("risky", "Changes that wait for the owner (database first): ask | allow | refuse | list"),
 ]
 
 # The ported navigation and knowledge surface. Grouped rather than listed one by
@@ -253,6 +254,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] in ("note", "resume", "checkpoint", "prompt", "correction"):
         from anthill import resume
         return resume.main(argv)
+    if argv and argv[0] == "risky":
+        from anthill import risky
+        return risky.main(argv[1:])
     if argv and argv[0] == "trail":
         from anthill import trail
         return trail.main(argv[1:])
