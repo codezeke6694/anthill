@@ -279,6 +279,17 @@ def all_sprints(ctx: _ctx.Context) -> list[dict[str, Any]]:
     return sorted(out, key=lambda g: g.get("updated", ""), reverse=True)
 
 
+def take_baseline(ctx: _ctx.Context, g: dict[str, Any]) -> dict[str, Any]:
+    """Run the check once before any change: the tests already failing, by name."""
+    from anthill import testnames, trail
+    g["baseline"] = testnames.baseline(ctx, g.get("done_when") or "")
+    save(ctx, g)
+    b = g["baseline"]
+    trail.record("sprint", ctx, sprint=g["id"], action="baseline",
+                 text=("passes already" if b.get("passed") else f"{len(b.get('failing') or [])} failing by name"))
+    return g
+
+
 def new(ctx: _ctx.Context, title: str, kind: str = "short", check: str = "",
         steps: list[str] | None = None, branch: str = "", what: str = "",
         sid: str = "") -> dict[str, Any]:
@@ -448,6 +459,8 @@ anthill sprint step "<a step to add>" | --done N  [--sprint <id>]
 anthill sprint decided "<what you decided for the owner>" --because "<the decision or rule>"  [--sprint <id>]
 anthill sprint block "<the question only the owner can answer, with your recommendation>"  [--sprint <id>]
 anthill sprint done  [--sprint <id>]               runs the check; only a pass closes it and files what it learned
+anthill sprint baseline [<id>]                     note which tests the check fails before any change (start and go do it;
+                                                   --no-baseline skips): at the end only a new failing test blocks
 anthill sprint stop "<why>"  [--sprint <id>]       pause it
 anthill sprint lock [<id>] --file <answer key or test> ... --by <owner>   the owner locks the check
 anthill sprint finished <id> --because "<why>"   it looks finished: the owner closes it from their page
@@ -460,7 +473,7 @@ Any chat, in any tool, may work any sprint. Without --sprint, the one this chat
 drives is meant, else the only open sprint on this branch.
 """
 
-VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close", "finished",
+VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close", "finished", "baseline",
          "piece", "waves", "brief", "referee", "ask"}
 PARALLEL = {"piece", "waves", "brief", "referee", "ask"}
 
@@ -497,6 +510,8 @@ def main(argv: list[str]) -> int:
             g = new(ctx, title, kind=G._opt(rest, "--kind") or "short", check=G._opt(rest, "--check"),
                     steps=G._all(rest, "--step"), what=G._opt(rest, "--what"),
                     sid=G._opt(rest, "--id"), branch=G._opt(rest, "--branch"))
+            if g.get("done_when") and "--no-baseline" not in rest:
+                take_baseline(ctx, g)
         elif verb == "go":
             words = [w for w in rest if not w.startswith("--")]
             g = load(ctx, words[0]) if words and not gid else G._open(ctx, gid)
@@ -506,6 +521,8 @@ def main(argv: list[str]) -> int:
                 g["done_when"] = G._opt(rest, "--check")
             if not g.get("done_when"):
                 raise LookupError("driving a sprint end to end needs a check that proves it done: --check \"<command>\"")
+            if (g.get("baseline") or {}).get("check") != g["done_when"] and "--no-baseline" not in rest:
+                take_baseline(ctx, g)
             who = trail.who()
             g.update({"driving": True, "session": who["session"], "tool": who["tool"],
                       "stalls": 0, "last_push_back": None})
@@ -532,6 +549,10 @@ def main(argv: list[str]) -> int:
             out = lock_check(ctx, sid, G._all(rest, "--file"), G._opt(rest, "--by"))
             print(f"locked: `{out['check']}`" + (f" and {len(out['files'])} file(s)" if out["files"] else ""))
             return 0
+        elif verb == "baseline":
+            words = [w for w in rest if not w.startswith("--")]
+            g = load(ctx, words[0]) if words and not gid else G._open(ctx, gid)
+            take_baseline(ctx, g)
         elif verb in ("step", "decided", "block", "done", "stop"):
             return G.main([verb, *rest])
         elif verb == "show":

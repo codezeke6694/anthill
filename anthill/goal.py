@@ -218,12 +218,21 @@ def finish(ctx: _ctx.Context, gid: str = "") -> dict[str, Any]:
             return g
     if not cmd:
         raise LookupError("this goal has no done-when check; add one with anthill goal set --done-when")
+    from anthill import testnames
     try:
         r = subprocess.run(cmd, shell=True, cwd=ctx.root, capture_output=True, text=True, timeout=1800)
-        ok, tail = r.returncode == 0, (r.stdout + r.stderr).strip()[-600:]
+        ran_ok, full = r.returncode == 0, (r.stdout + r.stderr)
+        tail = full.strip()[-600:]
     except subprocess.TimeoutExpired:
-        ok, tail = False, "the check ran over 30 minutes"
+        ran_ok, full, tail = False, "", "the check ran over 30 minutes"
+    # Tests judged by name: a test that was already failing when the sprint
+    # started does not hold it shut; a new failing name does.
+    verdict = testnames.judge(g.get("baseline"), cmd, ran_ok, full)
+    ok = verdict["passed"]
     g["result"] = {"t": _now(), "passed": ok, "output": tail}
+    for k in ("fixed", "still_failing", "new_failures"):
+        if verdict.get(k):
+            g["result"][k] = verdict[k]
     if ok:
         g["status"] = DONE
         g["driving"] = False
@@ -386,7 +395,14 @@ def render(g: dict[str, Any]) -> str:
     for b in g["blockers"]:
         L.append(f"  waiting on the owner: {b['question']}" + (f" -> answered: {b['answer']}" if b.get("answer") else ""))
     if g.get("result"):
-        L.append(f"  last check: {'passed' if g['result']['passed'] else 'failed'}")
+        res = g["result"]
+        L.append(f"  last check: {'passed' if res['passed'] else 'failed'}"
+                 + (f" -- apart from {len(res['still_failing'])} test(s) already failing before this sprint"
+                    if res.get("still_failing") else ""))
+        if res.get("new_failures"):
+            L.append("  new failures: " + ", ".join(res["new_failures"][:8]))
+        if res.get("fixed"):
+            L.append("  fixed on the way: " + ", ".join(res["fixed"][:8]))
     return "\n".join(L) + "\n"
 
 

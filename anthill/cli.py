@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
                      secs=round(time.monotonic() - t0, 2))
 
 
-_SPRINT_VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close", "finished",
+_SPRINT_VERBS = {"start", "go", "step", "decided", "block", "done", "stop", "list", "show", "help", "lock", "close", "finished", "baseline",
                  "piece", "waves", "brief", "referee", "ask"}
 
 
