@@ -293,6 +293,10 @@ details.more{margin-top:8px} details.more summary{font-size:13px;color:var(--acc
       tile(sp.finished_week || 0, "sprints finished this week", (sp.stuck || []).length ? (sp.stuck.length === 1 ? "1 stuck: " + sp.stuck[0] : sp.stuck.length + " stuck") : "none stuck", ""),
       fc.median_min != null ? tile(fc.median_min + " min", "fresh chat to first saved change", "", fc.n + " chats") : tile("—", "fresh chat to first saved change", "Not enough data yet", (fc.n || 0) + " chats", true),
     ];
+    const co = im.cost || {};
+    if (co.usd != null) tiles.push(tile("$" + Math.round(co.usd), "spent on chats this week",
+      "The keeper: $" + (co.keeper_usd || 0).toFixed(2) + " (" + (co.keeper_pct || 0) + "%)" + ((co.top || [])[0] ? " · most: " + short(co.top[0].title, 40) + " $" + Math.round(co.top[0].usd) : ""),
+      "API-price equivalent · $" + Math.round(co.no_sprint_usd || 0) + " in no sprint"));
     const wk = im.saves_per_week || [];
     if (wk.length) {
       const t = el("div", "tile"); t.append(el("span", "lab", "changes saved per week"));

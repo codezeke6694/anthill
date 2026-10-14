@@ -558,6 +558,14 @@ def main(argv: list[str]) -> int:
         elif verb == "show":
             words = [w for w in rest if not w.startswith("--")]
             g = load(ctx, words[0]) if words else G._open(ctx, gid)
+            try:
+                from anthill import cost
+                c = cost.report(ctx)["by_sprint"].get(g["id"])
+            except Exception:                  # noqa: BLE001 -- cost is a nicety, never a failure
+                c = None
+            if c:
+                print(f"  cost so far: ${c['usd']:,.2f} (API-price equivalent)"
+                      + (f", the keeper ${c['keeper_usd']:,.2f}" if c["keeper_usd"] else ""))
         elif verb == "list":
             gs = all_sprints(ctx)
             if "--all" not in rest:

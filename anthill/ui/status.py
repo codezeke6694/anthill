@@ -213,6 +213,19 @@ def happened(events: list[dict[str, Any]], limit: int = 40) -> list[dict[str, An
     return out
 
 
+def _cost(ctx: Any) -> dict[str, Any]:
+    """This week's spend on chats, by sprint, the keeper apart (`anthill cost`)."""
+    try:
+        from anthill import cost
+        r = cost.report(ctx, days=7)
+    except Exception:                      # noqa: BLE001 -- no records must not blank the page
+        return {}
+    top = [{"sprint": k, "title": v.get("title") or k, "usd": v["usd"]}
+           for k, v in r["by_sprint"].items() if k != cost.NO_SPRINT][:3]
+    return {"usd": r["total_usd"], "keeper_usd": r["keeper_usd"], "keeper_pct": r["keeper_share_pct"],
+            "no_sprint_usd": (r["by_sprint"].get(cost.NO_SPRINT) or {}).get("usd", 0.0), "top": top}
+
+
 def build(ctx: Any, w: dict[str, Any], todo: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
     b = board(ctx, w)
     close = to_close(ctx)
@@ -222,7 +235,7 @@ def build(ctx: Any, w: dict[str, Any], todo: dict[str, Any], events: list[dict[s
         "header": header(ctx, w),
         "needs": {"questions": questions, "review": todo.get("review") or [], "close": close},
         "board": b,
-        "impact": impact(events, todo, b),
+        "impact": {**impact(events, todo, b), "cost": _cost(ctx)},
         "decisions": w.get("decisions") or [],
         "warnings": w.get("traps") or [],
         "happened": happened(events),
