@@ -403,6 +403,28 @@ def rules_file_v2(ctx: _ctx.Context, name: str, protected_block: str, cmd: str =
     board = ("\n\nA big planned sprint whose pieces do not depend on each other, which the owner "
              "asks you to work on: you lead it, with helpers. Load the `parallel-sprint` skill first "
              "(`anthill skill get parallel-sprint`).")
+    from anthill import notes as _notes
+    own = [(p, _notes.kind_of(ctx, p), _notes._in_git(ctx.root, p)) for p in _notes.in_use(ctx)]
+    if own:
+        what = {"lessons": "**Lessons** -- after solving anything non-obvious, add one entry here, in its "
+                           "own format; read the entries about an area before working in it",
+                "handovers": "**Live work** -- one page per area: keep it current (edit in place) and read "
+                             "it before touching that area",
+                "pages": "**Module pages** -- the rules for each part of the code"}
+        notes_block = ("\n\n## This project's own notes\n\nThis project keeps its own notes. They are the "
+                       "record, and Anthill uses them instead of its own shelf:\n\n"
+                       + "\n".join(f"- `{p}`: {what[k]}" + ("" if g else " _(not in git: this laptop only)_")
+                                   for p, k, g in own)
+                       + "\n\n`anthill start` puts the lessons and pages about the code a task touches on its "
+                         "card; `anthill notes lessons \"<task>\"` finds them directly. A sprint tracks the "
+                         "work and its next step; what was learned goes in the notes above, not in the sprint.")
+        learned = ("What was learned goes in this project's own notes (below), not in the sprint.")
+        lesson_q = "an entry in the project's lesson log, naming the file"
+    else:
+        notes_block = ""
+        learned = ("Under **Learned**, a line starting\n`Warning:`, `Decision:` or `Rule:` is filed on the "
+                   "shared shelf when the sprint closes.")
+        lesson_q = "a Learned line, with the file it is about"
     return f"""# {name}
 
 This project is run with Anthill. The owner's charter is `.anthill/owner/charter.md`;
@@ -457,14 +479,13 @@ anthill sprint done                   # runs the check; only a pass closes it
 Work in progress with no sprint? Start one. Keep its page true: next step, traps,
 and under **Waiting on the owner** only questions still open — a settled one moves
 to Owner's answers or a decision. Finished, merged work with no check:
-`anthill sprint finished <id> --because "<why>"` puts it on the owner's page to close. Under **Learned**, a line starting
-`Warning:`, `Decision:` or `Rule:` is filed on the shared shelf when the sprint closes.
+`anthill sprint finished <id> --because "<why>"` puts it on the owner's page to close. {learned}
 
 **"End to end"**: when the owner says so, `anthill sprint go` — then keep working
 until the check passes. Do not stop to report after each step. Decide what the
 owner's written decisions, the rules, or technical judgement settle, and log it
 with `sprint decided` so they can overturn it. Stop only for what the owner alone
-decides — {stops} — with `sprint block`.{board}
+decides — {stops} — with `sprint block`.{board}{notes_block}
 
 ## After a commit
 
@@ -474,7 +495,7 @@ background, start the `anthill-keeper` agent with that list and carry on; it wri
 only the knowledge folder. Otherwise bring them up to date yourself before you stop.
 Before you finish any task, committed or not: did the work move (tell the keeper, or
 update the sprint page), and did you learn something the next agent should not
-rediscover (a Learned line, with the file it is about)?
+rediscover ({lesson_q})?
 
 ## Skills
 

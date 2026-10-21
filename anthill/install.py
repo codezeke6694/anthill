@@ -63,7 +63,14 @@ PROTECTED_PATHS_V2 = [
 
 
 def protected_paths(ctx: _ctx.Context) -> list[str]:
-    return list(PROTECTED_PATHS_V2 if ctx.v2 else PROTECTED_PATHS)
+    paths = list(PROTECTED_PATHS_V2 if ctx.v2 else PROTECTED_PATHS)
+    if ctx.v2 and is_local(ctx):
+        # Installed locally, Anthill writes CLAUDE.local.md and leaves a project's
+        # own CLAUDE.md and AGENTS.md -- ones git already tracks -- alone. Locking
+        # them anyway stopped Mesh IQ's chats keeping the handover list in its
+        # CLAUDE.md, which is how that project works (owner, 21 Oct).
+        paths = [p for p in paths if not (p in ("CLAUDE.md", "AGENTS.md") and _tracked(ctx, p))]
+    return paths
 
 
 # ---------------------------------------------------------------- local mode
@@ -763,6 +770,18 @@ def render_keeper(ctx: _ctx.Context) -> str:
         if old not in text:
             raise AssertionError(f"keeper text moved: {old[:60]}")
         text = text.replace(old, new)
+    from anthill import notes
+    own = [(p, notes.kind_of(ctx, p)) for p in notes.in_use(ctx)]
+    if own:
+        logs = [p for p, k in own if k == "lessons"]
+        plans = [p for p, k in own if k == "handovers"]
+        text += ("\n\n## This project's own notes\n\nThis project keeps its own notes and they are "
+                 "the record (owner, 21 Oct 2026). After a commit, also:\n"
+                 + "".join(f"- Bring the page in `{p}` for the area the change touched up to date: edit it in "
+                           "place so it says only what is true now. You may write there.\n" for p in plans)
+                 + "".join(f"- If the commit fixed something non-obvious and `{p}` has no entry for it, say so "
+                           "in your report so the chat that committed adds one. Never write a lesson you "
+                           "did not see measured.\n" for p in logs))
     return text
 
 
@@ -1108,7 +1127,8 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
     deny = perms.setdefault("deny", [])
     if ctx.v2:
         # The old layout's locks name paths that no longer exist here.
-        stale = set(deny_rules(PROTECTED_PATHS)) - set(deny_rules(protected_paths(ctx)))
+        stale = (set(deny_rules(PROTECTED_PATHS)) | set(deny_rules(PROTECTED_PATHS_V2))) \
+            - set(deny_rules(protected_paths(ctx)))
         deny[:] = [r for r in deny if r not in stale]
     added = [r for r in deny_rules(protected_paths(ctx)) if r not in deny]
     deny.extend(added)
@@ -1165,6 +1185,21 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         result["owner_page"] = ui_wire.wire(ctx)
     except Exception as exc:                          # pragma: no cover
         result["owner_page"] = {"why": f"not wired: {exc}"}
+
+    # A project that already keeps notes keeps them (owner, 21 Oct): say what was
+    # found, so the owner chooses them over Anthill's own shelf.
+    try:
+        from anthill import notes
+        found = {k: [x["path"] for x in v] for k, v in notes.scan(ctx).items() if v and k != "rules"}
+        if found and not notes.in_use(ctx):
+            result["project_notes"] = {
+                "found": found,
+                "next": ("this project already keeps notes. To have Anthill use them instead of its own "
+                         "shelf, the owner runs: anthill config set knowledge.project_notes \""
+                         + ",".join(p for v in found.values() for p in v) + "\" --by <owner>, "
+                         "then anthill install --force")}
+    except Exception:                                 # noqa: BLE001 -- a scan must never fail an install
+        pass
 
     result["pre_commit_hook"] = install_hook(ctx)
     result["pre_push_hook"] = install_push_hook(ctx)

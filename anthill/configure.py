@@ -43,6 +43,15 @@ ALLOWED: dict[str, tuple[str, str]] = {
     "execution.guard_hygiene": ("bool", "pre-commit refuses secrets and junk files; "
                                         "pre-push refuses a force push"),
     "execution.venv": ("str", "virtualenv gates run with"),
+    "execution.risky_paths": ("list", "files whose change waits for the owner (database changes): "
+                                      "globs; empty turns it off"),
+    "execution.dependencies_need_owner": ("bool", "a new or changed package stops the commit "
+                                                  "and asks the owner"),
+    "execution.code_checks": ("bool", "after each commit, flag personal paths, long blocks "
+                                      "and comment-heavy code"),
+    "knowledge.project_notes": ("list", "the project's own notes Anthill uses instead of its "
+                                        "notebook: lesson logs, handover/plan folders, page "
+                                        "folders (`anthill notes scan` finds them)"),
     "audit.required": ("bool", "a unit cannot close without an audit record"),
     "audit.escalate_verdicts": ("list", "verdicts that escalate to a human"),
     "blueprint.require_page": ("bool", "every gate also requires a knowledge page"),
@@ -115,8 +124,9 @@ def set_value(ctx: _ctx.Context, key: str, raw: str, by: str,
     out = {"set": key, "from": before, "to": value, "by": by.strip(),
            "written": write}
     # These are rendered into the agent docs and the hooks; say so.
-    if block == "execution" and field in ("push_requires_owner", "protected_branches",
-                                          "guard_hygiene", "isolate", "mode"):
+    if (block == "execution" and field in ("push_requires_owner", "protected_branches",
+                                           "guard_hygiene", "isolate", "mode", "risky_paths")) \
+            or key == "knowledge.project_notes":
         out["next"] = ("`anthill install --force` re-renders CLAUDE.md, AGENTS.md "
                        "and the role files so the prose matches this setting")
     if key in ("execution.mode", "audit.required"):

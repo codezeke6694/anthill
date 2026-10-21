@@ -62,6 +62,7 @@ DELEGATED = [
     ("edit", "Claude's check before each edit (installed as a hook): database changes, piece files"),
     ("codecheck", "What a commit added: personal paths, long blocks, comment-heavy code (post-commit)"),
     ("cost", "What each sprint cost, and Anthill's own share, from this laptop's chat records"),
+    ("notes", "The project's own notes (lesson logs, handovers, pages): scan | lessons \"<task>\""),
 ]
 
 # The ported navigation and knowledge surface. Grouped rather than listed one by
@@ -257,6 +258,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv and argv[0] in ("note", "resume", "checkpoint", "prompt", "correction"):
         from anthill import resume
         return resume.main(argv)
+    if argv and argv[0] == "notes":
+        from anthill import notes
+        return notes.main(argv[1:])
     if argv and argv[0] == "cost":
         from anthill import cost
         return cost.main(argv[1:])

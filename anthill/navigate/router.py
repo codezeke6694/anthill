@@ -780,10 +780,22 @@ def _rules_by_file() -> dict[str, list[dict[str, str]]]:
     return out
 
 
+def _learned_here(file: str, goal: str) -> dict[str, Any] | None:
+    """The project's own lessons and handover pages about this file (`anthill notes`)."""
+    try:
+        from anthill import notes
+        r = notes.relevant(_ctx.current(), [file] if file else [], goal)
+    except Exception:                      # noqa: BLE001 -- notes are a help, never a failure
+        return None
+    return r if r["lessons"] or r["handovers"] else None
+
+
 def _card(node: dict[str, Any], goal: str = "", latest_finding: str = "") -> dict[str, Any]:
     anchors = [_anchor_summary(anchor) for anchor in node.get("anchors") or []]
     file = node.get("file") or (_anchor_files(node) or [""])[0]
+    learned = _learned_here(file, goal)
     return {
+        **({"learned_here": learned} if learned else {}),
         "you_are_here": {
             "node_id": node["node_id"],
             "file": file,
