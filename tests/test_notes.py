@@ -119,3 +119,12 @@ def test_the_new_settings_can_be_changed_the_proper_way(project):
     from anthill import codecheck, risky
     assert risky.is_risky(ctx, "pgstore/schema/009_new.sql") and not risky.deps_need_owner(ctx)
     assert codecheck.limits(ctx) is None
+
+
+def test_a_reinstall_keeps_the_owner_s_choice_of_notes(project):
+    keep_notes(project)
+    ctx = use(project, "docs/LEARNINGS.md", "docs/plans")
+    install.install(ctx, project_name="Proj", stack="Python", write=True, force=True, run_survey=False)
+    ctx = reload(ctx)
+    assert notes.in_use(ctx) == ["docs/LEARNINGS.md", "docs/plans"]
+    assert "## This project's own notes" in (ctx.root / install.rules_file(ctx)).read_text()

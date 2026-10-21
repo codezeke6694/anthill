@@ -1048,6 +1048,11 @@ def install(ctx: _ctx.Context, project_name: str = "", stack: str = "",
         existing = ctx.config.get(block)
         if isinstance(existing, dict) and existing:
             cfg[block] = {**cfg.get(block, {}), **existing}
+    # The owner's choice of the project's own notes, likewise: a re-install that
+    # dropped it put Mesh IQ's chats back on Anthill's empty shelf (21 Oct).
+    notes_in_use = (ctx.config.get("knowledge") or {}).get("project_notes")
+    if notes_in_use:
+        cfg["knowledge"]["project_notes"] = notes_in_use
 
     # The Anthill version the team uses, recorded on a project's first install so
     # every teammate's `anthill update` lands on the same one.
